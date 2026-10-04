@@ -228,6 +228,22 @@ export default withPWA({
 
 Then point offline navigations at the page that already exists at `/offline`.
 
+### Self-hosting the standalone build
+
+`next.config.ts` sets `output: "standalone"`, so a VPS or Docker image only has to
+ship the traced server bundle:
+
+```bash
+npm run build
+cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/
+PORT=3000 HOSTNAME=0.0.0.0 node .next/standalone/server.js
+```
+
+`npm run start` also works locally, it just warns that the standalone output is
+the production entry point. Remember `NEXTAUTH_URL` and `NEXT_PUBLIC_SITE_URL`
+must match the public origin, and keep `public/` next to `server.js` so the
+manifest, icons and demo assets resolve.
+
 ### Error monitoring
 
 `app/error.tsx` logs to the console. Add Sentry with
