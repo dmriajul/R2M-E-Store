@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
+
+/** The account area is private: never index it (belt-and-braces with robots.ts). */
+export const metadata: Metadata = {
+  title: { default: "Your Account", template: "%s · Your Account · Little Luxe" },
+  robots: { index: false, follow: false },
+};
 
 /**
  * Account area shell. Everything under `/dashboard` gets the sidebar (or the

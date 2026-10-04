@@ -123,7 +123,7 @@ function SidebarNav({
       {ADMIN_NAV.map((section) => (
         <div key={section.label} className="flex flex-col gap-1.5">
           {!collapsed && (
-            <p className="px-1.5 text-[10px] font-semibold tracking-[0.18em] text-muted-foreground/70 uppercase">
+            <p className="px-1.5 text-[10px] font-semibold tracking-[0.18em] text-muted-foreground/80 uppercase">
               {section.label}
             </p>
           )}
@@ -277,7 +277,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <div className="relative max-w-md">
                 <Search
                   aria-hidden
-                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground/70"
+                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground/80"
                 />
                 <input
                   id="admin-search"
@@ -285,7 +285,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search orders, products..."
-                  className="h-10 w-full rounded-lg border border-[#2A2A2A] bg-[#151515] pr-3 pl-9 text-sm text-foreground transition-colors duration-200 placeholder:text-muted-foreground/60 focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:outline-none"
+                  className="h-10 w-full rounded-lg border border-[#2A2A2A] bg-[#151515] pr-3 pl-9 text-sm text-foreground transition-colors duration-200 placeholder:text-muted-foreground/80 focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:outline-none"
                 />
               </div>
             </form>
@@ -409,7 +409,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <main className="flex-1 px-4 py-5 sm:px-6 sm:py-6">{children}</main>
+        <main id="main-content" className="flex-1 px-4 py-5 sm:px-6 sm:py-6">
+          {children}
+        </main>
       </div>
 
       {/* ---------- Mobile drawer ---------- */}

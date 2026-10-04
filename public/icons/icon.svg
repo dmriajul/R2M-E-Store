@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Little Luxe">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="46%" r="52%">
+      <stop offset="0%" stop-color="#d4af37" stop-opacity="0.16" />
+      <stop offset="100%" stop-color="#d4af37" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect x="4" y="4" width="504" height="504" rx="112" fill="#0A0A0A" />
+  <rect x="4" y="4" width="504" height="504" rx="112" fill="url(#glow)" />
+  <rect
+    x="7"
+    y="7"
+    width="498"
+    height="498"
+    rx="109"
+    fill="none"
+    stroke="#d4af37"
+    stroke-width="6"
+  />
+  <!-- LL monogram -->
+  <path
+    d="M150 176h36v124h84v36H150zM262 176h36v124h84v36H262z"
+    fill="#d4af37"
+  />
+</svg>

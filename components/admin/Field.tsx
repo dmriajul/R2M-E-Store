@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  */
 
 export const adminInputClass =
-  "h-10 w-full rounded-lg border border-[#2A2A2A] bg-[#151515] text-sm text-foreground transition-colors duration-200 placeholder:text-muted-foreground/60 focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:outline-none aria-invalid:border-rose/60 aria-invalid:focus-visible:ring-rose/20";
+  "h-10 w-full rounded-lg border border-[#2A2A2A] bg-[#151515] text-sm text-foreground transition-colors duration-200 placeholder:text-muted-foreground/80 focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:outline-none aria-invalid:border-rose/60 aria-invalid:focus-visible:ring-rose/20";
 
 export const adminSelectClass = cn(adminInputClass, "px-2.5");
 
@@ -48,7 +48,7 @@ export function AdminField({
         {label}
       </label>
       {children}
-      {hint && !error && <p className="text-[11px] text-muted-foreground/70">{hint}</p>}
+      {hint && !error && <p className="text-[11px] text-muted-foreground/80">{hint}</p>}
       {error && (
         <p role="alert" className="text-[11px] text-rose">
           {error}

@@ -249,7 +249,7 @@ export function ProductViewer({
           gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
           camera={{ position: [0, 0.2, 4.1], fov: 42 }}
           fallback={<ProductViewerFallback />}
-          aria-label={`3D preview of ${productName ?? category}`}
+          aria-label={`3D product viewer, drag to rotate${productName ? ` — ${productName}` : ""}`}
           role="img"
         >
           <Suspense fallback={null}>
@@ -276,7 +276,7 @@ export function ProductViewer({
         </Canvas>
       </ViewerErrorBoundary>
 
-      <p className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-center text-[10px] tracking-[0.2em] text-muted-foreground/70 uppercase">
+      <p className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-center text-[10px] tracking-[0.2em] text-muted-foreground/80 uppercase">
         {hasPrecisePointer
           ? "Drag to rotate · scroll to zoom"
           : "Auto-rotating preview"}

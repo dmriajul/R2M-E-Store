@@ -114,6 +114,7 @@ export default function LoginPage() {
               />
               <Input
                 id="login-email"
+                aria-describedby={errors.email ? "login-email-error" : undefined}
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
@@ -123,7 +124,7 @@ export default function LoginPage() {
               />
             </div>
             {errors.email && (
-              <p role="alert" className="text-xs text-rose">
+              <p id="login-email-error" role="alert" className="text-xs text-rose">
                 {errors.email.message}
               </p>
             )}
@@ -147,13 +148,14 @@ export default function LoginPage() {
             </div>
             <PasswordInput
               id="login-password"
+              aria-describedby={errors.password ? "login-password-error" : undefined}
               autoComplete="current-password"
               placeholder="••••••••"
               invalid={Boolean(errors.password)}
               {...register("password")}
             />
             {errors.password && (
-              <p role="alert" className="text-xs text-rose">
+              <p id="login-password-error" role="alert" className="text-xs text-rose">
                 {errors.password.message}
               </p>
             )}

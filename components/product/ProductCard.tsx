@@ -29,6 +29,8 @@ export interface ProductCardProps {
   variant?: "grid" | "list";
   /** Stagger index applied to the entrance animation. */
   index?: number;
+  /** Above-the-fold card: let next/image preload it (never more than ~4). */
+  priority?: boolean;
   className?: string;
 }
 
@@ -145,6 +147,7 @@ export function ProductCard({
   product,
   variant = "grid",
   index = 0,
+  priority = false,
   className,
 }: ProductCardProps) {
   const reducedMotion = usePrefersReducedMotion();
@@ -194,8 +197,13 @@ export function ProductCard({
           >
             <OptimizedImage
               src={product.images[0]}
-              alt={product.name}
+              alt={
+                product.colors[0]
+                  ? `${product.name} in ${product.colors[0]}`
+                  : product.name
+              }
               preset="card"
+              priority={priority}
               className={artworkClass}
               /* Placeholder products (no photography yet) keep the gradient tile. */
               fallback={<ProductArtwork product={product} className={artworkClass} />}

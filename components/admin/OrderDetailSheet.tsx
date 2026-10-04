@@ -33,7 +33,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 const STEP_DOT: Readonly<Record<OrderStepState, string>> = {
   done: "border-emerald-500/40 bg-emerald-500/15 text-emerald-400",
   current: "border-blue-500/45 bg-blue-500/15 text-blue-400",
-  pending: "border-[#2A2A2A] bg-white/5 text-muted-foreground/60",
+  pending: "border-[#2A2A2A] bg-white/5 text-muted-foreground/80",
   cancelled: "border-rose-500/40 bg-rose-500/15 text-rose-400",
 };
 

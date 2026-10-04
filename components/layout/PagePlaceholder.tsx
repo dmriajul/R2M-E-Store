@@ -47,7 +47,7 @@ export function PagePlaceholder({
 
         {children}
 
-        <div className="mt-10 flex flex-wrap items-center gap-3 text-xs tracking-[0.2em] text-muted-foreground/70 uppercase">
+        <div className="mt-10 flex flex-wrap items-center gap-3 text-xs tracking-[0.2em] text-muted-foreground/80 uppercase">
           <span className="rounded-full border border-glass-border px-3 py-1">
             Scaffold
           </span>

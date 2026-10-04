@@ -1,6 +1,7 @@
 "use client";
 
 import { Toaster } from "sonner";
+import { AlertTriangle, CheckCircle2, Info, Loader2, XCircle } from "lucide-react";
 
 /**
  * Global toast surface, mounted once in the root layout.
@@ -18,6 +19,14 @@ export function AppToaster() {
       duration={3200}
       gap={10}
       offset={16}
+      /* Every toast carries an icon; the type classes below colour them. */
+      icons={{
+        success: <CheckCircle2 aria-hidden className="size-5" />,
+        error: <XCircle aria-hidden className="size-5" />,
+        info: <Info aria-hidden className="size-5" />,
+        warning: <AlertTriangle aria-hidden className="size-5" />,
+        loading: <Loader2 aria-hidden className="size-5 animate-spin" />,
+      }}
       toastOptions={{
         classNames: {
           toast:
@@ -29,9 +38,11 @@ export function AppToaster() {
           cancelButton: "!rounded-full !bg-white/10 !text-xs",
           closeButton:
             "!rounded-full !border-glass-border !bg-[#101010] !text-muted-foreground",
+          // Type colours: success green, error red, info blue, warning amber.
           success: "!text-emerald-400",
           error: "!text-rose",
-          info: "!text-cyan",
+          info: "!text-sky-400",
+          warning: "!text-amber-400",
         },
       }}
     />

@@ -1,10 +1,11 @@
 "use client";
 
+import { cloneElement, isValidElement, type ReactElement } from "react";
 import { cn } from "@/lib/utils";
 
 /** Shared input treatment for every checkout form: dark fill, glass border, gold focus. */
 export const checkoutInputClass =
-  "h-12 rounded-xl border-glass-border bg-[#1A1A1A] text-sm transition-colors duration-300 placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:ring-primary/25 aria-[invalid=true]:border-rose/60 aria-[invalid=true]:focus-visible:ring-rose/25";
+  "h-12 rounded-xl border-glass-border bg-[#1A1A1A] text-sm transition-colors duration-300 placeholder:text-muted-foreground/80 focus-visible:border-primary/60 focus-visible:ring-primary/25 aria-[invalid=true]:border-rose/60 aria-[invalid=true]:focus-visible:ring-rose/25";
 
 interface FieldProps {
   label: string;
@@ -24,6 +25,23 @@ export function Field({
   className,
   children,
 }: FieldProps) {
+  const errorId = `${htmlFor}-error`;
+  const hintId = `${htmlFor}-hint`;
+
+  /**
+   * Point the control at its message without every caller repeating it: the
+   * hint (while valid) or the error becomes the input's `aria-describedby`.
+   */
+  const describedBy =
+    error ? errorId : hint ? hintId : undefined;
+
+  const control =
+    describedBy && isValidElement(children)
+      ? cloneElement(children as ReactElement<{ "aria-describedby"?: string }>, {
+          "aria-describedby": describedBy,
+        })
+      : children;
+
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <label
@@ -32,10 +50,14 @@ export function Field({
       >
         {label}
       </label>
-      {children}
-      {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {control}
+      {hint && !error && (
+        <p id={hintId} className="text-xs text-muted-foreground">
+          {hint}
+        </p>
+      )}
       {error && (
-        <p role="alert" className="text-xs text-rose">
+        <p id={errorId} role="alert" className="text-xs text-rose">
           {error}
         </p>
       )}

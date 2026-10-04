@@ -126,6 +126,7 @@ export default function RegisterPage() {
               <User aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="register-name"
+                aria-describedby={errors.fullName ? "register-name-error" : undefined}
                 autoComplete="name"
                 placeholder="Alex Parker"
                 aria-invalid={Boolean(errors.fullName)}
@@ -134,7 +135,7 @@ export default function RegisterPage() {
               />
             </div>
             {errors.fullName && (
-              <p role="alert" className="text-xs text-rose">
+              <p id="register-name-error" role="alert" className="text-xs text-rose">
                 {errors.fullName.message}
               </p>
             )}
@@ -149,6 +150,7 @@ export default function RegisterPage() {
               <Mail aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="register-email"
+                aria-describedby={errors.email ? "register-email-error" : undefined}
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
@@ -158,7 +160,7 @@ export default function RegisterPage() {
               />
             </div>
             {errors.email && (
-              <p role="alert" className="text-xs text-rose">
+              <p id="register-email-error" role="alert" className="text-xs text-rose">
                 {errors.email.message}
               </p>
             )}
@@ -173,6 +175,7 @@ export default function RegisterPage() {
               <Phone aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="register-phone"
+                aria-describedby={errors.phone ? "register-phone-error" : undefined}
                 type="tel"
                 autoComplete="tel"
                 placeholder="+880 1700 000000"
@@ -182,7 +185,7 @@ export default function RegisterPage() {
               />
             </div>
             {errors.phone && (
-              <p role="alert" className="text-xs text-rose">
+              <p id="register-phone-error" role="alert" className="text-xs text-rose">
                 {errors.phone.message}
               </p>
             )}
@@ -195,6 +198,7 @@ export default function RegisterPage() {
             </label>
             <PasswordInput
               id="register-password"
+              aria-describedby={errors.password ? "register-password-error" : undefined}
               autoComplete="new-password"
               placeholder="••••••••"
               invalid={Boolean(errors.password)}
@@ -202,7 +206,7 @@ export default function RegisterPage() {
             />
             <PasswordStrength value={password ?? ""} className="mt-1" />
             {errors.password && (
-              <p role="alert" className="text-xs text-rose">
+              <p id="register-password-error" role="alert" className="text-xs text-rose">
                 {errors.password.message}
               </p>
             )}
@@ -215,13 +219,14 @@ export default function RegisterPage() {
             </label>
             <PasswordInput
               id="register-confirm"
+              aria-describedby={errors.confirmPassword ? "register-confirm-error" : undefined}
               autoComplete="new-password"
               placeholder="••••••••"
               invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
             {errors.confirmPassword && (
-              <p role="alert" className="text-xs text-rose">
+              <p id="register-confirm-error" role="alert" className="text-xs text-rose">
                 {errors.confirmPassword.message}
               </p>
             )}

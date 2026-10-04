@@ -14,8 +14,12 @@ export const SITE = {
   tagline: "Objects of quiet distinction.",
   kidsTagline: "Adorable styles for your little ones ✨",
   description:
-    "LUXE is a curated house of modern luxury — now for the small ones too. Organic fabrics, playful details and clothes built to survive the playground.",
-  url: "https://luxe.example.com",
+    "Discover adorable, premium kids fashion at Little Luxe. Shop dresses, shoes, outerwear and more for ages 0-14. Free shipping over ৳500. COD, bKash, Nagad, Rocket accepted. 🇧🇩",
+  /**
+   * Canonical origin: metadataBase, canonicals, sitemap, robots and OG images
+   * all derive from this. Override with NEXT_PUBLIC_SITE_URL on previews.
+   */
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://littleluxe.com",
 } as const;
 
 export interface NavLink {

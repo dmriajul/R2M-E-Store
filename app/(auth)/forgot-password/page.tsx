@@ -99,6 +99,7 @@ export default function ForgotPasswordPage() {
                 />
                 <Input
                   id="forgot-email"
+                  aria-describedby={errors.email ? "forgot-email-error" : undefined}
                   type="email"
                   autoComplete="email"
                   placeholder="you@example.com"
@@ -108,7 +109,7 @@ export default function ForgotPasswordPage() {
                 />
               </div>
               {errors.email && (
-                <p role="alert" className="text-xs text-rose">
+                <p id="forgot-email-error" role="alert" className="text-xs text-rose">
                   {errors.email.message}
                 </p>
               )}

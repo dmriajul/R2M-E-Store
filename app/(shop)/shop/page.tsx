@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import { ShopCatalog } from "@/components/shop/ShopCatalog";
 import { filtersFromSearchParams } from "@/lib/shop";
 import { SITE } from "@/lib/site";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { breadcrumbSchema } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: { absolute: "Kids Fashion | LITTLE LUXE" },
+  title: { absolute: "Kids Fashion Collection | Little Luxe" },
   description:
-    "Shop the LITTLE LUXE kids collection — organic cotton dresses, tees, bottoms, shoes, outerwear and accessories for ages 0–14. Free shipping over $50 and 30-day easy returns.",
+    "Shop the Little Luxe kids collection — organic cotton dresses, tees, bottoms, shoes, outerwear and accessories for ages 0–14. Free shipping over ৳500, cash on delivery and 30-day easy returns.",
   keywords: [
     "kids fashion",
     "children's clothing",
@@ -15,8 +17,9 @@ export const metadata: Metadata = {
     "kids shoes",
     "baby clothes",
   ],
+  alternates: { canonical: "/shop" },
   openGraph: {
-    title: "Kids Fashion | LITTLE LUXE",
+    title: "Kids Fashion Collection | Little Luxe",
     description:
       "Adorable, hard-wearing kids clothing in organic fabrics — ages 0 to 14.",
     type: "website",
@@ -37,6 +40,14 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
 
   return (
     <div className="relative">
+      <JsonLd
+        id="shop-breadcrumbs"
+        data={breadcrumbSchema([
+          { name: "Home", href: "/" },
+          { name: "Shop", href: "/shop" },
+        ])}
+      />
+
       {/* Soft, warm ambience for the kids line. */}
       <div
         aria-hidden

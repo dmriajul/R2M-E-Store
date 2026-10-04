@@ -11,8 +11,15 @@ import { ProductViewerFallback } from "@/components/three/ProductViewerFallback"
 import { Badge } from "@/components/ui/badge";
 import type { Product } from "@/types";
 
-/** WebGL cannot be server-rendered — load the viewer lazily on the client. */
-const ProductViewer = dynamic(() => import("@/components/three/ProductViewer"), {
+/**
+ * WebGL cannot be server-rendered — load the viewer lazily on the client.
+ *
+ * The importer is kept in a variable so the "3D View" tab can warm the chunk on
+ * hover/focus, before the visitor has actually committed to the click.
+ */
+const loadProductViewer = () => import("@/components/three/ProductViewer");
+
+const ProductViewer = dynamic(loadProductViewer, {
   ssr: false,
   loading: () => <ProductViewerFallback />,
 });
@@ -51,6 +58,9 @@ export function ProductGallery({ product }: ProductGalleryProps) {
             role="tab"
             aria-selected={tab === value}
             onClick={() => setTab(value)}
+            /* Warm the WebGL chunk before the click lands. */
+            onMouseEnter={value === "3d" ? () => void loadProductViewer() : undefined}
+            onFocus={value === "3d" ? () => void loadProductViewer() : undefined}
             className={cn(
               "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold tracking-[0.14em] uppercase transition-all duration-400 ease-[var(--ease-luxe)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
               tab === value

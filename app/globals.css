@@ -214,6 +214,14 @@
     color: var(--foreground);
   }
 
+  /* Keyboard focus: 2px gold outline, 2px offset, everywhere.
+     Components that draw their own gold ring opt out with
+     `focus-visible:outline-none`, so this only fills the gaps. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
   /* ---- Thin gold scrollbar ---- */
   * {
     scrollbar-width: thin;

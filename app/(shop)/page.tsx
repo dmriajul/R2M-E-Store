@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { MotionConfig } from "framer-motion";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { organizationSchema } from "@/lib/seo";
+import { SITE } from "@/lib/site";
 import { HeroSection } from "@/components/sections/HeroSection";
 import { BrandMarquee } from "@/components/sections/BrandMarquee";
 import { FeaturedProducts } from "@/components/sections/FeaturedProducts";
@@ -8,9 +11,15 @@ import { StatsSection } from "@/components/sections/StatsSection";
 import { Reveal } from "@/components/sections/Reveal";
 
 export const metadata: Metadata = {
-  title: "Home",
-  description:
-    "LUXE — modern luxury, considered. Timepieces, jewelry and accessories for people who prefer to own less, better.",
+  title: { absolute: "Little Luxe — Premium Kids Fashion" },
+  description: SITE.description,
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Little Luxe — Premium Kids Fashion",
+    description: SITE.description,
+    url: SITE.url,
+    type: "website",
+  },
 };
 
 /**
@@ -25,6 +34,9 @@ export default function HomePage() {
        globally: transform/layout animations are skipped and snapped to their
        end value while opacity still fades. */
     <MotionConfig reducedMotion="user">
+      {/* Organization schema — one per site, rendered on the home page. */}
+      <JsonLd id="organization-schema" data={organizationSchema()} />
+
       <HeroSection />
 
       <BrandMarquee />

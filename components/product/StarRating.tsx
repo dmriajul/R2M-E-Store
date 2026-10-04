@@ -32,7 +32,7 @@ export function StarRating({
       <span
         className="inline-flex items-center gap-0.5"
         role="img"
-        aria-label={`Rated ${rating.toFixed(1)} out of 5`}
+        aria-label={`Rated ${rating.toFixed(1)} out of 5 stars`}
       >
         {Array.from({ length: 5 }, (_, index) => {
           const fill = Math.min(Math.max(rating - index, 0), 1) * 100;

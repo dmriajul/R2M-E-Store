@@ -173,7 +173,7 @@ export function LegalPage({ content, title, lastUpdated }: LegalPageProps) {
                   </span>
 
                   {/* Section number — a quiet reading aid on long policies. */}
-                  <span className="hidden text-[11px] tabular-nums text-muted-foreground/70 sm:inline print:hidden">
+                  <span className="hidden text-[11px] tabular-nums text-muted-foreground/80 sm:inline print:hidden">
                     {String(index + 1).padStart(2, "0")}
                   </span>
 
@@ -217,7 +217,7 @@ export function LegalPage({ content, title, lastUpdated }: LegalPageProps) {
         <p className="text-xs text-muted-foreground print:text-neutral-700">
           {doc.footerNote}
         </p>
-        <p className="text-xs text-muted-foreground/70 print:text-neutral-600">
+        <p className="text-xs text-muted-foreground/80 print:text-neutral-600">
           <span className="font-semibold">{copy.updated}:</span> {lastUpdated[lang]}
         </p>
       </footer>

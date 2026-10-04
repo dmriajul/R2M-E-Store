@@ -103,7 +103,7 @@ export function Navbar() {
       )}
     >
       <nav
-        aria-label="Primary"
+        aria-label="Main navigation"
         className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:h-20 lg:px-8"
       >
         {/* ---------- Logo ---------- */}
@@ -160,7 +160,7 @@ export function Navbar() {
 
           <button
             type="button"
-            aria-label={`Cart, ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
+            aria-label={`Shopping bag, ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
             onClick={() => setIsCartOpen(true)}
             className={cn(
               "group relative inline-flex size-9 items-center justify-center rounded-full",
@@ -175,6 +175,7 @@ export function Navbar() {
               <motion.span
                 key={itemCount}
                 initial={reducedMotion ? { scale: 1 } : { scale: 0.5 }}
+                aria-hidden
                 animate={{ scale: 1 }}
                 transition={
                   reducedMotion
@@ -192,6 +193,18 @@ export function Navbar() {
               </motion.span>
             )}
           </button>
+
+          {/* Bag changes are announced politely (the badge itself is visual). */}
+          <span
+            id="cart-status"
+            role="status"
+            aria-live="polite"
+            className="sr-only"
+          >
+            {itemCount === 0
+              ? "Shopping bag is empty"
+              : `${itemCount} ${itemCount === 1 ? "item" : "items"} in your shopping bag`}
+          </span>
 
           <AccountMenu />
 

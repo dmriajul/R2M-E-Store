@@ -43,7 +43,7 @@ export function AccountMenu() {
   if (status === "loading" || !user) {
     return (
       <>
-        <Link href="/login" aria-label="Account" className={cn(triggerClasses, "md:hidden")}>
+        <Link href="/login" aria-label="Account menu" className={cn(triggerClasses, "md:hidden")}>
           <User className="size-[18px]" />
         </Link>
 

@@ -12,6 +12,8 @@ import {
   getProductById,
   getRelatedProducts,
 } from "@/lib/site";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { breadcrumbSchema } from "@/lib/seo";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductActions } from "@/components/product/ProductActions";
 import { ProductAccordion } from "@/components/product/ProductAccordion";
@@ -26,10 +28,17 @@ interface ProductPageProps {
   params: Promise<{ id: string }>;
 }
 
-/** Pre-render every catalogue page; unknown ids still render on demand. */
+/** Pre-render every catalogue page. */
 export function generateStaticParams() {
   return PRODUCTS.map((product) => ({ id: product.id }));
 }
+
+/**
+ * The catalogue is fully known at build time, so an unknown id is a genuine
+ * 404 rather than an on-demand render that answers 200 with a "not found"
+ * body (a soft 404 crawlers dislike).
+ */
+export const dynamicParams = false;
 
 export async function generateMetadata({
   params,
@@ -38,15 +47,16 @@ export async function generateMetadata({
   const product = getProductById(id);
 
   if (!product) {
-    return { title: { absolute: "Product not found | LITTLE LUXE" } };
+    return { title: { absolute: "Product not found | Little Luxe" } };
   }
 
-  const title = `${product.name} — Ages ${product.ageRange.replace("Y", "")} | LITTLE LUXE`;
+  const title = `${product.name} — Ages ${product.ageRange.replace("Y", "")} | Little Luxe`;
   const description = `${product.name} for ages ${product.ageRange.replace("Y", "")}. ${product.tagline} ${product.material}. ${formatPrice(product.price, product.currency)} with free shipping over $50.`;
 
   return {
     title: { absolute: title },
     description,
+    alternates: { canonical: `/product/${product.id}` },
     openGraph: {
       title,
       description,
@@ -118,6 +128,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
         type="application/ld+json"
         // Structured data is static per product; no user input is interpolated.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <JsonLd
+        id="product-breadcrumbs"
+        data={breadcrumbSchema([
+          { name: "Home", href: "/" },
+          { name: "Shop", href: "/shop" },
+          { name: product.name, href: `/product/${product.id}` },
+        ])}
       />
 
       <div

@@ -72,6 +72,11 @@ export interface Product {
   featured: boolean;
   status: ProductStatus;
   createdAt: string;
+  /**
+   * Present on database-backed rows (Prisma `Product.updatedAt`); the seeded
+   * catalogue only carries `createdAt`, so consumers fall back to that.
+   */
+  updatedAt?: string;
 }
 
 /** Optional choices captured when an item is added to the cart. */

@@ -68,7 +68,7 @@ export function MobileMenu({ onNavigate }: MobileMenuProps) {
         </Link>
       </div>
 
-      <p className="mt-auto pt-8 text-xs leading-relaxed text-muted-foreground/70">
+      <p className="mt-auto pt-8 text-xs leading-relaxed text-muted-foreground/80">
         {SITE.tagline}
       </p>
     </div>

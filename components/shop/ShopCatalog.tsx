@@ -131,6 +131,8 @@ export function ShopCatalog({ initialFilters }: ShopCatalogProps) {
                     product={product}
                     index={index}
                     variant={filters.view}
+                    /* Only the first row is above the fold. */
+                    priority={index < 4}
                   />
                 ))}
               </AnimatePresence>
