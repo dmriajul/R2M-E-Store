@@ -68,7 +68,17 @@ app/
     product/[id]/page.tsx    → Product placeholder (async params, Next 15)
   (auth)/
     login/page.tsx           → Login placeholder
-  admin/page.tsx             → Admin placeholder
+  admin/
+    layout.tsx               → console shell (sidebar + top bar, no Navbar/Footer)
+    page.tsx                 → /admin dashboard (KPIs, revenue, activity)
+    products/page.tsx        → products table + add/edit sheet
+    orders/page.tsx          → orders table + detail sheet
+    customers/page.tsx       → customer table + detail sheet
+    coupons/page.tsx         → coupon table + create/edit dialog
+    categories/page.tsx      → category cards + create/edit dialog
+    settings/page.tsx        → general / shipping / payments / notifications tabs
+    analytics/page.tsx       → revenue chart, breakdowns, top customers
+    loading.tsx              → shared console skeleton
   api/
     health/route.ts          → GET liveness probe
     products/route.ts        → GET mock catalogue (?category=, ?featured=true)
@@ -76,15 +86,18 @@ app/
   globals.css                → design system
   layout.tsx                 → Inter + metadata + Navbar/Footer shell
 components/
+  admin/                     → AdminShell, DataTable, KpiCard, BarChart, ProductForm, OrderDetailSheet, …
   layout/                    → Navbar, Footer, MobileMenu, CartSheet, SearchDialog, NewsletterForm, PagePlaceholder, SocialIcons
   sections/                  → (empty — next step)
   three/                     → (empty — no scenes yet)
   ui/                        → shadcn/ui components
 lib/
-  utils.ts                   → cn(), formatPrice(), slugify()
+  utils.ts                   → cn(), formatPrice(), slugify(), date formatters
   site.ts                    → site config, nav links, mock products
+  mock-admin.ts              → console dataset (orders, customers, coupons, revenue)
 store/
   useCartStore.ts            → zustand cart
+  useAdminStore.ts           → zustand console CRUD (products, orders, coupons, settings)
 types/
   index.ts                   → Product, CartItem, User, Order, Address, ApiResponse
 public/
@@ -182,8 +195,9 @@ and filterable; no database yet.
 ### Layout note
 
 Page chrome moved out of the root layout so auth pages can render without a navbar: the navbar +
-footer now live in `app/(shop)/layout.tsx` and `app/admin/layout.tsx`, while `app/(auth)/layout.tsx`
-provides the focused shell. `app/layout.tsx` keeps fonts, metadata and the toaster.
+footer live in `app/(shop)/layout.tsx`, `app/(auth)/layout.tsx` provides the focused shell, and
+`app/admin/layout.tsx` renders the console shell (sidebar + top bar). `app/layout.tsx` keeps fonts,
+metadata and the toaster.
 
 ## Step 5 — Account area (dashboard, orders, wishlist, profile)
 
@@ -215,10 +229,61 @@ provides the focused shell. `app/layout.tsx` keeps fonts, metadata and the toast
 - **Printing** — the order page renders a light `#print-invoice` document; `@media print` in
   `app/globals.css` hides the navbar, footer and account navigation so only the invoice prints.
 
+## Step 6 — Admin console
+
+```bash
+/admin              # KPIs, revenue overview, recent orders, bestsellers, low-stock alerts
+/admin/products     # dense product table, filters/sort/bulk actions, add + edit sheet
+/admin/orders       # order stats, status tabs, date ranges, CSV export, detail sheet
+/admin/customers    # customer table with ban/unban and a profile sheet
+/admin/coupons      # coupon table with live/expired/depleted status and a create dialog
+/admin/categories   # category cards with product counts and an emoji picker
+/admin/settings     # general · shipping · payments · notifications, saved section by section
+/admin/analytics    # revenue chart, orders by category, traffic sources, top customers
+```
+
+- **Shell** (`components/admin/AdminShell.tsx`) — collapsible dark-glass rail on desktop (icons
+  only at 72px), slide-in drawer on phones, sticky top bar with a global search that hands the term
+  to the product table, an alert bell (badge counts low-stock products) and a profile menu
+  (Profile · Settings · Logout). Breadcrumb + page title come from `components/admin/admin-nav.ts`,
+  which is the single source of truth for the console navigation.
+- **Palette** — the console runs on its own surfaces (`#0D0D0D` page, `#141414` cards, `#242424`
+  borders) with **blue `#3B82F6` as the action colour**; gold is reserved for the logo, KPI numbers
+  and premium highlights, so admin actions never compete with storefront branding.
+- **Data** (`lib/mock-admin.ts`) — every table reads the same record set: `ADMIN_ORDERS` reuses the
+  five shopper orders from `lib/mock-dashboard.ts` and adds seven more (all statuses), customers are
+  derived from those orders (order count + lifetime spend), products come from `lib/site.ts`
+  (no duplicated catalogue), and the 7-day revenue series sums to **$8,432.00** (`Avg $1,204.57/day`).
+- **State** (`store/useAdminStore.ts`) — zustand store seeded from the mock data; creating, editing,
+  duplicating, deleting, restocking, refunding and status changes all update the store locally and
+  raise a toast. Timelines are rebuilt from the order status so the tracking view stays coherent.
+- **Tables** (`components/admin/DataTable.tsx`) — one component drives products, orders, customers
+  and coupons: client-side sorting, 10 rows per page (`Showing 1–10 of 12`), optional row selection
+  with a bulk bar, zebra rows, row hover and horizontal scroll on small screens.
+- **Charts** — no charting dependency: `components/admin/BarChart.tsx` draws the revenue bars,
+  sparklines and every breakdown bar with Tailwind + framer-motion, including hover tooltips and
+  y/x axis labels.
+- **Forms** — React Hook Form + Zod everywhere (`adminProductSchema`, `adminCouponSchema`,
+  `adminCategorySchema`, the four `settings*Schema` entries in `lib/validations.ts`) with inline
+  errors. Coerced numeric fields use `z.input` types so the resolver stays type-safe.
+- **Status language** — `components/admin/StatusBadge.tsx` owns the palette (pending amber,
+  processing/shipped blue/violet, delivered green, cancelled/refunded red/grey; in-stock green,
+  low-stock amber, out-of-stock red), so a status never changes colour between pages.
+- **Loading** — `app/admin/loading.tsx` streams a console skeleton for every `/admin/*` route.
+
 ## Next up (not built yet)
 
-Admin CRUD, database, real product photography and `.glb` models (`public/models`), server-side
-coupon validation, real returns/refunds, and cart/wishlist/account persistence.
+Database, real product photography and `.glb` models (`public/models`), server-side coupon
+validation, real returns/refunds, admin authentication, and cart/wishlist/account persistence.
+
+### Step 6 limitations
+
+- Everything is mocked and in-memory: a hard refresh returns the console to its seeded state.
+- "Export CSV" downloads the current filtered rows from the browser; there is no server export.
+- Product images are gradient placeholders (no uploads) and the `.glb` field only stores a filename.
+- Emails, refunds and payment-gateway toggles are decorative — they toast instead of calling out.
+- Low stock follows each product's own threshold (default 20 in the seed, 10 for new products);
+  that is what makes the dashboard read "3 products running low" plus one out-of-stock item.
 
 ### Step 5 limitations
 

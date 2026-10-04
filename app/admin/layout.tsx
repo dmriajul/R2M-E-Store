@@ -1,15 +1,16 @@
-import { Navbar } from "@/components/layout/Navbar";
-import { Footer } from "@/components/layout/Footer";
+import type { Metadata } from "next";
+import { AdminShell } from "@/components/admin/AdminShell";
 
-/** The admin console keeps the standard storefront chrome. */
-export default function AdminLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <>
-      <Navbar />
-      <main className="relative z-10 flex-1">{children}</main>
-      <Footer />
-    </>
-  );
+export const metadata: Metadata = {
+  title: { default: "Admin", template: "%s · Admin · Little Luxe" },
+  description: "LUXE operations console — products, orders and inventory.",
+  robots: { index: false, follow: false },
+};
+
+/**
+ * Console layout. It sits outside the `(shop)` route group on purpose: the admin
+ * area has its own shell rather than the storefront Navbar/Footer.
+ */
+export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <AdminShell>{children}</AdminShell>;
 }

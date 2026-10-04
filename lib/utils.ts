@@ -160,3 +160,46 @@ export function formatMonthYear(iso: string): string {
   }).format(date);
   return long;
 }
+
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+const MONTHS_LONG = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+/** "Wednesday, October 1, 2026" — UTC-pinned like the other admin helpers. */
+export function formatLongDate(iso: string): string {
+  const date = parseIso(iso);
+  if (!date) return iso;
+
+  const weekday = WEEKDAYS[date.getUTCDay()] ?? "";
+  const month = MONTHS_LONG[date.getUTCMonth()] ?? "";
+  return `${weekday}, ${month} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
+}
+
+/** "Oct 1" — compact chart/tooltip label. */
+export function formatDayMonth(iso: string): string {
+  const date = parseIso(iso);
+  if (!date) return iso;
+  const month = MONTHS[date.getUTCMonth()] ?? "";
+  return `${month} ${date.getUTCDate()}`;
+}

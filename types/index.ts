@@ -305,6 +305,169 @@ export type DashboardPreferenceKey =
 
 export type DashboardPreferences = Record<DashboardPreferenceKey, boolean>;
 
+/* -------------------------------------------------------------------------- */
+/*  Admin console                                                             */
+/* -------------------------------------------------------------------------- */
+
+/** Order lifecycle as the operations team sees it (adds pending + refunded). */
+export type AdminOrderStatus =
+  | "pending"
+  | "processing"
+  | "shipped"
+  | "delivered"
+  | "cancelled"
+  | "refunded";
+
+/** Stock state used by the products table and the low-stock alert. */
+export type StockState = "in-stock" | "low-stock" | "out-of-stock";
+
+/** A product as the admin console stores it (extra ops fields on top of `Product`). */
+export interface AdminProduct extends Product {
+  sku: string;
+  /** What we pay per unit — used for the margin readout. */
+  costPerItem: number;
+  lowStockThreshold: number;
+  trackInventory: boolean;
+  metaTitle: string;
+  metaDescription: string;
+  /** Optional uploaded 3D asset token (mock — no real files). */
+  modelUrl?: string;
+}
+
+export interface AdminOrder {
+  id: string;
+  /** Display form with the leading "#". */
+  number: string;
+  customer: {
+    name: string;
+    email: string;
+    phone: string;
+  };
+  items: CartItem[];
+  totals: OrderTotals;
+  status: AdminOrderStatus;
+  paymentMethod: string;
+  placedAt: string;
+  shipping: Address;
+  /** Admin-only notes appended from the order detail sheet. */
+  notes: string[];
+  timeline: OrderTimelineStep[];
+}
+
+export interface AdminCustomer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  joinedAt: string;
+  active: boolean;
+  /** Derived from `ADMIN_ORDERS` so the list always agrees with the orders table. */
+  orderCount: number;
+  totalSpent: number;
+  addresses: Address[];
+}
+
+export type CouponType = "percentage" | "fixed" | "free-shipping";
+
+export type CouponStatus = "active" | "expired" | "depleted" | "scheduled";
+
+export interface AdminCoupon {
+  id: string;
+  code: string;
+  type: CouponType;
+  /** Percentage points, dollars off, or 0 for free shipping. */
+  value: number;
+  minOrder: number;
+  uses: number;
+  /** 0 = unlimited. */
+  usageLimit: number;
+  startsAt: string;
+  endsAt: string;
+  categories: string[];
+  active: boolean;
+}
+
+export interface AdminCategory {
+  id: string;
+  name: string;
+  slug: string;
+  emoji: string;
+  description: string;
+  /** Parent category name, or null for a top-level category. */
+  parent: string | null;
+}
+
+/** One bar in the revenue chart. */
+export interface RevenuePoint {
+  label: string;
+  value: number;
+}
+
+export interface AdminKpi {
+  id: string;
+  emoji: string;
+  label: string;
+  value: string;
+  /** Change vs the previous period; negative reads as a drop. */
+  trend: number;
+  trendUnit: "percent" | "count";
+  /** Seven-point sparkline series. */
+  spark: number[];
+}
+
+export interface Bestseller {
+  productId: string;
+  name: string;
+  unitsSold: number;
+  revenue: number;
+}
+
+export interface BreakdownRow {
+  label: string;
+  value: number;
+  hint?: string;
+}
+
+export interface AdminNotification {
+  id: string;
+  emoji: string;
+  title: string;
+  createdAt: string;
+  href: string;
+  read: boolean;
+}
+
+export interface AdminSettings {
+  general: {
+    storeName: string;
+    storeEmail: string;
+    phone: string;
+    address: string;
+    currency: CurrencyCode;
+    timezone: string;
+  };
+  shipping: {
+    freeShippingThreshold: number;
+    standardRate: number;
+    expressRate: number;
+    giftWrapPrice: number;
+  };
+  payments: {
+    stripeKey: string;
+    stripeEnabled: boolean;
+    bkashMerchantId: string;
+    bkashEnabled: boolean;
+    sslcommerzStoreId: string;
+    sslcommerzEnabled: boolean;
+  };
+  notifications: {
+    orderConfirmation: boolean;
+    shippingUpdate: boolean;
+    lowStockAlert: boolean;
+    adminEmail: string;
+  };
+}
+
 /** Uniform envelope for future API route responses. */
 export interface ApiResponse<TData> {
   data: TData | null;
