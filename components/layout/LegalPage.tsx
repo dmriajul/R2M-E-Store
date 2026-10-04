@@ -130,7 +130,7 @@ export function LegalPage({ content, title, lastUpdated }: LegalPageProps) {
         <p className="text-[11px] font-semibold tracking-[0.28em] text-primary uppercase print:text-neutral-600">
           {title}
         </p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-gradient-gold sm:text-4xl print:text-neutral-900">
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-gradient-gold sm:text-4xl print:bg-none! print:text-neutral-900!">
           {doc.title}
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base print:text-neutral-700">
