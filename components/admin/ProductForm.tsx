@@ -1,11 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CirclePlus, ImagePlus, Shapes, Trash2, X } from "lucide-react";
+import { CirclePlus, ImagePlus, Loader2, Shapes, Trash2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatPrice, slugify } from "@/lib/utils";
+import {
+  MAX_IMAGE_BYTES,
+  MODEL_FOLDER,
+  humanFileSize,
+  isRenderableImage,
+  publicIdFromUrl,
+  validateUploadFile,
+} from "@/lib/images";
 import { CATEGORY_META, COLOR_HEX, DEFAULT_SWATCH } from "@/lib/site";
 import { PRODUCT_BADGE_CHOICES } from "@/lib/mock-admin";
 import {
@@ -34,11 +43,13 @@ import {
   adminSelectClass,
 } from "@/components/admin/Field";
 import { useAdminStore } from "@/store/useAdminStore";
-import type { AdminProduct } from "@/types";
+import type { AdminProduct, UploadResult } from "@/types";
 
 /** New products start at 10; existing records keep their own threshold. */
 const NEW_PRODUCT_THRESHOLD = 10;
 const MAX_IMAGES = 5;
+/** Images arrive as Cloudinary URLs or, without Cloudinary, as local uploads. */
+const UPLOAD_HINT = `JPEG, PNG or WebP up to ${humanFileSize(MAX_IMAGE_BYTES)} each`;
 type AgeOption = (typeof AGE_OPTIONS)[number];
 
 /** "2-4Y" / "One Size" → [min, max] that always sits inside the age dropdowns. */
@@ -155,6 +166,13 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
   const sizes = watch("sizes") ?? [];
   const images = watch("images") ?? [];
   const modelUrl = watch("modelUrl") ?? "";
+
+  /* ---------- Uploads (Cloudinary, or /public/uploads in demo mode) ---------- */
+  const [uploading, setUploading] = useState<"image" | "model" | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [dragging, setDragging] = useState<"image" | "model" | null>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const modelInput = useRef<HTMLInputElement>(null);
   const category = watch("category");
   const active = watch("active");
   const featured = watch("featured");
@@ -198,7 +216,121 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
     setValue("images", [...images, `${stem}-${images.length + 1}`], { shouldDirty: true });
   };
 
+  /** XHR (not fetch) so the progress bar can show real percentages. */
+  const uploadAsset = (file: File, kind: "image" | "model") =>
+    new Promise<UploadResult>((resolve, reject) => {
+      const body = new FormData();
+      body.append("file", file);
+      body.append("kind", kind);
+
+      const request = new XMLHttpRequest();
+      request.open("POST", "/api/upload");
+      request.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          setProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      });
+      request.addEventListener("load", () => {
+        try {
+          const payload = JSON.parse(request.responseText) as {
+            data?: UploadResult;
+            error?: string;
+          };
+          if (request.status >= 400 || !payload.data) {
+            reject(new Error(payload.error ?? "Upload failed"));
+            return;
+          }
+          resolve(payload.data);
+        } catch {
+          reject(new Error("Unexpected response from the upload service"));
+        }
+      });
+      request.addEventListener("error", () => reject(new Error("Network error")));
+      request.send(body);
+    });
+
+  const handleImageFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const room = MAX_IMAGES - images.length;
+    if (room <= 0) {
+      toast.error(`Max ${MAX_IMAGES} images per product`);
+      return;
+    }
+
+    setUploading("image");
+    const uploaded: string[] = [];
+
+    try {
+      for (const file of Array.from(files).slice(0, room)) {
+        const validation = validateUploadFile(file, "image");
+        if (!validation.ok) {
+          toast.error(file.name, { description: validation.error });
+          continue;
+        }
+
+        setProgress(0);
+        try {
+          const asset = await uploadAsset(file, "image");
+          uploaded.push(asset.url);
+        } catch (error) {
+          toast.error(`Couldn't upload ${file.name}`, {
+            description: error instanceof Error ? error.message : undefined,
+          });
+        }
+      }
+
+      if (uploaded.length > 0) {
+        setValue("images", [...images, ...uploaded], { shouldDirty: true });
+        toast.success(uploaded.length === 1 ? "Image uploaded 📸" : `${uploaded.length} images uploaded 📸`);
+      }
+    } finally {
+      setUploading(null);
+      setProgress(0);
+    }
+  };
+
+  const handleModelFile = async (file: File | undefined) => {
+    if (!file) return;
+
+    const validation = validateUploadFile(file, "model");
+    if (!validation.ok) {
+      toast.error("That model can't be uploaded", { description: validation.error });
+      return;
+    }
+
+    setUploading("model");
+    setProgress(0);
+
+    try {
+      const asset = await uploadAsset(file, "model");
+      setValue("modelUrl", asset.url, { shouldDirty: true, shouldValidate: true });
+      toast.success("3D model uploaded 🧊", {
+        description: `${file.name} → ${MODEL_FOLDER}`,
+      });
+    } catch (error) {
+      toast.error("Couldn't upload that model", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setUploading(null);
+      setProgress(0);
+    }
+  };
+
+  /** Deletes a Cloudinary asset when an image is removed from the form. */
+  const discardAsset = async (value: string | undefined) => {
+    if (!value) return;
+    const publicId = publicIdFromUrl(value);
+    if (!publicId) return;
+
+    await fetch(`/api/upload?publicId=${encodeURIComponent(publicId)}`, {
+      method: "DELETE",
+    }).catch(() => null);
+  };
+
   const removeImage = (index: number) => {
+    void discardAsset(images[index]);
     setValue(
       "images",
       images.filter((_, position) => position !== index),
@@ -576,14 +708,25 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
               <FormSection title="Media">
                 <div className="sm:col-span-2">
                   <ul className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-                    {images.map((token, index) => (
+                    {images.map((value, index) => (
                       <li
-                        key={token}
+                        key={`${value}-${index}`}
                         className="group relative aspect-square overflow-hidden rounded-lg border border-[#2A2A2A] bg-[#101010]"
                       >
-                        <span className="grid h-full place-items-center bg-linear-to-br from-blue-500/20 to-violet-500/10 text-2xl">
-                          {categoryEmoji}
-                        </span>
+                        {isRenderableImage(value) ? (
+                          <Image
+                            src={value}
+                            alt={`Product image ${index + 1}`}
+                            fill
+                            sizes="160px"
+                            unoptimized={value.startsWith("/uploads/")}
+                            className="object-cover"
+                          />
+                        ) : (
+                          <span className="grid h-full place-items-center bg-linear-to-br from-blue-500/20 to-violet-500/10 text-2xl">
+                            {categoryEmoji}
+                          </span>
+                        )}
                         <button
                           type="button"
                           onClick={() => removeImage(index)}
@@ -593,7 +736,7 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
                           <X aria-hidden className="size-3" />
                         </button>
                         <span className="absolute inset-x-1 bottom-1 truncate rounded bg-[#0D0D0D]/80 px-1 py-0.5 text-[9px] text-muted-foreground">
-                          {token}
+                          {value}
                         </span>
                       </li>
                     ))}
@@ -601,32 +744,123 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
                     <li>
                       <button
                         type="button"
-                        onClick={addImage}
-                        className="flex h-full min-h-24 w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#3A3A3A] bg-[#101010] px-2 py-4 text-[11px] text-muted-foreground transition-colors duration-200 hover:border-blue-500/50 hover:text-blue-300 focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
+                        disabled={uploading !== null}
+                        onClick={() => imageInput.current?.click()}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          setDragging("image");
+                        }}
+                        onDragLeave={() => setDragging(null)}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          setDragging(null);
+                          void handleImageFiles(event.dataTransfer.files);
+                        }}
+                        className={cn(
+                          "flex h-full min-h-24 w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed px-2 py-4 text-center text-[11px] transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none disabled:opacity-60",
+                          dragging === "image"
+                            ? "border-blue-500/70 bg-blue-500/8 text-blue-200"
+                            : "border-[#3A3A3A] bg-[#101010] text-muted-foreground hover:border-blue-500/50 hover:text-blue-300",
+                        )}
                       >
-                        <ImagePlus aria-hidden className="size-4" />
-                        Add image
+                        {uploading === "image" ? (
+                          <>
+                            <Loader2 aria-hidden className="size-4 animate-spin" />
+                            {progress}%
+                          </>
+                        ) : (
+                          <>
+                            <UploadCloud aria-hidden className="size-4" />
+                            Drop or click
+                          </>
+                        )}
                       </button>
                     </li>
                   </ul>
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    Max {MAX_IMAGES} images, 2MB each · placeholders are generated for the demo.
-                  </p>
+
+                  {uploading === "image" && (
+                    <div
+                      role="progressbar"
+                      aria-valuenow={progress}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[#242424]"
+                    >
+                      <div
+                        className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  )}
+
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Max {MAX_IMAGES} images · {UPLOAD_HINT} · Cloudinary when configured,
+                      otherwise /public/uploads.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={addImage}
+                      className={cn(adminButtonGhost, "min-h-9 px-3 text-[11px]")}
+                    >
+                      <ImagePlus aria-hidden className="size-3.5" />
+                      Add placeholder
+                    </button>
+                  </div>
+
+                  <input
+                    ref={imageInput}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    className="sr-only"
+                    onChange={(event) => {
+                      void handleImageFiles(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
                 </div>
 
                 <AdminField
                   label="3D model"
                   htmlFor="product-model"
-                  hint=".glb files only — leave blank for the gradient viewer."
+                  hint=".glb only — uploaded to a separate folder so the viewer can stream it."
                   className="sm:col-span-2"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <input
                       id="product-model"
                       {...register("modelUrl")}
-                      placeholder="rainbow-tutu.glb"
+                      placeholder="rainbow-tutu.glb or a Cloudinary URL"
                       className={cn(adminInputClass, "flex-1 font-mono text-xs")}
                     />
+                    <button
+                      type="button"
+                      disabled={uploading !== null}
+                      onClick={() => modelInput.current?.click()}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        setDragging("model");
+                      }}
+                      onDragLeave={() => setDragging(null)}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        setDragging(null);
+                        void handleModelFile(event.dataTransfer.files[0]);
+                      }}
+                      className={cn(
+                        adminButtonGhost,
+                        "min-h-10 px-3",
+                        dragging === "model" && "border-blue-500/60 text-blue-300",
+                      )}
+                    >
+                      {uploading === "model" ? (
+                        <Loader2 aria-hidden className="size-3.5 animate-spin" />
+                      ) : (
+                        <UploadCloud aria-hidden className="size-3.5" />
+                      )}
+                      {uploading === "model" ? `${progress}%` : "Upload .glb"}
+                    </button>
                     {modelUrl ? (
                       <button
                         type="button"
@@ -642,7 +876,24 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
                       </span>
                     )}
                   </div>
-                  {modelUrl && !modelUrl.toLowerCase().endsWith(".glb") && (
+
+                  <input
+                    ref={modelInput}
+                    type="file"
+                    accept=".glb,model/gltf-binary"
+                    className="sr-only"
+                    onChange={(event) => {
+                      void handleModelFile(event.target.files?.[0]);
+                      event.target.value = "";
+                    }}
+                  />
+
+                  {modelUrl.startsWith("http") && (
+                    <p className="mt-1.5 truncate text-[11px] text-emerald-400">
+                      Uploaded ✓ {modelUrl}
+                    </p>
+                  )}
+                  {modelUrl && !modelUrl.toLowerCase().endsWith(".glb") && !modelUrl.startsWith("http") && (
                     <p role="alert" className="mt-1.5 text-[11px] text-amber-400">
                       Only .glb files are supported.
                     </p>

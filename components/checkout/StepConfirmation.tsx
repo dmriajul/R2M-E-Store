@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Copy, PackageCheck, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { formatDeliveryDate, formatPrice } from "@/lib/utils";
+import { PAYMENT_METHODS, isManualPayment } from "@/lib/payments";
+import { CopyableValue } from "@/components/checkout/PaymentMethodPicker";
 import { useCheckoutStore } from "@/store/useCheckoutStore";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { Confetti } from "@/components/checkout/Confetti";
@@ -18,6 +21,94 @@ export function StepConfirmation() {
   const reducedMotion = usePrefersReducedMotion();
 
   if (!order) return null;
+
+  const payment = order.payment;
+  const method = payment ? PAYMENT_METHODS[payment.method] : undefined;
+  const wallet = payment ? isManualPayment(payment.method) : false;
+
+  /** Method-specific "what happens next" panel. */
+  const paymentBlock = payment ? (
+    <div className="glass-soft flex flex-col gap-4 rounded-2xl border border-glass-border p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <span aria-hidden>{method?.icon ?? "🚚"}</span>
+          {wallet ? "Complete your payment" : `Paying with ${method?.name ?? "Cash on Delivery"}`}
+        </p>
+        <span
+          className={
+            payment.status === "PAID"
+              ? "rounded-full border border-emerald-500/40 bg-emerald-500/12 px-2.5 py-1 text-[10px] font-semibold tracking-[0.14em] text-emerald-300 uppercase"
+              : "rounded-full border border-amber-500/40 bg-amber-500/12 px-2.5 py-1 text-[10px] font-semibold tracking-[0.14em] text-amber-300 uppercase"
+          }
+        >
+          {payment.status === "PAID" ? "Paid" : payment.status === "PENDING" ? "Pending verification" : "Unpaid"}
+        </span>
+      </div>
+
+      {wallet ? (
+        <>
+          <p className="text-sm text-muted-foreground">
+            Send <span className="font-semibold text-foreground">{formatPrice(order.totals.total)}</span>{" "}
+            to any {method?.name} number below, then quote the order number as your reference.
+          </p>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(method?.numbers ?? []).map((number, index) => (
+              <CopyableValue
+                key={number}
+                label={`${method?.name} number ${index + 1}`}
+                value={number}
+                hint={index === 0 ? "Verified fastest" : undefined}
+              />
+            ))}
+          </div>
+
+          <CopyableValue
+            label="Payment reference"
+            value={order.number}
+            hint="Include this in the wallet's reference field"
+          />
+
+          <ul className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+            <li>⏱️ Usually verified within 1–2 hours (10am–10pm).</li>
+            <li>🧾 We&apos;ll email you the moment it clears — then your parcel ships.</li>
+            <li>❓Paid already? Reply to the confirmation email with your screenshot.</li>
+          </ul>
+
+          {payment.senderNumber && (
+            <p className="text-xs text-muted-foreground">
+              Sending from <span className="font-mono text-foreground">{payment.senderNumber}</span>
+            </p>
+          )}
+
+          {payment.screenshotUrl && (
+            <div className="flex items-center gap-3 rounded-xl border border-glass-border bg-[#141414] px-3 py-2">
+              <Image
+                src={payment.screenshotUrl}
+                alt="Your payment screenshot"
+                width={56}
+                height={56}
+                unoptimized={!payment.screenshotUrl.startsWith("/uploads")}
+                className="size-14 rounded-lg object-cover"
+              />
+              <p className="text-xs text-muted-foreground">
+                Screenshot received — our team is checking it against the transfer. ✅
+              </p>
+            </div>
+          )}
+        </>
+      ) : (
+        <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+          <li>
+            💵 Keep <span className="font-semibold text-foreground">exact change</span> ready for the
+            courier — cash on delivery only.
+          </li>
+          <li>🚚 We&apos;ll call {order.email ? "the number on your order" : "you"} before delivery.</li>
+          <li>🧾 You&apos;ll get a printed receipt with your parcel.</li>
+        </ul>
+      )}
+    </div>
+  ) : null;
 
   const copyOrderNumber = async () => {
     try {
@@ -112,12 +203,15 @@ export function StepConfirmation() {
         </div>
       </div>
 
+      {paymentBlock}
+
       {/* ---------- Summary ---------- */}
       <OrderSummary items={order.items} showCoupon={false} />
 
       <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
         <PackageCheck className="size-3.5 text-emerald-400" aria-hidden />
-        Total paid {formatPrice(order.totals.total)} · Packed in recycled materials ♻️
+        {payment?.status === "PAID" ? "Total paid" : "Order total"}{" "}
+        {formatPrice(order.totals.total)} · Packed in recycled materials ♻️
       </p>
 
       <Separator className="bg-glass-border" />

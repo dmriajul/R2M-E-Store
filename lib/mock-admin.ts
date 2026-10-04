@@ -11,6 +11,7 @@ import { computeTotals } from "@/lib/cart";
 import { CATEGORY_META, PRODUCTS, getProductById } from "@/lib/site";
 import { MOCK_ORDERS, DEMO_NOW } from "@/lib/mock-dashboard";
 import { slugify } from "@/lib/utils";
+import { isManualPayment, paymentMethodFromLabel } from "@/lib/payments";
 import { buildLineId } from "@/types";
 import type {
   Address,
@@ -30,6 +31,7 @@ import type {
   Product,
   ProductBadge,
   ProductCategory,
+  PaymentStatusKey,
   RevenuePoint,
   StockState,
 } from "@/types";
@@ -345,6 +347,34 @@ interface AdminOrderSeed {
   paymentMethod: string;
   notes?: string[];
   address?: Address;
+  /** Manual-payment state; derived from the method + status when omitted. */
+  paymentStatus?: PaymentStatusKey;
+  /** Payment screenshot / transaction reference (demo receipt for seeded rows). */
+  paymentRef?: string;
+}
+
+/**
+ * Demo payment screenshots shipped in `public/uploads/payments/`.
+ *
+ * They look like wallet receipts so the console's "Verify Payment" flow can be
+ * exercised without a wallet account — Cloudinary holds the real ones.
+ */
+const DEMO_PAYMENT_SCREENSHOTS: Readonly<Record<string, string>> = {
+  "LL-2025-00171": "/demo/payments/demo-bkash-receipt.svg",
+  "LL-2025-00172": "/demo/payments/demo-rocket-receipt.svg",
+};
+
+/** Cash stays unpaid until delivery; wallets wait for verification while pending. */
+function derivePaymentStatus(seed: AdminOrderSeed): PaymentStatusKey {
+  if (seed.status === "refunded") return "REFUNDED";
+  if (seed.status === "cancelled") return "FAILED";
+
+  const method = paymentMethodFromLabel(seed.paymentMethod);
+
+  if (method === "COD") return seed.status === "delivered" ? "PAID" : "UNPAID";
+  if (method === null || !isManualPayment(method)) return "PAID";
+
+  return seed.status === "pending" ? "PENDING" : "PAID";
 }
 
 const HOME_ADDRESS: Address = {
@@ -400,6 +430,8 @@ function buildAdminOrder(seed: AdminOrderSeed, index: number): AdminOrder {
     },
     status: seed.status,
     paymentMethod: seed.paymentMethod,
+    paymentStatus: seed.paymentStatus ?? derivePaymentStatus(seed),
+    paymentRef: seed.paymentRef ?? DEMO_PAYMENT_SCREENSHOTS[seed.id],
     placedAt: seed.placedAt,
     shipping: addressFor(seed.person, index),
     notes: seed.notes ?? [],
@@ -433,6 +465,17 @@ const extraOrders: AdminOrderSeed[] = [
     ],
   },
   {
+    id: "LL-2025-00172",
+    person: PEOPLE.fatima!,
+    status: "pending",
+    placedAt: "2026-10-02T09:41:00Z",
+    paymentMethod: "Rocket •••• 5120",
+    items: [
+      orderLine("floral-summer-dress", "Rose", "4T", 1, "2026-10-02T09:41:00Z"),
+      orderLine("butterfly-hair-clips", "Rose", "One Size", 2, "2026-10-02T09:42:00Z"),
+    ],
+  },
+  {
     id: "LL-2025-00170",
     person: PEOPLE.james!,
     status: "pending",
@@ -445,7 +488,7 @@ const extraOrders: AdminOrderSeed[] = [
     person: PEOPLE.fatima!,
     status: "processing",
     placedAt: "2026-09-30T11:05:00Z",
-    paymentMethod: "Nagad •••• 3390",
+    paymentMethod: "Cash on Delivery",
     items: [orderLine("cotton-pajama-set", "Sky", "3T", 2, "2026-09-30T11:05:00Z")],
     notes: ["Customer asked for gift wrapping — added by hand."],
   },

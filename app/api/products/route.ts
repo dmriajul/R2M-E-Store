@@ -1,31 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { MOCK_PRODUCTS } from "@/lib/site";
+import { listProducts } from "@/lib/data/products";
 import type { ApiResponse, Product } from "@/types";
 
+export const runtime = "nodejs";
+
 /**
- * Temporary catalogue endpoint backed by mock data. Supports `?category=` and
- * `?featured=true`; replace the body with a database query in a later step.
+ * Catalogue endpoint.
+ *
+ * Reads the seeded Postgres catalogue when `DATABASE_URL` is set and the mock
+ * catalogue in `lib/site.ts` otherwise — `source` in the response says which
+ * one answered. Supports `?category=`, `?featured=true` and `?all=true`
+ * (include drafts).
  */
-export function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+): Promise<NextResponse<ApiResponse<Product[]>>> {
   const { searchParams } = request.nextUrl;
-  const category = searchParams.get("category");
-  const featured = searchParams.get("featured");
 
-  let products: readonly Product[] = MOCK_PRODUCTS;
+  const { products, source } = await listProducts({
+    category: searchParams.get("category") ?? undefined,
+    featured: searchParams.get("featured") === "true",
+    activeOnly: searchParams.get("all") !== "true",
+  });
 
-  if (category) {
-    products = products.filter((product) => product.category === category);
-  }
-
-  if (featured === "true") {
-    products = products.filter((product) => product.featured);
-  }
-
-  const payload: ApiResponse<Product[]> = {
-    data: [...products],
-    error: null,
-    success: true,
-  };
-
-  return NextResponse.json(payload, { status: 200 });
+  return NextResponse.json(
+    { data: products, error: null, success: true, source },
+    { status: 200 },
+  );
 }

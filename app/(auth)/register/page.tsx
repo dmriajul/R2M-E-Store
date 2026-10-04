@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Mail, Phone, Sparkles, User } from "lucide-react";
 import { toast } from "sonner";
 import { registerSchema, type RegisterValues } from "@/lib/validations";
+import { DEMO_PASSWORD } from "@/lib/demo-mode";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { PasswordStrength } from "@/components/auth/PasswordStrength";
@@ -45,12 +47,57 @@ export default function RegisterPage() {
 
   const onSubmit = async (values: RegisterValues) => {
     setPending(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
 
-    toast.success("Account created! 🎉", {
-      description: `Welcome to the family, ${values.fullName.split(" ")[0]}.`,
-    });
-    router.push("/shop");
+    try {
+      /* 1 — create the account (Postgres via Prisma, or the demo user log). */
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: values.fullName,
+          email: values.email,
+          phone: values.phone || undefined,
+          password: values.password,
+        }),
+      });
+
+      const payload = (await response.json()) as { data?: unknown; error?: string };
+
+      if (!response.ok) {
+        setPending(false);
+        toast.error("We couldn't create that account", {
+          description: payload.error ?? "Please try again in a moment.",
+        });
+        return;
+      }
+
+      /* 2 — sign the new shopper straight in. */
+      const result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
+      }).catch(() => null);
+
+      if (!result || result.error) {
+        setPending(false);
+        toast.warning("Account created — please sign in", {
+          description: `Use your password on the sign-in page (demo tip: ${DEMO_PASSWORD}).`,
+        });
+        router.push("/login");
+        return;
+      }
+
+      toast.success("Account created! 🎉", {
+        description: `Welcome to the family, ${values.fullName.split(" ")[0]}.`,
+      });
+      router.push("/shop");
+      router.refresh();
+    } catch {
+      setPending(false);
+      toast.error("Something went wrong", {
+        description: "We couldn't reach the account service — please try again.",
+      });
+    }
   };
 
   return (

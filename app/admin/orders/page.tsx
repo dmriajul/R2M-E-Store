@@ -20,6 +20,8 @@ import {
 import { DEMO_NOW } from "@/lib/mock-dashboard";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { OrderStatusBadge } from "@/components/admin/StatusBadge";
+import { PaymentStatusBadge } from "@/components/admin/PaymentStatusBadge";
+import { paymentMethodFromLabel } from "@/lib/payments";
 import { OrderDetailSheet } from "@/components/admin/OrderDetailSheet";
 import {
   DropdownMenu,
@@ -176,9 +178,17 @@ export default function AdminOrdersPage() {
     {
       key: "payment",
       label: "Payment",
-      render: (order) => (
-        <span className="text-muted-foreground whitespace-nowrap">{order.paymentMethod}</span>
-      ),
+      render: (order) => {
+        const kind = paymentMethodFromLabel(order.paymentMethod);
+        return (
+          <span className="flex flex-col gap-1 whitespace-nowrap">
+            <span className="text-muted-foreground">{order.paymentMethod}</span>
+            <PaymentStatusBadge
+              status={order.paymentStatus ?? (kind === "COD" ? "UNPAID" : "PAID")}
+            />
+          </span>
+        );
+      },
     },
     {
       key: "status",

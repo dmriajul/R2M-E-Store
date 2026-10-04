@@ -100,6 +100,11 @@ interface AdminState {
   addOrderNote: (id: string, note: string) => void;
   refundOrder: (id: string) => void;
 
+  /* Manual-payment verification (Step 7). */
+  verifyPayment: (id: string) => void;
+  rejectPayment: (id: string, reason?: string) => void;
+  markCashPaid: (id: string) => void;
+
   toggleCustomerActive: (id: string) => void;
 
   saveCoupon: (values: AdminCouponValues, id?: string) => string;
@@ -205,6 +210,50 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
           ...order,
           status: "refunded",
           notes: [...order.notes, "Refund issued in full."],
+        };
+        return { ...next, timeline: buildAdminTimeline(next) };
+      }),
+    })),
+
+  verifyPayment: (id) =>
+    set((state) => ({
+      orders: state.orders.map((order) => {
+        if (order.id !== id) return order;
+        const next: AdminOrder = {
+          ...order,
+          // The console's status set has no "confirmed" — a verified payment
+          // moves the order straight into preparation.
+          status: "processing",
+          paymentStatus: "PAID",
+          notes: [...order.notes, "Payment verified by an operator."],
+        };
+        return { ...next, timeline: buildAdminTimeline(next) };
+      }),
+    })),
+
+  rejectPayment: (id, reason) =>
+    set((state) => ({
+      orders: state.orders.map((order) => {
+        if (order.id !== id) return order;
+        const next: AdminOrder = {
+          ...order,
+          status: "cancelled",
+          paymentStatus: "FAILED",
+          notes: [...order.notes, reason ?? "Payment could not be verified — order cancelled."],
+        };
+        return { ...next, timeline: buildAdminTimeline(next) };
+      }),
+    })),
+
+  markCashPaid: (id) =>
+    set((state) => ({
+      orders: state.orders.map((order) => {
+        if (order.id !== id) return order;
+        const next: AdminOrder = {
+          ...order,
+          status: "delivered",
+          paymentStatus: "PAID",
+          notes: [...order.notes, "Cash collected by the delivery partner."],
         };
         return { ...next, timeline: buildAdminTimeline(next) };
       }),

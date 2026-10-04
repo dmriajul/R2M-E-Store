@@ -4,14 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  Menu,
-  Search,
-  ShoppingBag,
-  User,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { Menu, Search, ShoppingBag, X, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_LINKS, SITE } from "@/lib/site";
 import { useCartStore, selectCartItemCount } from "@/store/useCartStore";
@@ -26,6 +19,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { AccountMenu } from "@/components/layout/AccountMenu";
 import { CartSheet } from "@/components/layout/CartSheet";
 import { MobileMenu } from "@/components/layout/MobileMenu";
 import { SearchDialog } from "@/components/layout/SearchDialog";
@@ -199,7 +193,7 @@ export function Navbar() {
             )}
           </button>
 
-          <IconButton icon={User} label="Account" href="/login" />
+          <AccountMenu />
 
           {/* ---------- Mobile hamburger ---------- */}
           <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>

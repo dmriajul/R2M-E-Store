@@ -1,5 +1,7 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { CATEGORY_META, COLOR_HEX, DEFAULT_SWATCH } from "@/lib/site";
+import { IMAGE_SIZES, imageSrc, isRenderableImage } from "@/lib/images";
 import type { Product } from "@/types";
 
 interface ProductArtworkProps {
@@ -31,6 +33,27 @@ export function ProductArtwork({
   const meta = CATEGORY_META[product.category];
   const swatch =
     COLOR_HEX[product.colors[index % product.colors.length] ?? ""] ?? DEFAULT_SWATCH;
+
+  /* A real photograph (Cloudinary or /public/uploads) always wins the slot. */
+  const candidate = product.images[index] ?? product.images[0];
+  const photo = isRenderableImage(candidate) ? candidate : undefined;
+
+  if (photo) {
+    return (
+      <div className={cn("relative overflow-hidden bg-[#101010]", className)}>
+        <Image
+          src={imageSrc(photo, size === "thumb" ? 200 : 900)}
+          alt={product.name}
+          fill
+          sizes={IMAGE_SIZES[size]}
+          // Local /public/uploads files are already exactly what we want;
+          // Cloudinary serves an optimised, auto-format URL.
+          unoptimized={photo.startsWith("/uploads/")}
+          className="object-cover transition-transform duration-700 ease-[var(--ease-luxe)] group-hover:scale-[1.04]"
+        />
+      </div>
+    );
+  }
 
   return (
     <div

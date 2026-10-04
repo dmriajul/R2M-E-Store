@@ -271,10 +271,110 @@ metadata and the toaster.
   low-stock amber, out-of-stock red), so a status never changes colour between pages.
 - **Loading** — `app/admin/loading.tsx` streams a console skeleton for every `/admin/*` route.
 
+## Step 7 — Database, auth, payments & image uploads
+
+Everything below is **optional**: with no `.env` file the storefront runs exactly as it did in
+Steps 1–6 (mock catalogue, in-memory orders, `password123` demo sign-in, `/public/uploads`
+images). Add the credentials and each integration switches over on its own.
+
+```bash
+cp .env.example .env          # every key is optional
+npx prisma generate           # only when DATABASE_URL is set
+npx prisma db push            # create the tables
+npm run db:seed               # 12 products · admin + 3 shoppers · 4 coupons · 5 orders
+npm run db:studio             # browse the data
+```
+
+### Database (Supabase Postgres + Prisma)
+
+- `prisma/schema.prisma` — `User`, `Product`, `Order`, `OrderItem`, `Address`, `Review`,
+  `WishlistItem`, `Coupon` with the `Role`, `OrderStatus`, `PaymentMethod`, `PaymentStatus` and
+  `CouponType` enums; order numbers follow `LL-2025-XXXXX`.
+- `prisma/seed.ts` — the same dataset the UI shows in demo mode, including two wallet payments
+  waiting for verification (with demo receipt screenshots) and one cash-on-delivery order.
+- `lib/prisma.ts` — a lazy singleton that **never** throws: `getPrisma()` returns `null` and
+  `withDatabase(query, fallback)` returns the mock data when Postgres is unreachable, and every
+  response carries `source: "database" | "mock"` so you can see which path answered.
+- Data layer: `lib/data/products.ts`, `lib/data/orders.ts`, `lib/data/coupons.ts`,
+  `lib/data/users.ts`.
+
+### Authentication (Auth.js / NextAuth v5)
+
+- Credentials provider + bcrypt (`lib/auth.ts`), JWT sessions carrying `id` and `role`,
+  `pages.signIn = "/login"`.
+- `middleware.ts` protects `/dashboard/*` (any session) and `/admin/*` (ADMIN only); `/shop`,
+  `/product/*`, `/login`, `/register` and `/checkout` stay public.
+- Register → `POST /api/auth/register` (Zod → bcrypt → Prisma, or the demo user log) → automatic
+  sign-in. Login errors are real: `unknown-email` and `wrong-password` are surfaced as friendly
+  copy instead of a generic "invalid credentials".
+- Demo accounts: `admin@littleluxe.com / admin123` (ADMIN) and `sarah@example.com / password123`
+  (CUSTOMER); **any** email works with `password123`. The Navbar account button turns into an
+  avatar + dropdown (Dashboard · Orders · Admin Console · Sign Out).
+
+### Payments
+
+- `lib/payments.ts` is the single source of truth: 🚚 Cash on Delivery (default, fee 0), 📱 bKash,
+  📱 Nagad, 🚀 Rocket (manual transfer), 💳 SSLCommerz (**disabled — "Coming soon"**). Numbers come
+  from `PAYMENT_*_NUMBERS`, falling back to the two store numbers in `lib/config.ts`.
+- Wallet payments walk the customer through the transfer, show copy-to-clipboard numbers, the exact
+  amount and the order number as the reference, then require a screenshot (≤2MB) plus an
+  "I've completed the payment" tick before the order can be placed.
+- `POST /api/orders` re-prices every line from the catalogue (a tampered client cannot set prices),
+  validates stock and coupons server-side (`lib/data/coupons.ts`: minimum order, expiry, usage limit;
+  the checkout's own percentage codes still resolve), then writes to Postgres or the demo log:
+  **COD → CONFIRMED + UNPAID**, **wallets → PENDING + PENDING**.
+- `PATCH /api/admin/orders/[orderNumber]/payment` is the operator decision — `approve` →
+  CONFIRMED + PAID, `reject` → CANCELLED + FAILED, `collect-cash` → DELIVERED + PAID. The admin
+  order sheet shows the payment status, the screenshot and the matching buttons.
+- The confirmation page repeats the method-specific instructions: wallet numbers, the order number
+  as reference, the 1–2 hour verification note and a track-order link.
+
+### Image uploads (Cloudinary)
+
+- `POST /api/upload` (multipart: `file`, `kind`, `folder?`) accepts JPEG/PNG/WebP ≤5MB and `.glb`
+  ≤10MB, stores images in `little-luxe/products` and models in `little-luxe/models`, and returns
+  `{ url, publicId, width, height, provider }`. Rate limit: 20 uploads/minute per session (IP when
+  signed out).
+- `DELETE /api/upload?publicId=…` removes an asset; with no Cloudinary keys the file is written to
+  `.uploads/{products,models}` (git-ignored) and streamed back through `app/uploads/[...path]`, so
+  uploads work out of the box — Next only serves `public/` files that existed at build time.
+- The admin product form has real drag-and-drop with a progress bar, previews and delete; the
+  storefront switches `ProductArtwork` (and therefore cards, gallery and quick view) to `next/image`
+  as soon as a product has a real URL, and keeps the gradient + emoji tile otherwise.
+
+### Cart persistence
+
+- `useCartStore` is wrapped in `persist` (`little-luxe-cart`, only `items`, `skipHydration: true`)
+  and rehydrated in a client effect, so the bag survives a refresh without hydration mismatches.
+
 ## Next up (not built yet)
 
-Database, real product photography and `.glb` models (`public/models`), server-side coupon
-validation, real returns/refunds, admin authentication, and cart/wishlist/account persistence.
+Real product photography and `.glb` models, live SSLCommerz checkout, database-backed
+cart/wishlist/account sync, transactional e-mail, and background jobs for abandoned carts.
+
+### Step 7 limitations
+
+- Supabase/Prisma needs a network round-trip: `prisma generate`, `validate`, `format` and `db push`
+  all download engine binaries from `binaries.prisma.sh`, which an offline sandbox blocks — so
+  `prisma/schema.prisma` was verified by hand (brace/structure/model/delta-field checks) and the
+  app's default is the mock fallback, with every Prisma call wrapped in try/catch.
+- Wallets are **manual by design** — the customer transfers money and uploads a screenshot; the
+  admin approves or rejects it. SSLCommerz stays a "Coming soon" card until a merchant account is
+  configured (`NEXT_PUBLIC_ENABLE_SSLCOMMERZ=true` + store id).
+- Uploaded files land in `.uploads/` when Cloudinary is unconfigured; on a serverless host that
+  disk is ephemeral, so add the Cloudinary keys for durable storage.
+- Wallet screenshots shipped with the demo are SVG receipts in `public/demo/payments/`; real
+  uploads go through the same `paymentRef` field.
+- Cart persistence is local (`localStorage`); merging the bag into the database on sign-in is
+  prepared but not switched on.
+- Admin console tables are still the seeded mock set. "Verify payment" / "Mark as paid" call the
+  API **and** update the console list, which is what makes the flow demoable without a database.
+- `npm run build` prints one known warning: `jose` (used by Auth.js) references `CompressionStream`
+  in the Edge Runtime bundle. Only compressed JWEs are affected — we use plain signed JWTs, and the
+  redirect/role behaviour is verified end to end.
+- Money constants are the demo's own: the storefront is priced in dollars (free shipping over $50)
+  while the client brief's `NEXT_PUBLIC_FREE_SHIPPING_THRESHOLD=500` is available as an override —
+  flip `NEXT_PUBLIC_CURRENCY=BDT` and the env value together for taka pricing.
 
 ### Step 6 limitations
 

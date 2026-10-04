@@ -1,7 +1,13 @@
 "use client";
 
 import { create } from "zustand";
-import type { CartItem, CouponState, PlacedOrder, ShippingMethod } from "@/types";
+import type {
+  CartItem,
+  CouponState,
+  OrderPaymentSnapshot,
+  PlacedOrder,
+  ShippingMethod,
+} from "@/types";
 import { computeTotals, lookupCoupon, type CartTotals } from "@/lib/cart";
 import type {
   ContactValues,
@@ -39,7 +45,12 @@ interface CheckoutState {
   setPayment: (values: PaymentValues) => void;
   applyCoupon: (code: string) => boolean;
   clearCoupon: () => void;
-  placeOrder: (items: readonly CartItem[], totals: CartTotals) => PlacedOrder;
+  placeOrder: (
+    items: readonly CartItem[],
+    totals: CartTotals,
+    /** Server response when `POST /api/orders` answered; demo values otherwise. */
+    meta?: { id?: string; orderNumber?: string; payment?: OrderPaymentSnapshot },
+  ) => PlacedOrder;
   reset: () => void;
 }
 
@@ -107,13 +118,15 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => ({
 
   clearCoupon: () => set({ coupon: null, couponMessage: null }),
 
-  placeOrder: (items, totals) => {
+  placeOrder: (items, totals, meta) => {
     const { contact, shipping } = get();
     const method: ShippingMethod = shipping?.method ?? "standard";
     const leadDays = method === "express" ? 3 : 7;
 
     const order: PlacedOrder = {
-      number: generateOrderNumber(),
+      id: meta?.id,
+      number: meta?.orderNumber ?? generateOrderNumber(),
+      payment: meta?.payment,
       email: contact?.email ?? "",
       placedAt: new Date().toISOString(),
       estimatedDelivery: addBusinessDays(leadDays).toISOString(),

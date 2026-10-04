@@ -1,0 +1,222 @@
+// LITTLE LUXE — Postgres schema (Supabase-compatible).
+//
+// The app runs without a database: every query in `lib/data/*` is wrapped in a
+// try/catch and falls back to the mock dataset. Add DATABASE_URL, then run
+//
+//   npx prisma generate
+//   npx prisma db push
+//   npm run db:seed
+//
+// to switch the storefront onto live data.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Supabase users can point pooled connections at DATABASE_URL and set
+  // DIRECT_URL for migrations, then uncomment the line below:
+  // directUrl = env("DIRECT_URL")
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Enums                                                                     */
+/* -------------------------------------------------------------------------- */
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  COD
+  BKASH
+  NAGAD
+  ROCKET
+  SSLCOMMERZ
+  CARD
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+  FREE_SHIPPING
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Models                                                                    */
+/* -------------------------------------------------------------------------- */
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  password  String
+  role      Role     @default(CUSTOMER)
+  avatar    String?
+  addresses Address[]
+  orders    Order[]
+  wishlist  WishlistItem[]
+  reviews   Review[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+}
+
+model Product {
+  id                String         @id @default(cuid())
+  name              String
+  slug              String         @unique
+  description       String
+  price             Float
+  originalPrice     Float?
+  category          String
+  gender            String
+  ageRange          String
+  material          String?
+  colors            String[] // colour names
+  sizes             String[]
+  images            String[] // Cloudinary URLs
+  modelColor        String?
+  stock             Int            @default(0)
+  lowStockThreshold Int            @default(10)
+  badge             String? // New | Sale | Bestseller | Organic
+  featured          Boolean        @default(false)
+  active            Boolean        @default(true)
+  orderItems        OrderItem[]
+  wishlistItems     WishlistItem[]
+  reviews           Review[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([category])
+  @@index([featured, active])
+}
+
+model Order {
+  id                String        @id @default(cuid())
+  orderNumber       String        @unique // LL-2025-XXXXX
+  userId            String
+  user              User          @relation(fields: [userId], references: [id])
+  items             OrderItem[]
+  subtotal          Float
+  shipping          Float         @default(0)
+  discount          Float         @default(0)
+  giftWrap          Float         @default(0)
+  total             Float
+  status            OrderStatus   @default(PENDING)
+  paymentMethod     PaymentMethod
+  paymentStatus     PaymentStatus @default(UNPAID)
+  paymentRef        String? // transaction ID or screenshot URL
+  shippingName      String
+  shippingEmail     String
+  shippingPhone     String
+  shippingAddress   String
+  shippingCity      String
+  shippingZip       String
+  shippingCountry   String        @default("Bangladesh")
+  notes             String?
+  trackingNumber    String?
+  estimatedDelivery DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([status, paymentStatus])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  name      String
+  color     String
+  size      String
+  quantity  Int
+  price     Float
+
+  @@index([orderId])
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String
+  address1  String
+  address2  String?
+  city      String
+  state     String?
+  zip       String
+  country   String   @default("Bangladesh")
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  rating    Int // 1-5
+  comment   String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([productId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model Coupon {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  type        CouponType
+  value       Float
+  minOrder    Float      @default(0)
+  maxDiscount Float?
+  usageLimit  Int?
+  usedCount   Int        @default(0)
+  startDate   DateTime?
+  endDate     DateTime?
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+}

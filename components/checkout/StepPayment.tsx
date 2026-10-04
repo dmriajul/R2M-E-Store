@@ -1,58 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, CreditCard, Landmark, Lock, Smartphone, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  ClipboardCopy,
+  ImagePlus,
+  Info,
+  Loader2,
+  Smartphone,
+  Sparkles,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import {
-  formatCardNumber,
-  formatExpiry,
-  paymentSchema,
-  type PaymentValues,
-} from "@/lib/validations";
+import { formatMoney } from "@/lib/config";
+import { paymentSchema, type PaymentValues } from "@/lib/validations";
 import { computeTotals } from "@/lib/cart";
+import { isManualPayment, PAYMENT_METHODS } from "@/lib/payments";
+import { humanFileSize } from "@/lib/images";
 import { useCartStore } from "@/store/useCartStore";
 import { useCheckoutStore } from "@/store/useCheckoutStore";
 import { Field, checkoutInputClass } from "@/components/checkout/Field";
-import { MastercardMark, VisaMark } from "@/components/checkout/CardBrandIcons";
+import {
+  CopyableValue,
+  PaymentMethodPicker,
+  PaymentSecurityNote,
+} from "@/components/checkout/PaymentMethodPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { PaymentKey, UploadResult } from "@/types";
 
-const METHODS = [
-  {
-    value: "card",
-    emoji: "💳",
-    label: "Credit / Debit Card",
-    description: "Visa, Mastercard, Amex",
-    icon: CreditCard,
-  },
-  {
-    value: "mobile",
-    emoji: "📱",
-    label: "Mobile Payment",
-    description: "bKash · Nagad",
-    icon: Smartphone,
-  },
-  {
-    value: "sslcommerz",
-    emoji: "🏦",
-    label: "SSLCommerz",
-    description: "Cards, net banking, wallets",
-    icon: Landmark,
-  },
-] as const;
+/** Screenshots are capped at 2MB; product images get 5MB in the admin console. */
+const MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024;
 
-/** Brand colours for the two mobile wallets. */
-const WALLETS = [
-  { value: "bkash", label: "bKash", color: "#E2136E" },
-  { value: "nagad", label: "Nagad", color: "#EE7023" },
-] as const;
-
-/** Step 3 — payment method and the final "Place Order" action. */
+/** Step 3 — payment method, manual-transfer details and the final "Place Order". */
 export function StepPayment() {
   const payment = useCheckoutStore((state) => state.payment);
+  const contact = useCheckoutStore((state) => state.contact);
   const shipping = useCheckoutStore((state) => state.shipping);
   const coupon = useCheckoutStore((state) => state.coupon);
   const setPayment = useCheckoutStore((state) => state.setPayment);
@@ -61,7 +49,17 @@ export function StepPayment() {
 
   const items = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
+
   const [placing, setPlacing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const totals = computeTotals(items, {
+    method: shipping?.method ?? "standard",
+    giftWrap: shipping?.giftWrap ?? false,
+    coupon,
+  });
 
   const {
     register,
@@ -73,241 +71,360 @@ export function StepPayment() {
     resolver: zodResolver(paymentSchema),
     mode: "onChange",
     defaultValues: payment ?? {
-      method: "card",
-      cardNumber: "",
-      cardName: "",
-      expiry: "",
-      cvv: "",
-      mobileProvider: "bkash",
-      mobileNumber: "",
+      method: "COD",
+      senderNumber: "",
+      screenshotUrl: "",
+      transactionId: "",
+      confirmed: false,
     },
   });
 
-  const method = watch("method");
-  const mobileProvider = watch("mobileProvider");
+  const method = watch("method") as PaymentKey;
+  const screenshotUrl = watch("screenshotUrl") ?? "";
+  const confirmed = watch("confirmed");
+  const config = PAYMENT_METHODS[method] ?? PAYMENT_METHODS.COD;
+  const manual = isManualPayment(method);
+
+  /** Uploads the proof-of-payment screenshot and stores its URL on the form. */
+  const handleScreenshot = async (file: File | undefined) => {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Upload a PNG, JPEG or WebP screenshot");
+      return;
+    }
+    if (file.size > MAX_SCREENSHOT_BYTES) {
+      toast.error(`Screenshots must be under ${humanFileSize(MAX_SCREENSHOT_BYTES)}`);
+      return;
+    }
+
+    setLocalPreview(URL.createObjectURL(file));
+    setUploading(true);
+
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      body.append("folder", "little-luxe/payments");
+
+      const response = await fetch("/api/upload", { method: "POST", body });
+      const payload = (await response.json()) as { data?: UploadResult; error?: string };
+
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error ?? "Upload failed");
+      }
+
+      setValue("screenshotUrl", payload.data.url, { shouldValidate: true });
+      toast.success("Screenshot uploaded 📎", {
+        description: `Stored via ${payload.data.provider === "cloudinary" ? "Cloudinary" : "local demo storage"}.`,
+      });
+    } catch (error) {
+      setValue("screenshotUrl", "", { shouldValidate: true });
+      setLocalPreview(null);
+      toast.error("Couldn't upload that screenshot", {
+        description: error instanceof Error ? error.message : "Please try again",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const onSubmit = async (values: PaymentValues) => {
     setPlacing(true);
     setPayment(values);
 
-    // No real processing: simulate the gateway round-trip, then record the order.
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    const fallbackNumber = `LL-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+    let orderNumber = fallbackNumber;
+    let persistedId: string | undefined;
 
-    const totals = computeTotals(items, {
-      method: shipping?.method ?? "standard",
-      giftWrap: shipping?.giftWrap ?? false,
-      coupon,
+    /* Persist the order — the API answers from Postgres, or from the demo log. */
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            productId: item.productId,
+            name: item.name,
+            color: item.color,
+            size: item.size,
+            quantity: item.quantity,
+            price: item.price,
+          })),
+          contact: {
+            name: shipping?.fullName ?? "Guest shopper",
+            email: contact?.email ?? "",
+            phone: contact?.phone ?? "",
+          },
+          shipping: {
+            address: [shipping?.address1, shipping?.address2].filter(Boolean).join(", "),
+            city: shipping?.city ?? "",
+            zip: shipping?.postalCode ?? "",
+            country: shipping?.country ?? "Bangladesh",
+            method: shipping?.method ?? "standard",
+            giftWrap: shipping?.giftWrap ?? false,
+          },
+          payment: {
+            method: values.method,
+            senderNumber: values.senderNumber,
+            screenshotUrl: values.screenshotUrl,
+          },
+          couponCode: coupon?.code,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        data?: { orderNumber: string; id: string };
+        error?: string;
+      };
+
+      if (response.ok && payload.data) {
+        orderNumber = payload.data.orderNumber;
+        persistedId = payload.data.id;
+      } else {
+        toast.warning("Order saved locally", {
+          description: payload.error ?? "The order service is unreachable — demo mode.",
+        });
+      }
+    } catch {
+      toast.warning("Order saved locally", {
+        description: "No backend reachable — your order lives in this browser session.",
+      });
+    }
+
+    placeOrder(items, totals, {
+      id: persistedId,
+      orderNumber,
+      payment: {
+        method: values.method,
+        status: method === "COD" ? "UNPAID" : "PENDING",
+        reference: orderNumber,
+        senderNumber: values.senderNumber,
+        screenshotUrl: values.screenshotUrl,
+      },
     });
 
-    placeOrder(items, totals);
     clearCart();
     setPlacing(false);
 
     toast.success("Order placed successfully! 🎉", {
-      description: "A confirmation email is on its way.",
+      description:
+        method === "COD"
+          ? "Pay in cash when your parcel arrives."
+          : "We'll confirm your order as soon as the payment is verified.",
     });
   };
+
+  const senderHint = config.numbers?.[0] ?? "";
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
       <header>
         <h2 className="text-2xl font-bold tracking-tight">Payment Method</h2>
-        <p className="mt-1.5 flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Lock className="size-3.5 text-emerald-400" aria-hidden />
-          Encrypted end to end. This is a demo — no card is ever charged.
-        </p>
+        <PaymentSecurityNote />
       </header>
 
-      {/* ---------- Method tabs ---------- */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        {METHODS.map((option) => {
-          const selected = method === option.value;
-
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => setValue("method", option.value, { shouldValidate: true })}
-              aria-pressed={selected}
-              className={cn(
-                "flex flex-col items-start gap-2 rounded-2xl border px-4 py-4 text-left transition-all duration-400 ease-[var(--ease-luxe)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                selected
-                  ? "border-primary/60 bg-primary/8 shadow-[0_0_30px_-16px_rgba(212,175,55,0.9)]"
-                  : "border-glass-border bg-glass hover:border-rose/35",
-              )}
-            >
-              <span className="flex w-full items-center gap-2">
-                <span className="text-xl" aria-hidden>
-                  {option.emoji}
-                </span>
-                <span className="flex-1 text-sm font-semibold">{option.label}</span>
-                <span
-                  aria-hidden
-                  className={cn(
-                    "grid size-4 place-items-center rounded-full border",
-                    selected ? "border-primary bg-primary" : "border-glass-border",
-                  )}
-                >
-                  {selected && <span className="size-1.5 rounded-full bg-primary-foreground" />}
-                </span>
-              </span>
-              <span className="text-xs text-muted-foreground">{option.description}</span>
-            </button>
-          );
-        })}
-      </div>
+      <PaymentMethodPicker
+        value={method}
+        onChange={(next) => {
+          setValue("method", next, { shouldValidate: true });
+          setValue("confirmed", next === "COD", { shouldValidate: false });
+        }}
+      />
       <input type="hidden" {...register("method")} />
 
-      {/* ---------- Card ---------- */}
-      {method === "card" && (
-        <div className="flex flex-col gap-5">
-          <Field
-            label="Card number"
-            htmlFor="pay-card-number"
-            error={errors.cardNumber?.message}
-          >
-            <div className="relative">
-              <Input
-                id="pay-card-number"
-                inputMode="numeric"
-                autoComplete="cc-number"
-                placeholder="4111 1111 1111 1111"
-                aria-invalid={Boolean(errors.cardNumber)}
-                className={`${checkoutInputClass} pr-24 font-mono tracking-wider`}
-                {...register("cardNumber", {
-                  onChange: (event) => {
-                    setValue("cardNumber", formatCardNumber(event.target.value), {
-                      shouldValidate: true,
-                    });
-                  },
-                })}
-              />
-              <span className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1.5">
-                <VisaMark className="h-4 w-auto" />
-                <MastercardMark className="h-4 w-auto" />
-              </span>
+      {/* ---------- Cash on delivery ---------- */}
+      {method === "COD" && (
+        <div className="glass-soft flex flex-col gap-3 rounded-2xl border border-glass-border p-5">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <Wallet className="size-4 text-emerald-400" aria-hidden />
+            You&apos;ll pay {formatMoney(totals.total)} in cash when your order arrives
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Please keep exact change ready. Our delivery partner collects payment at your doorstep
+            and hands over a printed receipt. 🚚
+          </p>
+        </div>
+      )}
+
+      {/* ---------- Manual mobile wallets ---------- */}
+      {manual && (
+        <div className="flex flex-col gap-4">
+          <div className="glass-soft flex flex-col gap-3 rounded-2xl border border-glass-border p-5">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <Smartphone className="size-4 text-rose" aria-hidden />
+              Send {formatMoney(totals.total)} to one of these {config.name} numbers
+            </p>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(config.numbers ?? []).map((number, index) => (
+                <CopyableValue
+                  key={number}
+                  label={`${config.name} number ${index + 1}`}
+                  value={number}
+                  hint={index === 0 ? "Preferred — verified fastest" : undefined}
+                />
+              ))}
             </div>
-          </Field>
 
-          <Field label="Name on card" htmlFor="pay-card-name" error={errors.cardName?.message}>
-            <Input
-              id="pay-card-name"
-              autoComplete="cc-name"
-              placeholder="ALEX PARKER"
-              aria-invalid={Boolean(errors.cardName)}
-              className={cn(checkoutInputClass, "uppercase")}
-              {...register("cardName")}
-            />
-          </Field>
+            <div className="rounded-xl border border-glass-border bg-[#141414] px-4 py-3">
+              <p className="text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+                Reference
+              </p>
+              <p className="mt-0.5 text-sm text-foreground">
+                Your <span className="font-mono">LL-…</span> order number, generated when you place
+                the order
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Quote it in the {config.name} reference field so we can match your payment
+              </p>
+            </div>
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Expiry" htmlFor="pay-expiry" error={errors.expiry?.message}>
+            {config.ussd && (
+              <p className="text-xs text-muted-foreground">
+                Prefer USSD? Dial <span className="font-mono text-foreground">{config.ussd}</span>{" "}
+                and follow the prompts.
+              </p>
+            )}
+
+            <ol className="mt-1 flex flex-col gap-1.5 text-xs text-muted-foreground">
+              {(config.instructions ?? "").split("\n").map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Screenshot upload */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
+              Payment screenshot
+            </p>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                onChange={(event) => {
+                  void handleScreenshot(event.target.files?.[0]);
+                  event.target.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInput.current?.click()}
+                disabled={uploading}
+                className="h-12 w-full gap-2 rounded-full border-glass-border bg-glass text-xs font-semibold tracking-[0.16em] uppercase transition-colors duration-300 hover:border-primary/50 hover:text-primary sm:w-auto"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Uploading…
+                  </>
+                ) : (
+                  <>
+                    <ImagePlus className="size-4" />
+                    Upload Payment Screenshot
+                  </>
+                )}
+              </Button>
+              <span className="text-xs text-muted-foreground">Image only · max 2MB</span>
+            </div>
+
+            {(localPreview || screenshotUrl) && (
+              <div className="relative w-fit overflow-hidden rounded-xl border border-glass-border">
+                <Image
+                  src={screenshotUrl || localPreview || ""}
+                  alt="Payment screenshot preview"
+                  width={220}
+                  height={220}
+                  unoptimized={Boolean(screenshotUrl) && !screenshotUrl.startsWith("/uploads")}
+                  className="h-32 w-auto object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setValue("screenshotUrl", "", { shouldValidate: true });
+                    setLocalPreview(null);
+                  }}
+                  aria-label="Remove screenshot"
+                  className="absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-full border border-glass-border bg-[#0A0A0A]/85 text-muted-foreground transition-colors duration-300 hover:text-rose focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            )}
+
+            {errors.screenshotUrl && (
+              <p role="alert" className="text-xs text-rose">
+                {errors.screenshotUrl.message}
+              </p>
+            )}
+
+            <Field
+              label="Transaction ID (optional)"
+              htmlFor="pay-transaction"
+              error={errors.transactionId?.message}
+              hint="Found in the wallet's confirmation SMS."
+            >
               <Input
-                id="pay-expiry"
-                inputMode="numeric"
-                autoComplete="cc-exp"
-                placeholder="MM/YY"
-                aria-invalid={Boolean(errors.expiry)}
-                className={cn(checkoutInputClass, "font-mono tracking-wider")}
-                {...register("expiry", {
-                  onChange: (event) => {
-                    setValue("expiry", formatExpiry(event.target.value), {
-                      shouldValidate: true,
-                    });
-                  },
-                })}
+                id="pay-transaction"
+                placeholder="e.g. 8N7A2K4LQ1"
+                className={cn(checkoutInputClass, "font-mono")}
+                {...register("transactionId")}
               />
             </Field>
 
-            <Field label="CVV" htmlFor="pay-cvv" error={errors.cvv?.message} hint="3 digits on the back">
+            <Field
+              label="Number you're sending from"
+              htmlFor="pay-sender"
+              error={errors.senderNumber?.message}
+              hint={senderHint ? `Send from your own ${config.name} number` : undefined}
+            >
               <Input
-                id="pay-cvv"
-                inputMode="numeric"
-                autoComplete="cc-csc"
-                placeholder="123"
-                maxLength={4}
-                aria-invalid={Boolean(errors.cvv)}
-                className={cn(checkoutInputClass, "font-mono tracking-wider")}
-                {...register("cvv")}
+                id="pay-sender"
+                type="tel"
+                inputMode="tel"
+                placeholder="+880 1700 000000"
+                aria-invalid={Boolean(errors.senderNumber)}
+                className={checkoutInputClass}
+                {...register("senderNumber")}
               />
             </Field>
+
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-glass-border bg-glass px-4 py-3.5 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 shrink-0 cursor-pointer rounded border-glass-border accent-[var(--primary)]"
+                {...register("confirmed")}
+              />
+              <span>
+                I&apos;ve completed the payment
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Your order will be confirmed after payment verification (usually within 1–2
+                  hours).
+                </span>
+              </span>
+            </label>
+            {errors.confirmed && (
+              <p role="alert" className="text-xs text-rose">
+                {errors.confirmed.message}
+              </p>
+            )}
           </div>
         </div>
       )}
 
-      {/* ---------- Mobile wallet ---------- */}
-      {method === "mobile" && (
-        <div className="flex flex-col gap-5">
-          <fieldset className="flex flex-col gap-3">
-            <legend className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-              Provider
-            </legend>
-            <div className="flex flex-wrap gap-3">
-              {WALLETS.map((wallet) => {
-                const selected = mobileProvider === wallet.value;
-
-                return (
-                  <button
-                    key={wallet.value}
-                    type="button"
-                    onClick={() =>
-                      setValue("mobileProvider", wallet.value, { shouldValidate: true })
-                    }
-                    aria-pressed={selected}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-full border px-5 py-3 text-sm font-semibold transition-all duration-400 ease-[var(--ease-luxe)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                      selected
-                        ? "text-white shadow-[0_0_28px_-12px_rgba(255,255,255,0.4)]"
-                        : "border-glass-border bg-glass text-muted-foreground hover:text-foreground",
-                    )}
-                    style={
-                      selected
-                        ? { backgroundColor: wallet.color, borderColor: wallet.color }
-                        : undefined
-                    }
-                  >
-                    <span
-                      aria-hidden
-                      className="grid size-5 place-items-center rounded-full bg-white/25 text-[10px] font-bold"
-                    >
-                      {wallet.label.charAt(0)}
-                    </span>
-                    {wallet.label}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
-          <input type="hidden" {...register("mobileProvider")} />
-
-          <Field
-            label="Mobile number"
-            htmlFor="pay-mobile"
-            error={errors.mobileNumber?.message}
-            hint="You'll receive a payment request — approve it to complete your order."
-          >
-            <Input
-              id="pay-mobile"
-              type="tel"
-              inputMode="tel"
-              placeholder="+880 1700 000000"
-              aria-invalid={Boolean(errors.mobileNumber)}
-              className={checkoutInputClass}
-              {...register("mobileNumber")}
-            />
-          </Field>
-        </div>
-      )}
-
-      {/* ---------- SSLCommerz ---------- */}
-      {method === "sslcommerz" && (
+      {/* ---------- Disabled gateway ---------- */}
+      {method === "SSLCOMMERZ" && (
         <div className="glass-soft flex items-start gap-3 rounded-2xl border border-glass-border p-5">
-          <Landmark className="mt-0.5 size-5 shrink-0 text-cyan" aria-hidden />
+          <Info className="mt-0.5 size-5 shrink-0 text-cyan" aria-hidden />
           <div>
-            <p className="text-sm font-semibold">Redirect to secure payment</p>
+            <p className="text-sm font-semibold">Coming soon</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              You&apos;ll be taken to SSLCommerz to pay with cards, mobile banking
-              or internet banking, then returned here to confirm your order. 🔒
+              {config.comingSoon} Until then, cash on delivery and the mobile wallets are ready to
+              go. 💳
             </p>
           </div>
         </div>
@@ -327,25 +444,29 @@ export function StepPayment() {
 
         <Button
           type="submit"
-          disabled={!isValid || placing}
+          disabled={!isValid || placing || uploading}
           className="group h-14 w-full gap-2 rounded-full bg-primary px-8 text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_46px_-8px_rgba(212,175,55,0.95)] disabled:opacity-45 disabled:shadow-none sm:w-auto motion-safe:hover:not-disabled:scale-[1.02]"
         >
           {placing ? (
             <>
-              <span
-                aria-hidden
-                className="size-4 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground motion-safe:animate-spin"
-              />
+              <Loader2 className="size-4 animate-spin" />
               Processing…
             </>
           ) : (
             <>
               <Sparkles className="size-4" />
-              Place Order 🎉
+              {method === "COD" ? "Place Order 🎉" : "Submit for Verification"}
             </>
           )}
         </Button>
       </div>
+
+      {manual && !confirmed && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <ClipboardCopy className="size-3.5" aria-hidden />
+          Tip: send the exact amount and keep the reference handy — verification is manual.
+        </p>
+      )}
     </form>
   );
 }

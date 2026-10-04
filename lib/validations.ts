@@ -59,66 +59,130 @@ export const shippingSchema = z.object({
 
 export type ShippingValues = z.infer<typeof shippingSchema>;
 
+export const PAYMENT_METHOD_KEYS = ["COD", "BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ"] as const;
+
+/** Methods that require the customer to transfer money and upload proof. */
+export const MANUAL_PAYMENT_KEYS = ["BKASH", "NAGAD", "ROCKET"] as const;
+
+/**
+ * Payment step (Step 7).
+ *
+ * Cash on delivery needs nothing but a tap. The three mobile wallets are
+ * *manual*: the customer sends the money to one of the store numbers, keeps the
+ * order number as the reference and uploads a screenshot — so the form insists
+ * on a screenshot and an explicit "I've completed the payment" tick.
+ */
 export const paymentSchema = z
   .object({
-    method: z.enum(["card", "mobile", "sslcommerz"]),
-    cardNumber: z.string().trim().optional(),
-    cardName: z.string().trim().optional(),
-    expiry: z.string().trim().optional(),
-    cvv: z.string().trim().optional(),
-    mobileProvider: z.enum(["bkash", "nagad"]),
-    mobileNumber: z.string().trim().optional(),
+    method: z.enum(PAYMENT_METHOD_KEYS, {
+      errorMap: () => ({ message: "Choose how you'd like to pay" }),
+    }),
+    /** Wallet the customer is paying from (manual methods). */
+    senderNumber: z.string().trim().optional(),
+    /** Cloudinary/upload URL of the payment screenshot. */
+    screenshotUrl: z.string().trim().optional(),
+    /** Transaction id from the wallet app, when the customer has it. */
+    transactionId: z.string().trim().optional(),
+    /** "I've completed the payment". */
+    confirmed: z.boolean(),
   })
   .superRefine((values, ctx) => {
-    if (values.method !== "card") return;
+    if (values.method === "COD") return;
+    if (!MANUAL_PAYMENT_KEYS.includes(values.method as (typeof MANUAL_PAYMENT_KEYS)[number])) return;
 
-    const digits = (values.cardNumber ?? "").replace(/\s/g, "");
-    if (!/^\d{13,19}$/.test(digits)) {
+    const digits = (values.senderNumber ?? "").replace(/[^\d]/g, "");
+    if (digits.length < 11) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["cardNumber"],
-        message: "Enter a valid card number",
+        path: ["senderNumber"],
+        message: "Enter the number you're sending from",
       });
     }
 
-    if (!values.cardName || values.cardName.length < 3) {
+    if (!values.screenshotUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["cardName"],
-        message: "Enter the name on the card",
+        path: ["screenshotUrl"],
+        message: "Upload the payment screenshot",
       });
     }
 
-    if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(values.expiry ?? "")) {
+    if (!values.confirmed) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["expiry"],
-        message: "Use MM/YY",
-      });
-    }
-
-    if (!/^\d{3,4}$/.test(values.cvv ?? "")) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["cvv"],
-        message: "3 or 4 digits",
-      });
-    }
-  })
-  .superRefine((values, ctx) => {
-    if (values.method !== "mobile") return;
-
-    const digits = (values.mobileNumber ?? "").replace(/[^\d]/g, "");
-    if (digits.length < 10) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["mobileNumber"],
-        message: "Enter the mobile number to bill",
+        path: ["confirmed"],
+        message: "Tick the box once you've sent the money",
       });
     }
   });
 
 export type PaymentValues = z.infer<typeof paymentSchema>;
+
+/** Registration payload accepted by `POST /api/auth/register`. */
+export const registerApiSchema = z.object({
+  name: z.string().trim().min(3, "Enter your full name").max(80, "That name is too long"),
+  email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^[+()\-\s0-9]{7,20}$/, "Enter a valid phone number")
+    .optional()
+    .or(z.literal("")),
+  password: z
+    .string()
+    .min(8, "Use at least 8 characters")
+    .regex(/[A-Z]/, "Add an uppercase letter")
+    .regex(/\d/, "Add a number"),
+});
+
+export type RegisterApiValues = z.infer<typeof registerApiSchema>;
+
+/** `POST /api/orders` payload — prices are re-checked server-side. */
+export const createOrderSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        name: z.string().min(1),
+        color: z.string().min(1),
+        size: z.string().min(1),
+        quantity: z.coerce.number().int().min(1).max(10),
+        price: z.coerce.number().min(0),
+      }),
+    )
+    .min(1, "Your bag is empty"),
+  contact: z.object({
+    name: z.string().trim().min(2, "Enter your name"),
+    email: z.string().trim().email("Enter a valid email"),
+    phone: z.string().trim().min(7, "Enter a phone number"),
+  }),
+  shipping: z.object({
+    address: z.string().trim().min(5, "Enter the delivery address"),
+    city: z.string().trim().min(2, "Enter the city"),
+    zip: z.string().trim().min(3, "Enter the postal code"),
+    country: z.string().trim().min(2, "Enter the country"),
+    method: z.enum(["standard", "express"]),
+    giftWrap: z.boolean(),
+  }),
+  payment: z.object({
+    method: z.enum(PAYMENT_METHOD_KEYS),
+    senderNumber: z.string().trim().optional(),
+    screenshotUrl: z.string().trim().optional(),
+  }),
+  couponCode: z.string().trim().optional(),
+});
+
+export type CreateOrderValues = z.infer<typeof createOrderSchema>;
+
+/** Admin decision on a manual payment (`PATCH /api/admin/orders/[n]/payment`). */
+export const paymentsAdminSchema = z.object({
+  action: z.enum(["approve", "reject", "collect-cash"], {
+    errorMap: () => ({ message: "Pick approve, reject or collect-cash" }),
+  }),
+  note: z.string().trim().max(280, "Keep the note under 280 characters").optional(),
+});
+
+export type PaymentsAdminValues = z.infer<typeof paymentsAdminSchema>;
 
 /** Card numbers Apple-style: 4111 1111 1111 1111. */
 export function formatCardNumber(value: string): string {

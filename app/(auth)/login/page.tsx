@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { loginSchema, type LoginValues } from "@/lib/validations";
+import { DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD, DEMO_PASSWORD } from "@/lib/demo-mode";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { SocialButtons } from "@/components/auth/SocialButtons";
@@ -15,8 +17,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 
-/** Demo credential every mock sign-in expects. */
-const DEMO_PASSWORD = "password123";
+/** Friendly copy for each failure code the credentials provider returns. */
+const ERROR_COPY: Readonly<Record<string, { title: string; description: string }>> = {
+  "unknown-email": {
+    title: "We couldn't find that account",
+    description: `No shopper uses that email yet. In demo mode try ${DEMO_ADMIN_EMAIL} — or register in a few seconds.`,
+  },
+  "wrong-password": {
+    title: "That password does not match",
+    description: `For this demo, use “${DEMO_PASSWORD}” (or “${DEMO_ADMIN_PASSWORD}” for the admin console).`,
+  },
+  CredentialsSignin: {
+    title: "That password does not match",
+    description: `For this demo, use “${DEMO_PASSWORD}” — or sign in as an admin with ${DEMO_ADMIN_EMAIL}.`,
+  },
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,13 +50,26 @@ export default function LoginPage() {
   const onSubmit = async (values: LoginValues) => {
     setPending(true);
 
-    // Mock auth: any email works with the demo password.
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    /* Where to land after a successful sign-in (middleware adds ?callbackUrl=). */
+    const callbackUrl =
+      new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get(
+        "callbackUrl",
+      ) ?? "/shop";
 
-    if (values.password !== DEMO_PASSWORD) {
+    const result = await signIn("credentials", {
+      email: values.email,
+      password: values.password,
+      redirect: false,
+    }).catch(() => null);
+
+    if (!result || result.error) {
       setPending(false);
-      toast.error("That password does not match", {
-        description: `For this demo, use “${DEMO_PASSWORD}”.`,
+
+      const code = result?.code ?? result?.error ?? "CredentialsSignin";
+      const copy = ERROR_COPY[code] ?? ERROR_COPY.CredentialsSignin;
+
+      toast.error(copy?.title ?? "That password does not match", {
+        description: copy?.description,
       });
       return;
     }
@@ -49,7 +77,9 @@ export default function LoginPage() {
     toast.success("Welcome back! 👋", {
       description: `Signed in as ${values.email}`,
     });
-    router.push("/shop");
+
+    router.push(callbackUrl);
+    router.refresh();
   };
 
   return (

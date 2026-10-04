@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { toast } from "sonner";
 import { buildLineId, type CartItem, type Product, type ProductVariant } from "@/types";
 import { MAX_QUANTITY_PER_LINE, computeTotals } from "@/lib/cart";
@@ -64,7 +65,9 @@ function resolveLine(items: readonly CartItem[], identifier: string): CartItem |
   );
 }
 
-export const useCartStore = create<CartState>()((set, get) => ({
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
   items: [],
   total: 0,
   itemCount: 0,
@@ -216,8 +219,27 @@ export const useCartStore = create<CartState>()((set, get) => ({
         );
 
     set(withTotals(nextItems));
-  },
-}));
+    },
+    }),
+    {
+      name: "little-luxe-cart",
+      storage: createJSONStorage(() => localStorage),
+      /** Only the lines persist; totals are recomputed on rehydrate. */
+      partialize: (state) => ({ items: state.items }),
+      /**
+       * `skipHydration` keeps the server render empty, so the badge never
+       * mismatches. `components/providers/CartHydration.tsx` calls rehydrate()
+       * once the app is on the client.
+       */
+      skipHydration: true,
+      version: 1,
+      merge: (persisted, current) => {
+        const saved = (persisted as { items?: CartItem[] } | undefined)?.items ?? [];
+        return { ...current, ...withTotals(saved) };
+      },
+    },
+  ),
+);
 
 /* -------------------------------------------------------------------------- */
 /*  Selectors — subscribe to the narrowest slice possible.                     */

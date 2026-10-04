@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { Mail, MapPin, Printer, Receipt, Send, X } from "lucide-react";
+import { Check, Eye, Mail, MapPin, Printer, Receipt, Send, Wallet, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatPrice, formatStamp } from "@/lib/utils";
 import { ADMIN_ORDER_STATUS_LABEL, ADMIN_STATUSES } from "@/lib/mock-admin";
+import { PAYMENT_STATUS_META, isManualPayment, paymentMethodFromLabel } from "@/lib/payments";
 import {
   Sheet,
   SheetContent,
@@ -14,6 +16,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { OrderStatusBadge } from "@/components/admin/StatusBadge";
+import { PaymentStatusBadge } from "@/components/admin/PaymentStatusBadge";
 import { ConfirmActionDialog } from "@/components/admin/ConfirmActionDialog";
 import {
   AdminField,
@@ -48,20 +51,72 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
   const updateOrderStatus = useAdminStore((state) => state.updateOrderStatus);
   const addOrderNote = useAdminStore((state) => state.addOrderNote);
   const refundOrder = useAdminStore((state) => state.refundOrder);
+  const verifyPayment = useAdminStore((state) => state.verifyPayment);
+  const rejectPayment = useAdminStore((state) => state.rejectPayment);
+  const markCashPaid = useAdminStore((state) => state.markCashPaid);
 
   const [nextStatus, setNextStatus] = useState<AdminOrderStatus>("pending");
   const [note, setNote] = useState("");
   const [confirmStatus, setConfirmStatus] = useState(false);
   const [confirmRefund, setConfirmRefund] = useState(false);
+  const [confirmPayment, setConfirmPayment] = useState<"approve" | "reject" | "collect-cash" | null>(
+    null,
+  );
+  const [showScreenshot, setShowScreenshot] = useState(false);
 
   useEffect(() => {
     if (order) {
       setNextStatus(order.status);
       setNote("");
+      setShowScreenshot(false);
     }
   }, [order]);
 
   const open = Boolean(orderId && order);
+
+  const paymentKey = order ? paymentMethodFromLabel(order.paymentMethod) : null;
+  const paymentStatus =
+    order?.paymentStatus ?? (paymentKey === "COD" ? "UNPAID" : paymentKey ? "PAID" : "UNPAID");
+  const awaitingVerification =
+    paymentStatus === "PENDING" && paymentKey !== null && isManualPayment(paymentKey);
+
+  /**
+   * Records the decision.
+   *
+   * The API is the source of truth for orders that live in Postgres; seeded
+   * demo orders only exist in this console, so the local list always updates
+   * too (the request legitimately 404s for those).
+   */
+  const decidePayment = async (action: "approve" | "reject" | "collect-cash") => {
+    if (!order) return;
+
+    try {
+      await fetch(`/api/admin/orders/${encodeURIComponent(order.number.replace(/^#/, ""))}/payment`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+    } catch {
+      /* Offline or demo order — the console list below is authoritative. */
+    }
+
+    if (action === "approve") {
+      verifyPayment(order.id);
+      toast.success("Payment verified ✅", {
+        description: `${order.number} is confirmed and now Processing.`,
+      });
+    } else if (action === "reject") {
+      rejectPayment(order.id);
+      toast.success("Payment rejected", {
+        description: `${order.number} is cancelled and the customer is notified.`,
+      });
+    } else {
+      markCashPaid(order.id);
+      toast.success("Cash collected 💵", {
+        description: `${order.number} is delivered and marked as paid.`,
+      });
+    }
+  };
 
   const applyStatus = () => {
     if (!order) return;
@@ -221,6 +276,99 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
                       <br />
                       <span className="text-muted-foreground">{order.shipping.phone}</span>
                     </address>
+                  </section>
+
+                  {/* ---------- Payment (Step 7) ---------- */}
+                  <section className="rounded-xl border border-[#242424] bg-[#101010] p-4">
+                    <header className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="flex items-center gap-1.5 text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                        <Wallet aria-hidden className="size-3.5" />
+                        Payment
+                      </h3>
+                      <PaymentStatusBadge status={paymentStatus} />
+                    </header>
+
+                    <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                      <Detail label="Method" value={order.paymentMethod} />
+                      <Detail
+                        label={paymentKey === "ROCKET" ? "Txn reference" : "Reference"}
+                        value={order.number}
+                      />
+                    </dl>
+
+                    <p className="mt-3 text-[11px] text-muted-foreground">
+                      {PAYMENT_STATUS_META[paymentStatus].hint}
+                    </p>
+
+                    {order.paymentRef && (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowScreenshot((current) => !current)}
+                          className={cn(adminButtonGhost, "min-h-9 px-3 text-xs")}
+                        >
+                          <Eye aria-hidden className="size-3.5" />
+                          {showScreenshot ? "Hide screenshot" : "View Payment Screenshot"}
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                          {showScreenshot && (
+                            <motion.div
+                              key="screenshot"
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.3, ease: EASE }}
+                              className="overflow-hidden"
+                            >
+                              <Image
+                                src={order.paymentRef}
+                                alt={`Payment proof for ${order.number}`}
+                                width={360}
+                                height={560}
+                                unoptimized
+                                className="mt-3 w-40 rounded-lg border border-[#242424]"
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+
+                    {awaitingVerification ? (
+                      <div className="mt-4 flex flex-wrap gap-2 border-t border-[#242424] pt-3">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmPayment("approve")}
+                          className={cn(adminButtonBlue, "min-h-10")}
+                        >
+                          <Check aria-hidden className="size-3.5" />
+                          Verify Payment
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmPayment("reject")}
+                          className={cn(adminButtonGhost, "min-h-10 text-rose-400 hover:text-rose-300")}
+                        >
+                          <XCircle aria-hidden className="size-3.5" />
+                          Reject
+                        </button>
+                      </div>
+                    ) : paymentKey === "COD" && paymentStatus === "UNPAID" ? (
+                      <div className="mt-4 flex flex-wrap gap-2 border-t border-[#242424] pt-3">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmPayment("collect-cash")}
+                          className={cn(adminButtonBlue, "min-h-10")}
+                        >
+                          <Check aria-hidden className="size-3.5" />
+                          Mark as Paid
+                        </button>
+                        <span className="self-center text-[11px] text-muted-foreground">
+                          Cash on delivery — collect at the doorstep.
+                        </span>
+                      </div>
+                    ) : null}
                   </section>
 
                   {/* ---------- Status + timeline ---------- */}
@@ -405,6 +553,37 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
         description="The customer timeline updates immediately."
         confirmLabel={`Mark as ${ADMIN_ORDER_STATUS_LABEL[nextStatus]}`}
         onConfirm={applyStatus}
+      />
+
+      <ConfirmActionDialog
+        open={confirmPayment !== null}
+        onOpenChange={(open) => !open && setConfirmPayment(null)}
+        title={
+          confirmPayment === "approve"
+            ? "Approve this payment?"
+            : confirmPayment === "reject"
+              ? "Reject this payment?"
+              : "Mark the cash as collected?"
+        }
+        description={
+          confirmPayment === "approve"
+            ? "The order is confirmed, marked Paid and moves into preparation — the customer is notified by email."
+            : confirmPayment === "reject"
+              ? "The order is cancelled and the customer is told the transfer could not be verified."
+              : "Use this once the courier has handed the parcel over and taken the money."
+        }
+        confirmLabel={
+          confirmPayment === "approve"
+            ? "Approve payment"
+            : confirmPayment === "reject"
+              ? "Reject payment"
+              : "Mark as paid"
+        }
+        destructive={confirmPayment === "reject"}
+        onConfirm={() => {
+          if (confirmPayment) void decidePayment(confirmPayment);
+          setConfirmPayment(null);
+        }}
       />
 
       <ConfirmActionDialog

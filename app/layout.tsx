@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { SITE } from "@/lib/site";
 import { AppToaster } from "@/components/providers/AppToaster";
+import { AuthProvider } from "@/components/providers/AuthProvider";
+import { CartHydration } from "@/components/providers/CartHydration";
 import "./globals.css";
 
 /**
@@ -67,7 +69,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`} suppressHydrationWarning>
       <body className="flex min-h-dvh flex-col bg-background text-foreground">
-        {children}
+        {/* Auth.js session context — client-side, so pages stay static. */}
+        <AuthProvider>
+          {children}
+          {/* Restores the persisted bag after hydration (skipHydration). */}
+          <CartHydration />
+        </AuthProvider>
         <AppToaster />
       </body>
     </html>

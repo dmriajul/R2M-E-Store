@@ -148,6 +148,10 @@ export interface PlacedOrder {
     discount: number;
     total: number;
   };
+  /** Database row id, or the demo in-memory id, when the order was persisted. */
+  id?: string;
+  /** Payment snapshot written by the Step 7 checkout flow. */
+  payment?: OrderPaymentSnapshot;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -352,6 +356,10 @@ export interface AdminOrder {
   /** Admin-only notes appended from the order detail sheet. */
   notes: string[];
   timeline: OrderTimelineStep[];
+  /** Manual-payment verification state (Step 7). */
+  paymentStatus?: PaymentStatusKey;
+  /** Transaction id or screenshot URL supplied by the customer. */
+  paymentRef?: string;
 }
 
 export interface AdminCustomer {
@@ -473,4 +481,123 @@ export interface ApiResponse<TData> {
   data: TData | null;
   error: string | null;
   success: boolean;
+  /** Which backend answered: the database, or the demo/mock layer. */
+  source?: "database" | "mock";
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Backend integration (Step 7)                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Mirrors the Prisma `Role` enum. */
+export type AuthRole = "CUSTOMER" | "ADMIN";
+
+/** The signed-in user as the API and the session expose it (never the hash). */
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: AuthRole;
+  avatar?: string;
+}
+
+/** Mirrors the Prisma `PaymentMethod` enum (card payments map to SSLCOMMERZ). */
+export type PaymentKey = "COD" | "BKASH" | "NAGAD" | "ROCKET" | "SSLCOMMERZ";
+
+/** Mirrors the Prisma `PaymentStatus` enum. */
+export type PaymentStatusKey = "UNPAID" | "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+
+/** Mirrors the Prisma `OrderStatus` enum. */
+export type OrderStatusKey =
+  | "PENDING"
+  | "CONFIRMED"
+  | "PROCESSING"
+  | "SHIPPED"
+  | "DELIVERED"
+  | "CANCELLED"
+  | "REFUNDED";
+
+/** Payment details attached to a placed order. */
+export interface OrderPaymentSnapshot {
+  method: PaymentKey;
+  status: PaymentStatusKey;
+  /** Order number the customer quotes as the transfer reference. */
+  reference: string;
+  /** Wallet number the money was sent to (manual methods only). */
+  senderNumber?: string;
+  /** Uploaded proof of payment (Cloudinary URL or `/uploads` path). */
+  screenshotUrl?: string;
+}
+
+/** One line of an order as it arrives at `POST /api/orders`. */
+export interface OrderLineInput {
+  productId: string;
+  name: string;
+  color: string;
+  size: string;
+  quantity: number;
+  price: number;
+}
+
+/** `POST /api/orders` body. */
+export interface CreateOrderInput {
+  items: OrderLineInput[];
+  contact: { name: string; email: string; phone: string };
+  shipping: {
+    address: string;
+    city: string;
+    zip: string;
+    country: string;
+    method: "standard" | "express";
+    giftWrap: boolean;
+  };
+  payment: {
+    method: PaymentKey;
+    senderNumber?: string;
+    screenshotUrl?: string;
+  };
+  couponCode?: string;
+}
+
+/** What `POST /api/orders` returns and `GET /api/orders` lists. */
+export interface OrderRecord {
+  id: string;
+  orderNumber: string;
+  status: OrderStatusKey;
+  paymentStatus: PaymentStatusKey;
+  paymentMethod: PaymentKey;
+  paymentRef?: string;
+  subtotal: number;
+  shipping: number;
+  discount: number;
+  giftWrap: number;
+  total: number;
+  items: OrderLineInput[];
+  customerName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  zip: string;
+  country: string;
+  notes?: string;
+  trackingNumber?: string;
+  estimatedDelivery?: string;
+  createdAt: string;
+  /** `database` when the row was persisted, `mock` in demo mode. */
+  source: "database" | "mock";
+}
+
+/** Response of `POST /api/upload`. */
+export interface UploadResult {
+  url: string;
+  publicId: string;
+  width?: number;
+  height?: number;
+  bytes?: number;
+  format?: string;
+  kind: "image" | "model";
+  provider: "cloudinary" | "local";
+  storage: string;
 }
