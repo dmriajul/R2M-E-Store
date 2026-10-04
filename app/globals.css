@@ -1,0 +1,435 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ==========================================================================
+   LUXE — Dark Luxury Design System
+   Dark-only theme. Tokens follow the shadcn/ui contract and extend it with
+   brand tokens (gold / neon cyan / glassmorphism).
+   ========================================================================== */
+
+:root,
+.dark {
+  /* ---- Core surfaces ---- */
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+
+  --card: #101010;
+  --card-foreground: #fafafa;
+
+  --popover: #0f0f0f;
+  --popover-foreground: #fafafa;
+
+  /* ---- Brand: gold primary ---- */
+  --primary: #d4af37;
+  --primary-foreground: #0a0a0a;
+
+  /* ---- Secondary / muted ---- */
+  --secondary: #1a1a1a;
+  --secondary-foreground: #fafafa;
+
+  --muted: #1a1a1a;
+  --muted-foreground: #a1a1aa;
+
+  /* ---- Accent: neon cyan ---- */
+  --accent: #00f0ff;
+  --accent-foreground: #0a0a0a;
+
+  /* ---- Feedback ---- */
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+
+  /* ---- Lines & focus ---- */
+  --border: #2a2a2a;
+  --input: #2a2a2a;
+  --ring: #d4af37;
+
+  /* ---- Glassmorphism ---- */
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-strong: rgba(10, 10, 10, 0.72);
+
+  /* ---- Brand helpers ---- */
+  --gold: #d4af37;
+  --gold-soft: rgba(212, 175, 55, 0.15);
+  --gold-strong: #f1d97a;
+  --cyan: #00f0ff;
+  --cyan-soft: rgba(0, 240, 255, 0.12);
+
+  /* ---- Kids line: warm secondary accents ---- */
+  --rose: #f472b6;
+  --rose-soft: rgba(244, 114, 182, 0.14);
+  --lavender: #a78bfa;
+  --lavender-soft: rgba(167, 139, 250, 0.14);
+
+  /* ---- Charts ---- */
+  --chart-1: #d4af37;
+  --chart-2: #00f0ff;
+  --chart-3: #a1a1aa;
+  --chart-4: #f1d97a;
+  --chart-5: #3f3f46;
+
+  /* ---- Radius ---- */
+  --radius: 0.75rem;
+
+  /* ---- Motion ---- */
+  --ease-luxe: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
+  --color-glass-strong: var(--glass-strong);
+
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-strong: var(--gold-strong);
+  --color-cyan: var(--cyan);
+  --color-cyan-soft: var(--cyan-soft);
+
+  --color-rose: var(--rose);
+  --color-rose-soft: var(--rose-soft);
+  --color-lavender: var(--lavender);
+  --color-lavender-soft: var(--lavender-soft);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-marquee: marquee 48s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Seamless marquee: the track holds two identical halves and shifts by -50%. */
+@keyframes marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 6rem;
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    position: relative;
+    min-height: 100dvh;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Subtle film-grain / noise overlay. Pointer-events are disabled so it
+     never intercepts clicks, and it sits under positioned chrome (z-50). */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.035;
+    mix-blend-mode: overlay;
+    background-repeat: repeat;
+    background-size: 200px 200px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23noise)' opacity='0.9'/%3E%3C/svg%3E");
+  }
+
+  ::selection {
+    background-color: rgba(212, 175, 55, 0.3);
+    color: var(--foreground);
+  }
+
+  /* Keyboard focus: 2px gold outline, 2px offset, everywhere.
+     Components that draw their own gold ring opt out with
+     `focus-visible:outline-none`, so this only fills the gaps. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* ---- Thin gold scrollbar ---- */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--gold) var(--background);
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--background);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid var(--background);
+    border-radius: 9999px;
+    background: linear-gradient(
+      180deg,
+      var(--gold-strong) 0%,
+      var(--gold) 45%,
+      #8a6f1f 100%
+    );
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(
+      180deg,
+      #fff3c4 0%,
+      var(--gold-strong) 50%,
+      var(--gold) 100%
+    );
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: var(--background);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+
+    /* Framer Motion opts out via useReducedMotion()/MotionConfig, but halt the
+       CSS marquee too since it loops forever. */
+    .animate-marquee {
+      animation: none !important;
+      transform: none !important;
+    }
+  }
+}
+
+@layer components {
+  /* Frosted glass surface used by the navbar, sheets and floating cards. */
+  .glass {
+    background-color: var(--glass);
+    border: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    backdrop-filter: blur(16px) saturate(160%);
+  }
+
+  .glass-strong {
+    background-color: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+  }
+
+  /* Gold gradient text for luxury headlines. */
+  .text-gradient-gold {
+    background-image: linear-gradient(
+      100deg,
+      #f6e7ab 0%,
+      var(--gold) 42%,
+      #8a6f1f 100%
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+
+  /* Hairline gold divider. */
+  .hairline-gold {
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgba(212, 175, 55, 0.55),
+      transparent
+    );
+  }
+
+  /* Soft luxury glow for CTAs and hovered product cards. */
+  .glow-gold {
+    box-shadow:
+      0 0 0 1px rgba(212, 175, 55, 0.25),
+      0 8px 40px -12px rgba(212, 175, 55, 0.45);
+  }
+
+  .glow-cyan {
+    box-shadow:
+      0 0 0 1px rgba(0, 240, 255, 0.25),
+      0 8px 40px -12px rgba(0, 240, 255, 0.4);
+  }
+
+  /* ---- Kids line helpers -------------------------------------------------
+     Scoped to the shop/product surfaces so the Step 1–2 look is untouched. */
+
+  /* Warmer, softer glass for cards aimed at parents. */
+  .glass-soft {
+    background-color: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    backdrop-filter: blur(14px) saturate(150%);
+  }
+
+  /* Friendly lift used on product tiles instead of a hard gold glow. */
+  .shadow-playful {
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+      0 18px 40px -24px rgba(0, 0, 0, 0.9);
+  }
+
+  .shadow-playful-hover {
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
+      0 28px 60px -26px rgba(0, 0, 0, 0.95),
+      0 0 34px -14px rgba(244, 114, 182, 0.45);
+  }
+
+  /* Relaxed reading rhythm for descriptions and long-form copy. */
+  .prose-kids {
+    line-height: 1.75;
+    letter-spacing: 0.005em;
+  }
+
+  /* Playful emoji treatment for headings and artwork. */
+  .emoji-pop {
+    display: inline-block;
+    transition: transform 400ms var(--ease-luxe);
+  }
+
+  .group:hover .emoji-pop {
+    transform: scale(1.18) rotate(-6deg);
+  }
+
+  /* Shimmering gold rule used as a loading / emphasis accent. */
+  .shimmer-gold {
+    background-image: linear-gradient(
+      90deg,
+      rgba(212, 175, 55, 0) 0%,
+      rgba(212, 175, 55, 0.6) 50%,
+      rgba(212, 175, 55, 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+}
+
+/* ==========================================================================
+   Print — invoices only
+   The order page renders a dedicated light document (`#print-invoice`); the
+   dark storefront chrome and the account navigation are hidden here, and the
+   document is pinned to the top-left so it never inherits the page offset.
+   ========================================================================== */
+
+@page {
+  margin: 14mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  body > header,
+  body > footer,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  #print-invoice {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    color: #000;
+    box-shadow: none !important;
+  }
+}
