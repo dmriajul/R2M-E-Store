@@ -80,14 +80,84 @@ export interface ProductVariant {
   color?: string;
 }
 
+/** How a cart line is keyed: same product in two sizes = two lines. */
+export function buildLineId(
+  productId: string,
+  color: string,
+  size: string,
+): string {
+  return `${productId}-${color}-${size}`;
+}
+
+/**
+ * One line in the shopping bag. Flat and display-ready: the bag and the
+ * checkout summary render straight from these fields, so a line survives
+ * without the full `Product` record.
+ */
 export interface CartItem {
-  /** Mirrors `product.id` so a product appears once per line. */
+  /** Composite key: `${productId}-${color}-${size}`. */
+  lineId: string;
+  productId: string;
+  /**
+   * @deprecated Alias of `productId`, kept so earlier card components that
+   * assert `item.id === product.id` keep working. Use `lineId` for updates.
+   */
   id: string;
-  product: Product;
+  name: string;
+  price: number;
   quantity: number;
-  variant?: ProductVariant;
+  color: string;
+  size: string;
+  ageRange: string;
+  /** Tailwind gradient stops for the thumbnail, e.g. "from-pink-400 to-rose-600". */
+  imageGradient: string;
+  /** Category emoji painted over the thumbnail. */
+  emoji: string;
+  /** Units on hand when the line was created — used to clamp the quantity. */
+  stock: number;
   /** ISO timestamp of when the line was added. */
   addedAt: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Checkout                                                                  */
+/* -------------------------------------------------------------------------- */
+
+export type ShippingMethod = "standard" | "express";
+
+export type PaymentMethod = "card" | "mobile" | "sslcommerz";
+
+export interface CouponState {
+  code: string;
+  /** Percentage off the subtotal. */
+  percent: number;
+}
+
+/** Order summary produced when an order is placed (mock — no processing). */
+export interface PlacedOrder {
+  number: string;
+  email: string;
+  placedAt: string;
+  /** ISO date. */
+  estimatedDelivery: string;
+  items: CartItem[];
+  totals: {
+    subtotal: number;
+    shipping: number;
+    giftWrap: number;
+    discount: number;
+    total: number;
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Auth                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface AuthSession {
+  name: string;
+  email: string;
+  phone?: string;
 }
 
 export type UserRole = "customer" | "admin";

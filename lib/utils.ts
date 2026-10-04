@@ -34,3 +34,14 @@ export function slugify(value: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 }
+
+/**
+ * Formats an ISO date for delivery estimates, e.g. "Friday, 17 October".
+ */
+export function formatDeliveryDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(iso));
+}

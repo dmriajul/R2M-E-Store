@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { SITE } from "@/lib/site";
-import { Navbar } from "@/components/layout/Navbar";
-import { Footer } from "@/components/layout/Footer";
+import { AppToaster } from "@/components/providers/AppToaster";
 import "./globals.css";
 
 /**
@@ -30,9 +29,10 @@ export const metadata: Metadata = {
   keywords: [
     "luxury",
     "e-commerce",
+    "kids fashion",
+    "organic kids clothes",
     "timepieces",
     "fragrance",
-    "leather goods",
   ],
   openGraph: {
     title: `${SITE.name} — Modern Luxury, Considered`,
@@ -54,15 +54,21 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
+/**
+ * Root layout: fonts, metadata, toasts.
+ *
+ * Page chrome (Navbar/Footer) deliberately lives in the route-group layouts
+ * instead of here, so the auth pages can render as a focused, chrome-free
+ * experience — see app/(shop)/layout.tsx and app/(auth)/layout.tsx.
+ */
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${inter.variable} dark`} suppressHydrationWarning>
       <body className="flex min-h-dvh flex-col bg-background text-foreground">
-        <Navbar />
-        <main className="relative z-10 flex-1">{children}</main>
-        <Footer />
+        {children}
+        <AppToaster />
       </body>
     </html>
   );

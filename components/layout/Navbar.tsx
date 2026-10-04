@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   Menu,
   Search,
@@ -14,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { NAV_LINKS, SITE } from "@/lib/site";
 import { useCartStore, selectCartItemCount } from "@/store/useCartStore";
+import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -76,6 +78,7 @@ function IconButton({ icon: Icon, label, href, onClick, className }: IconButtonP
 export function Navbar() {
   const pathname = usePathname();
   const itemCount = useCartStore(selectCartItemCount);
+  const reducedMotion = usePrefersReducedMotion();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -174,12 +177,25 @@ export function Navbar() {
           >
             <ShoppingBag className="size-[18px] transition-transform duration-300 group-hover:scale-110" />
             {itemCount > 0 && (
-              <Badge
-                variant="default"
-                className="absolute -top-0.5 -right-0.5 h-[18px] min-w-[18px] rounded-full border-0 bg-primary px-1 text-[10px] leading-none font-bold text-primary-foreground shadow-[0_0_12px_rgba(212,175,55,0.7)]"
+              /* Keyed on the count so every change replays the springy pop. */
+              <motion.span
+                key={itemCount}
+                initial={reducedMotion ? { scale: 1 } : { scale: 0.5 }}
+                animate={{ scale: 1 }}
+                transition={
+                  reducedMotion
+                    ? { duration: 0 }
+                    : { type: "spring", stiffness: 520, damping: 14, mass: 0.6 }
+                }
+                className="absolute -top-0.5 -right-0.5"
               >
-                {itemCount > 99 ? "99+" : itemCount}
-              </Badge>
+                <Badge
+                  variant="default"
+                  className="h-[18px] min-w-[18px] rounded-full border-0 bg-primary px-1 text-[10px] leading-none font-bold text-primary-foreground shadow-[0_0_12px_rgba(212,175,55,0.7)]"
+                >
+                  {itemCount > 99 ? "99+" : itemCount}
+                </Badge>
+              </motion.span>
             )}
           </button>
 

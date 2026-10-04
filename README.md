@@ -149,12 +149,50 @@ and filterable; no database yet.
 
 ### Known limitations
 
-- Cart lines merge by product id, so colour/size choices of an *earlier* add win until lines become
-  variant-keyed (cart-store work belongs to a later step).
 - The wishlist is session-scoped (no persistence yet).
 - Image placeholders are gradient + emoji tiles; `product.images` holds tokens, not file paths.
 
+## Step 4 — Cart, checkout & auth
+
+```bash
+/checkout        # 4-step flow: Information → Shipping → Payment → Confirm
+/login           # demo: any email + password123
+/register        # password strength meter, terms consent
+/forgot-password # mock "check your inbox" state
+```
+
+- **Cart lines are variant-keyed.** A line's id is
+  `${productId}-${color}-${size}` (`lineId`, see `types/index.ts`), so the same product in 4T and 5
+  are two rows. `updateItemSize`/`updateItemColor` rewrite the key and *merge* if the target
+  combination already exists. `removeItem`/`updateQuantity` accept either a `lineId` or a legacy
+  `productId`, and `CartItem.id` remains an alias of `productId` for earlier components.
+- **Cart drawer** (`components/layout/CartSheet.tsx`) — free-shipping progress bar, per-line qty
+  stepper, AnimatePresence add/remove, coupon field and a sticky summary with checkout CTA.
+- **Checkout** — React Hook Form + Zod (`lib/validations.ts`), answers held in
+  `store/useCheckoutStore.ts` so they survive step navigation, stepper with clickable completed
+  steps, sticky order summary, mock payment (card / bKash / Nagad / SSLCommerz) and a confetti
+  confirmation. Money maths lives in `lib/cart.ts` (free shipping ≥ $50, express $9.99, gift wrap
+  $3.99, coupons `LITTLE10` / `WELCOME15` / `GRANDMA5`).
+- **Auth** — chrome-free group with an animated CSS backdrop; mock sign-in (any email +
+  `password123`), registration with strength meter, and a reset-link screen.
+- **Toasts** — one sonner `<Toaster />` in the root layout, styled dark. The cart store raises
+  "Added to bag! 🛍️" / "Removed from bag" / "Free shipping unlocked! 🚚", so every add-to-cart
+  entry point is covered.
+
+### Layout note
+
+Page chrome moved out of the root layout so auth pages can render without a navbar: the navbar +
+footer now live in `app/(shop)/layout.tsx` and `app/admin/layout.tsx`, while `app/(auth)/layout.tsx`
+provides the focused shell. `app/layout.tsx` keeps fonts, metadata and the toaster.
+
 ## Next up (not built yet)
 
-Auth flow, admin CRUD, database, real product photography and `.glb` models
-(`public/models`), plus variant-keyed cart lines.
+Admin CRUD, database, real product photography and `.glb` models (`public/models`), order history
+(`/dashboard/orders` is a placeholder), coupon validation server-side, and cart/wishlist persistence.
+
+### Step 4 limitations
+
+- Cart, wishlist and checkout state are in-memory (no `localStorage`): a hard refresh empties the bag.
+- Payment is fully mocked — no gateway, no API route, nothing is charged.
+- `/dashboard/orders` is a placeholder link after order confirmation.
+- Coupons are validated against a client-side table (`lib/cart.ts`), not server-side.
