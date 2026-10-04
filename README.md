@@ -1,1 +1,125 @@
-# R2M-E-Store
+# LUXE — Premium Dark E-Commerce Foundation
+
+A dark-luxury storefront foundation built with **Next.js 15 (App Router)**, **TypeScript (strict)**, **Tailwind CSS v4**, **shadcn/ui**, **Zustand**, and motion libraries (framer-motion, GSAP, react-three-fiber) installed and ready for the next step.
+
+> **Status: Step 1 complete — foundation only.** No full pages, no 3D scenes, no database.
+> Every route currently renders a clearly-labelled placeholder so the shell can be verified.
+
+---
+
+## Stack
+
+| Layer      | Choice                                                      |
+| ---------- | ----------------------------------------------------------- |
+| Framework  | Next.js 15.5 (App Router, React 19, Turbopack-optional)      |
+| Language   | TypeScript 5 — `strict` + `noUnusedLocals` + `noUncheckedIndexedAccess`, `any` banned by ESLint |
+| Styling    | Tailwind CSS v4 (`@theme inline` tokens) + shadcn/ui         |
+| State      | Zustand 5 (cart store with derived `total` / `itemCount`)    |
+| Motion     | framer-motion, GSAP *(installed, unused yet)*                |
+| 3D         | @react-three/fiber, @react-three/drei, three *(installed, unused yet)* |
+| Typeface   | Inter — self-hosted variable font via `next/font/local`      |
+
+### shadcn/ui components included
+`button` · `card` · `sheet` · `input` · `badge` · `separator` · `skeleton` · `dialog` · `dropdown-menu` · `avatar`
+
+---
+
+## Getting started
+
+```bash
+npm install
+npm run dev     # http://localhost:3000
+npm run build   # production build (passes clean)
+npm run lint    # eslint (0 warnings)
+npx tsc --noEmit
+```
+
+---
+
+## Design system
+
+All tokens live in `app/globals.css` and are exposed as Tailwind utilities via `@theme inline`
+(e.g. `bg-background`, `text-primary`, `border-glass-border`, `bg-glass`).
+
+| Token            | Value                        | Usage                          |
+| ---------------- | ---------------------------- | ------------------------------ |
+| `--background`   | `#0A0A0A`                    | Page canvas                    |
+| `--foreground`   | `#FAFAFA`                    | Body text                      |
+| `--primary`      | `#D4AF37` (gold)             | CTAs, accents, active nav      |
+| `--accent`       | `#00F0FF` (neon cyan)        | Secondary highlights           |
+| `--muted`        | `#1A1A1A`                    | Surfaces, muted backgrounds    |
+| `--border`       | `#2A2A2A`                    | Hairlines, inputs              |
+| `--glass`        | `rgba(255,255,255,0.05)`     | Frosted surfaces               |
+| `--glass-border` | `rgba(255,255,255,0.1)`      | Frosted borders                |
+
+Also included: a fixed, pointer-transparent **noise/grain overlay** on `body::before`, a **thin gold
+scrollbar** (WebKit + Firefox), smooth scrolling with reduced-motion fallbacks, and utility classes
+`.glass`, `.glass-strong`, `.text-gradient-gold`, `.hairline-gold`, `.glow-gold`, `.glow-cyan`.
+
+---
+
+## Folder structure
+
+```
+app/
+  (shop)/
+    page.tsx                 → Home placeholder
+    shop/page.tsx            → Shop placeholder
+    product/[id]/page.tsx    → Product placeholder (async params, Next 15)
+  (auth)/
+    login/page.tsx           → Login placeholder
+  admin/page.tsx             → Admin placeholder
+  api/
+    health/route.ts          → GET liveness probe
+    products/route.ts        → GET mock catalogue (?category=, ?featured=true)
+  fonts/                     → Inter variable woff2 (self-hosted)
+  globals.css                → design system
+  layout.tsx                 → Inter + metadata + Navbar/Footer shell
+components/
+  layout/                    → Navbar, Footer, MobileMenu, CartSheet, SearchDialog, NewsletterForm, PagePlaceholder, SocialIcons
+  sections/                  → (empty — next step)
+  three/                     → (empty — no scenes yet)
+  ui/                        → shadcn/ui components
+lib/
+  utils.ts                   → cn(), formatPrice(), slugify()
+  site.ts                    → site config, nav links, mock products
+store/
+  useCartStore.ts            → zustand cart
+types/
+  index.ts                   → Product, CartItem, User, Order, Address, ApiResponse
+public/
+  images/                    → (empty)
+  models/                    → (empty — for .glb files)
+```
+
+---
+
+## Cart store
+
+`store/useCartStore.ts` — `items[]`, `addItem(product, quantity, variant?)`, `removeItem(id)`,
+`updateQuantity(id, qty)`, `clearCart()`, plus derived `total` and `itemCount` recomputed on every
+mutation. Quantities are clamped to `min(stock, 10)`. Typed selectors (`selectCartItems`,
+`selectCartTotal`, `selectCartItemCount`, `selectIsInCart`) are exported for narrow subscriptions.
+
+Persistence is intentionally **not** wired up — layer on zustand's `persist` middleware when the
+backend lands.
+
+---
+
+## Notes & environment caveats
+
+- **Fonts:** `next/font/google` requires network access at build time, which is blocked in this
+  sandbox — Inter is therefore self-hosted through `next/font/local` (`app/fonts/`). Re-vendor it with:
+  `cp node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2 app/fonts/inter-latin-variable.woff2`
+- **shadcn registry:** `npx shadcn@latest init` could not reach `ui.shadcn.com` from this sandbox, so the
+  same official component sources were fetched from the `shadcn-ui/ui` repository, imports rewritten to
+  `@/lib/utils` / `@/components/ui/*`, and `components.json` was authored to match the CLI format.
+  `npx shadcn@latest add <component>` will work normally once the registry is reachable.
+- **lucide-react v1** removed brand icons, so the footer socials live in
+  `components/layout/SocialIcons.tsx` as inline SVGs.
+- `next.config.ts` sets `allowedDevOrigins` so the hosted preview proxy can reach the dev server.
+
+## Next up (not built yet)
+
+Hero + collections sections, shop grid with filters, product detail with variants and add-to-bag,
+auth flow, admin CRUD, database, and the react-three-fiber showcase.
