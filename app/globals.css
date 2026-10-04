@@ -132,6 +132,7 @@
 
   --animate-shimmer: shimmer 2.4s linear infinite;
   --animate-float: float 6s ease-in-out infinite;
+  --animate-marquee: marquee 48s linear infinite;
 }
 
 @keyframes shimmer {
@@ -150,6 +151,16 @@
   }
   50% {
     transform: translateY(-8px);
+  }
+}
+
+/* Seamless marquee: the track holds two identical halves and shifts by -50%. */
+@keyframes marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
   }
 }
 
@@ -253,6 +264,13 @@
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+    }
+
+    /* Framer Motion opts out via useReducedMotion()/MotionConfig, but halt the
+       CSS marquee too since it loops forever. */
+    .animate-marquee {
+      animation: none !important;
+      transform: none !important;
     }
   }
 }

@@ -21,6 +21,15 @@ export const NAV_LINKS: readonly NavLink[] = [
   { label: "About", href: "/#about" },
 ] as const;
 
+/** Outline text rolled in the home-page marquee. */
+export const MARQUEE_WORDS: readonly string[] = [
+  "LUXURY",
+  "CRAFTSMANSHIP",
+  "INNOVATION",
+  "PREMIUM",
+  "EXCLUSIVE",
+] as const;
+
 export const FOOTER_LINKS: Readonly<Record<string, readonly NavLink[]>> = {
   Shop: [
     { label: "All Products", href: "/shop" },
