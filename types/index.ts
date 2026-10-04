@@ -173,6 +173,7 @@ export interface User {
 
 export interface Address {
   id: string;
+  /** Short handle shown on the card, e.g. "Home" or "Office". */
   label: string;
   fullName: string;
   line1: string;
@@ -181,6 +182,7 @@ export interface Address {
   state?: string;
   postalCode: string;
   country: string;
+  phone: string;
   isDefault: boolean;
 }
 
@@ -206,6 +208,102 @@ export interface Review {
   date: string;
   verified: boolean;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Dashboard (account area)                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** Statuses shown on the order list, the filter tabs and the badge colours. */
+export type OrderStatus = "processing" | "shipped" | "delivered" | "cancelled";
+
+/** How one row of the tracking timeline should read. */
+export type OrderStepState = "done" | "current" | "pending" | "cancelled";
+
+export interface OrderTimelineStep {
+  key: string;
+  label: string;
+  emoji: string;
+  /** ISO instant, or an empty string while the step is still pending. */
+  timestamp: string;
+  /** Free-text rider, e.g. "Expected Oct 2". */
+  note?: string;
+  state: OrderStepState;
+}
+
+/** Money breakdown for a placed order. */
+export interface OrderTotals {
+  subtotal: number;
+  shipping: number;
+  giftWrap: number;
+  discount: number;
+  total: number;
+}
+
+/** One order in the demo account area (a real backend replaces this). */
+export interface DashboardOrder {
+  /** Without the leading "#", e.g. "LL-2025-00142". */
+  id: string;
+  /** Display form including the "#". */
+  number: string;
+  placedAt: string;
+  status: OrderStatus;
+  items: CartItem[];
+  totals: OrderTotals;
+  /** Human line under the header, e.g. "Arriving tomorrow". */
+  deliveryNote: string;
+  timeline: OrderTimelineStep[];
+  shipping: {
+    fullName: string;
+    address: Address;
+    carrier: string;
+    trackingNumber: string;
+  };
+  payment: {
+    label: string;
+    status: "paid" | "pending" | "refunded";
+  };
+  /** Present only on cancelled orders. */
+  cancelledReason?: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  emoji: string;
+  title: string;
+  body?: string;
+  createdAt: string;
+  read: boolean;
+  /** Optional deep link the notification points at. */
+  href?: string;
+}
+
+export interface KidProfile {
+  name: string;
+  /** ISO date. */
+  birthday: string;
+}
+
+/** The signed-in shopper (mock — auth is decorative in this build). */
+export interface DashboardUser {
+  name: string;
+  email: string;
+  phone: string;
+  /** ISO date. */
+  memberSince: string;
+  dateOfBirth: string;
+  gender: string;
+  kids: KidProfile[];
+  rewardPoints: number;
+  totalSpent: number;
+}
+
+export type DashboardPreferenceKey =
+  | "emailNotifications"
+  | "smsNotifications"
+  | "marketingEmails"
+  | "birthdayReminders";
+
+export type DashboardPreferences = Record<DashboardPreferenceKey, boolean>;
 
 /** Uniform envelope for future API route responses. */
 export interface ApiResponse<TData> {

@@ -191,3 +191,97 @@ export const forgotPasswordSchema = z.object({
 });
 
 export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
+
+/* -------------------------------------------------------------------------- */
+/*  Account area (dashboard)                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** New/edit address form in the address book. */
+export const addressSchema = z.object({
+  label: z.string().trim().min(1, "Add a label like Home"),
+  fullName: requiredString("Full name", 3),
+  line1: requiredString("Address", 5),
+  line2: z.string().trim().optional(),
+  city: requiredString("City", 2),
+  state: z.string().trim().optional(),
+  postalCode: requiredString("Postal code", 3),
+  country: z.string().min(1, "Select a country"),
+  phone: z
+    .string()
+    .trim()
+    .min(1, "Phone number is required")
+    .regex(/^[+()\-\s0-9]{7,20}$/, "Enter a valid phone number"),
+  isDefault: z.boolean(),
+});
+
+export type AddressValues = z.infer<typeof addressSchema>;
+
+export const GENDER_OPTIONS = [
+  "Female",
+  "Male",
+  "Non-binary",
+  "Prefer not to say",
+] as const;
+
+/** Profile details. Email is read-only in the UI but still validated. */
+export const profileSchema = z.object({
+  fullName: requiredString("Full name", 3),
+  email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
+  phone: z
+    .string()
+    .trim()
+    .min(1, "Phone number is required")
+    .regex(/^[+()\-\s0-9]{7,20}$/, "Enter a valid phone number"),
+  dateOfBirth: z
+    .string()
+    .trim()
+    .min(1, "Add a date of birth")
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), "Enter a valid date"),
+  gender: z.string().trim().min(1, "Pick an option"),
+});
+
+export type ProfileValues = z.infer<typeof profileSchema>;
+
+export const passwordChangeSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password"),
+    newPassword: z
+      .string()
+      .min(8, "Use at least 8 characters")
+      .regex(/[A-Z]/, "Add an uppercase letter")
+      .regex(/\d/, "Add a number"),
+    confirmPassword: z.string().min(1, "Confirm your new password"),
+  })
+  .refine((values) => values.newPassword === values.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords do not match",
+  })
+  .refine((values) => values.newPassword !== values.currentPassword, {
+    path: ["newPassword"],
+    message: "Your new password must be different",
+  });
+
+export type PasswordChangeValues = z.infer<typeof passwordChangeSchema>;
+
+/** Return request raised from an order (mock — nothing is sent anywhere). */
+export const RETURN_REASONS = [
+  "Wrong size",
+  "Not as described",
+  "Changed my mind",
+  "Arrived damaged",
+  "Other",
+] as const;
+
+export const returnRequestSchema = z
+  .object({
+    reason: z.enum(RETURN_REASONS, {
+      errorMap: () => ({ message: "Pick a reason" }),
+    }),
+    note: z.string().trim().max(300, "Keep it under 300 characters").optional(),
+  })
+  .refine((values) => values.reason !== "Other" || (values.note ?? "").length >= 10, {
+    path: ["note"],
+    message: "Tell us a little more (10+ characters)",
+  });
+
+export type ReturnRequestValues = z.infer<typeof returnRequestSchema>;

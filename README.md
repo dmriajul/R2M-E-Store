@@ -185,14 +185,52 @@ Page chrome moved out of the root layout so auth pages can render without a navb
 footer now live in `app/(shop)/layout.tsx` and `app/admin/layout.tsx`, while `app/(auth)/layout.tsx`
 provides the focused shell. `app/layout.tsx` keeps fonts, metadata and the toaster.
 
+## Step 5 — Account area (dashboard, orders, wishlist, profile)
+
+```bash
+/dashboard               # overview: stats, recent orders, recommendations, quick actions
+/dashboard/orders        # 5 mock orders with status filters + expandable detail
+/dashboard/orders/[id]   # tracking timeline, shipping, item table, returns, printable invoice
+/dashboard/wishlist      # saved pieces wired to useWishlistStore + "Move to Cart"
+/dashboard/addresses     # up to 3 addresses, add/edit/delete, set default
+/dashboard/profile       # details, password (with strength meter), preferences, danger zone
+/dashboard/notifications # unread rail, mark-as-read, mark all
+```
+
+- **Layout** (`app/(shop)/dashboard/layout.tsx` → `components/dashboard/DashboardShell.tsx`) —
+  glass sidebar that collapses to icons on tablet, a bottom tab bar on phones, breadcrumb trail,
+  an unread count on Notifications and an `AnimatePresence` transition keyed on the pathname.
+- **Mock data** lives in `lib/mock-dashboard.ts`: `DEMO_NOW` (a frozen "today"), the shopper,
+  addresses, notifications and five orders. Order lines are built from the real catalogue via
+  `getProductById` and priced with `computeTotals`, so the numbers can't drift from the bag and
+  checkout.
+- **Deterministic dates.** `formatShortDate` / `formatStamp` / `formatRelative(iso, anchorIso)`
+  read the UTC fields of `DEMO_NOW`, so "Delivered 3 days ago" and "Oct 1, 2026, 9:00 AM" render
+  identically on the server and after hydration — no locale or clock drift.
+- **Interactive state** (`store/useDashboardStore.ts`) — profile, addresses, notifications and
+  notification preferences, so an edit survives navigation between the account pages.
+- **Forms** — every one is React Hook Form + Zod using the shared schemas in `lib/validations.ts`
+  (`addressSchema`, `profileSchema`, `passwordChangeSchema`, `returnRequestSchema`), with inline
+  errors and dark inputs + gold focus rings matching checkout.
+- **Printing** — the order page renders a light `#print-invoice` document; `@media print` in
+  `app/globals.css` hides the navbar, footer and account navigation so only the invoice prints.
+
 ## Next up (not built yet)
 
-Admin CRUD, database, real product photography and `.glb` models (`public/models`), order history
-(`/dashboard/orders` is a placeholder), coupon validation server-side, and cart/wishlist persistence.
+Admin CRUD, database, real product photography and `.glb` models (`public/models`), server-side
+coupon validation, real returns/refunds, and cart/wishlist/account persistence.
+
+### Step 5 limitations
+
+- Account data is mock and in-memory: a hard refresh restores the demo values (including the five
+  saved wishlist pieces, which the dashboard loads once per session).
+- "Delete Account", "Change Photo", "Contact Support" and "Redeem" are intentionally inert — they
+  say so via toast rather than pretending to work.
+- Orders, notifications and addresses are seeded per session; nothing is written back to a server.
+- Invoice printing relies on the browser's print dialog (the "Print Invoice" button).
 
 ### Step 4 limitations
 
 - Cart, wishlist and checkout state are in-memory (no `localStorage`): a hard refresh empties the bag.
 - Payment is fully mocked — no gateway, no API route, nothing is charged.
-- `/dashboard/orders` is a placeholder link after order confirmation.
 - Coupons are validated against a client-side table (`lib/cart.ts`), not server-side.

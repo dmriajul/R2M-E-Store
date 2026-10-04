@@ -391,3 +391,37 @@
     animation: var(--animate-shimmer);
   }
 }
+
+/* ==========================================================================
+   Print — invoices only
+   The order page renders a dedicated light document (`#print-invoice`); the
+   dark storefront chrome and the account navigation are hidden here, and the
+   document is pinned to the top-left so it never inherits the page offset.
+   ========================================================================== */
+
+@page {
+  margin: 14mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  body > header,
+  body > footer,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  #print-invoice {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    color: #000;
+    box-shadow: none !important;
+  }
+}
