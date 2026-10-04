@@ -347,6 +347,28 @@ npm run db:studio             # browse the data
 - `useCartStore` is wrapped in `persist` (`little-luxe-cart`, only `items`, `skipHydration: true`)
   and rehydrated in a client effect, so the bag survives a refresh without hydration mismatches.
 
+## Step 7.5 — Legal pages (EN + বাংলা) & image optimisation
+
+- Five real documents, one page each: `/terms`, `/returns`, `/privacy`, `/shipping`, `/faq`.
+  The copy lives in `lib/legal-content.ts` as typed `{ id, title, icon, paragraphs[] }` sections —
+  English and Bengali side by side in the same file, so the two versions cannot drift apart.
+- `components/layout/LegalPage.tsx` renders them: an EN | বাং gold pill toggle (instant, no
+  navigation), a framer-motion accordion (every section is forced open when printing), a print
+  button, the "last updated" stamp and a "Back to Home" control. Mobile-first, ≥44px targets.
+- The footer's **Support** column now links the five pages (Shipping Info, Return Policy, FAQ,
+  Terms & Conditions, Privacy Policy) and the Legal column's Privacy/Terms entries use the real
+  routes instead of `/#` anchors.
+- Images: `lib/image-optimizer.ts` builds Cloudinary delivery URLs per preset — `thumbnail` 96px,
+  `card` 400×500, `detail` 800×1000, `zoom` 1600×2000 (+`dpr_auto`), `blur` 24px, `og` 1200×630 —
+  plus `getResponsiveSrcSet()` (`"…/w_240…/tee.jpg 240w, …"`). Non-Cloudinary URLs (Unsplash
+  leftovers, `/uploads/…`, placeholder tokens) pass through untouched.
+- `components/ui/OptimizedImage.tsx` is the storefront's single image primitive: `next/image` with
+  a preset-aware loader (so Next emits a genuine `srcSet`), a blurred 24px Cloudinary preview, a
+  shimmer while loading, `onError` degradation and the gradient tile as the fallback. Product cards
+  use `preset="card"`; the product gallery uses `detail` for the stage and `thumbnail` for the strip.
+- `next.config.ts` already allowed `res.cloudinary.com` and `images.unsplash.com`; both were
+  verified, so this step needed no config change.
+
 ## Next up (not built yet)
 
 Real product photography and `.glb` models, live SSLCommerz checkout, database-backed

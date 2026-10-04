@@ -16,6 +16,7 @@ import { useCartStore } from "@/store/useCartStore";
 import { useWishlistStore } from "@/store/useWishlistStore";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { ProductArtwork } from "@/components/product/ProductArtwork";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { QuickViewDialog } from "@/components/product/QuickViewDialog";
 import { StarRating } from "@/components/product/StarRating";
 import { Badge } from "@/components/ui/badge";
@@ -165,6 +166,12 @@ export function ProductCard({
     },
   };
 
+  /* Artwork box: shared by the real photo and the gradient fallback tile. */
+  const artworkClass = cn(
+    "transition-transform duration-700 ease-[var(--ease-luxe)] group-hover:scale-[1.06]",
+    isList ? "h-full min-h-32 w-32 sm:w-44" : "aspect-4/5 w-full",
+  );
+
   return (
     <>
       <motion.article
@@ -185,12 +192,13 @@ export function ProductCard({
             tabIndex={-1}
             aria-hidden
           >
-            <ProductArtwork
-              product={product}
-              className={cn(
-                "transition-transform duration-700 ease-[var(--ease-luxe)] group-hover:scale-[1.06]",
-                isList ? "h-full min-h-32 w-32 sm:w-44" : "aspect-4/5 w-full",
-              )}
+            <OptimizedImage
+              src={product.images[0]}
+              alt={product.name}
+              preset="card"
+              className={artworkClass}
+              /* Placeholder products (no photography yet) keep the gradient tile. */
+              fallback={<ProductArtwork product={product} className={artworkClass} />}
             />
           </Link>
 

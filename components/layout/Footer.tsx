@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FOOTER_LINKS, SITE } from "@/lib/site";
+import { FOOTER_LINKS, SITE, type NavLink } from "@/lib/site";
 import { Separator } from "@/components/ui/separator";
 import { NewsletterForm } from "@/components/layout/NewsletterForm";
 import {
@@ -8,6 +8,39 @@ import {
   XIcon,
   YouTubeIcon,
 } from "@/components/layout/SocialIcons";
+
+/**
+ * Support column.
+ *
+ * The step-1 anchors are joined by the real legal pages (Step 7.5), so
+ * "Shipping & Returns" and "FAQ" are replaced by the pages that actually answer
+ * those questions instead of jumping to a section heading.
+ */
+const SUPPORT_LINKS: readonly NavLink[] = [
+  { label: "Contact", href: "/#contact" },
+  { label: "Order Tracking", href: "/#tracking" },
+  { label: "Shipping Info", href: "/shipping" },
+  { label: "Return Policy", href: "/returns" },
+  { label: "FAQ", href: "/faq" },
+  { label: "Terms & Conditions", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy" },
+];
+
+/** Legal column: point the two documents that now have pages at the real URLs. */
+const LEGAL_LINKS: readonly NavLink[] = (FOOTER_LINKS.Legal ?? []).map((link) =>
+  link.label === "Privacy Policy"
+    ? { label: link.label, href: "/privacy" }
+    : link.label === "Terms of Service"
+      ? { label: link.label, href: "/terms" }
+      : link,
+);
+
+/** Resolved columns — Support and Legal are overridden, Shop comes from site.ts. */
+function footerLinks(heading: string): readonly NavLink[] {
+  if (heading === "Support") return SUPPORT_LINKS;
+  if (heading === "Legal") return LEGAL_LINKS;
+  return FOOTER_LINKS[heading] ?? [];
+}
 
 const SOCIALS = [
   { label: "Instagram", href: "https://instagram.com", icon: InstagramIcon },
@@ -56,25 +89,28 @@ export function Footer() {
           </div>
 
           {/* ---------- Link columns ---------- */}
-          {Object.entries(FOOTER_LINKS).map(([heading, links]) => (
-            <div key={heading}>
-              <h3 className="text-xs font-semibold tracking-[0.22em] text-primary uppercase">
-                {heading}
-              </h3>
-              <ul className="mt-5 flex flex-col gap-3">
-                {links.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted-foreground transition-colors duration-300 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          {Object.entries(FOOTER_LINKS).map(([heading]) => {
+            const links = footerLinks(heading);
+            return (
+              <div key={heading}>
+                <h3 className="text-xs font-semibold tracking-[0.22em] text-primary uppercase">
+                  {heading}
+                </h3>
+                <ul className="mt-5 flex flex-col gap-3">
+                  {links.map((link) => (
+                    <li key={link.label}>
+                      <Link
+                        href={link.href}
+                        className="text-sm text-muted-foreground transition-colors duration-300 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
 
         <Separator className="my-12 bg-glass-border" />

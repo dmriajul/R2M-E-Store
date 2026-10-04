@@ -6,6 +6,7 @@ import { Box, Images } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BADGE_STYLES } from "@/lib/site";
 import { ProductArtwork } from "@/components/product/ProductArtwork";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { ProductViewerFallback } from "@/components/three/ProductViewerFallback";
 import { Badge } from "@/components/ui/badge";
 import type { Product } from "@/types";
@@ -75,11 +76,20 @@ export function ProductGallery({ product }: ProductGalleryProps) {
           </div>
         ) : (
           <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500">
-            <ProductArtwork
-              product={product}
-              index={activeImage}
-              size="detail"
+            <OptimizedImage
+              src={product.images[activeImage] ?? product.images[0]}
+              alt={`${product.name} — image ${activeImage + 1}`}
+              preset="detail"
               className="aspect-square w-full rounded-3xl border border-glass-border"
+              /* Placeholder products keep their gradient tile. */
+              fallback={
+                <ProductArtwork
+                  product={product}
+                  index={activeImage}
+                  size="detail"
+                  className="aspect-square w-full rounded-3xl border border-glass-border"
+                />
+              }
             />
 
             {/* Thumbnail strip */}
@@ -98,11 +108,20 @@ export function ProductGallery({ product }: ProductGalleryProps) {
                       : "border-glass-border opacity-70 hover:opacity-100",
                   )}
                 >
-                  <ProductArtwork
-                    product={product}
-                    index={index}
-                    size="thumb"
+                  <OptimizedImage
+                    src={image}
+                    /* Decorative: the button above already carries the label. */
+                    alt=""
+                    preset="thumbnail"
                     className="aspect-square w-full"
+                    fallback={
+                      <ProductArtwork
+                        product={product}
+                        index={index}
+                        size="thumb"
+                        className="aspect-square w-full"
+                      />
+                    }
                   />
                 </button>
               ))}
