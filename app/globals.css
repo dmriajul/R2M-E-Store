@@ -58,6 +58,12 @@
   --cyan: #00f0ff;
   --cyan-soft: rgba(0, 240, 255, 0.12);
 
+  /* ---- Kids line: warm secondary accents ---- */
+  --rose: #f472b6;
+  --rose-soft: rgba(244, 114, 182, 0.14);
+  --lavender: #a78bfa;
+  --lavender-soft: rgba(167, 139, 250, 0.14);
+
   /* ---- Charts ---- */
   --chart-1: #d4af37;
   --chart-2: #00f0ff;
@@ -113,6 +119,11 @@
   --color-gold-strong: var(--gold-strong);
   --color-cyan: var(--cyan);
   --color-cyan-soft: var(--cyan-soft);
+
+  --color-rose: var(--rose);
+  --color-rose-soft: var(--rose-soft);
+  --color-lavender: var(--lavender);
+  --color-lavender-soft: var(--lavender-soft);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -325,6 +336,47 @@
     box-shadow:
       0 0 0 1px rgba(0, 240, 255, 0.25),
       0 8px 40px -12px rgba(0, 240, 255, 0.4);
+  }
+
+  /* ---- Kids line helpers -------------------------------------------------
+     Scoped to the shop/product surfaces so the Step 1–2 look is untouched. */
+
+  /* Warmer, softer glass for cards aimed at parents. */
+  .glass-soft {
+    background-color: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    backdrop-filter: blur(14px) saturate(150%);
+  }
+
+  /* Friendly lift used on product tiles instead of a hard gold glow. */
+  .shadow-playful {
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+      0 18px 40px -24px rgba(0, 0, 0, 0.9);
+  }
+
+  .shadow-playful-hover {
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
+      0 28px 60px -26px rgba(0, 0, 0, 0.95),
+      0 0 34px -14px rgba(244, 114, 182, 0.45);
+  }
+
+  /* Relaxed reading rhythm for descriptions and long-form copy. */
+  .prose-kids {
+    line-height: 1.75;
+    letter-spacing: 0.005em;
+  }
+
+  /* Playful emoji treatment for headings and artwork. */
+  .emoji-pop {
+    display: inline-block;
+    transition: transform 400ms var(--ease-luxe);
+  }
+
+  .group:hover .emoji-pop {
+    transform: scale(1.18) rotate(-6deg);
   }
 
   /* Shimmering gold rule used as a loading / emphasis accent. */

@@ -119,7 +119,42 @@ backend lands.
   `components/layout/SocialIcons.tsx` as inline SVGs.
 - `next.config.ts` sets `allowedDevOrigins` so the hosted preview proxy can reach the dev server.
 
+## Step 3 — Kids fashion shop & product pages
+
+The catalogue is now 12 kids pieces (ages 0–14) across six categories. Everything is typed, mock-backed
+and filterable; no database yet.
+
+```bash
+/shop                          # catalogue: category + age + gender filters, sort, grid/list
+/shop?category=dresses         # filters live in the URL and render on the server (shareable)
+/shop?age=3-5Y&gender=girls&sort=price-asc
+/product/floral-summer-dress   # 3D viewer + gallery, variant pickers, reviews, JSON-LD
+```
+
+- **Data** — `lib/site.ts` holds the 12 seeded products, `categories`, `ageFilters`, `getProducts()`
+  and `getProductById()`. Age buckets are matched by *overlap* (`3-6Y` shows under both `3-5Y` and
+  `6-8Y`), and the "Girls"/"Boys" pills also include Unisex pieces.
+- **Shop** — sticky glass filter bar (inline from `lg`, bottom-sheet on mobile), 2/3/4-column grid,
+  `AnimatePresence` reflow, quick-view dialog, wishlist hearts, 8-per-page "Load more", 🧸 empty state.
+  Filters sync to `?category=&age=&gender=&sort=&view=`; the server reads them on first paint.
+- **3D viewer** — `components/three/ProductViewer.tsx`: category-shaped placeholder (cone dress,
+  elongated shoe box, cylinder torso, torus accessory, rounded-box tee, capsule bottoms) in a
+  fabric-like `meshPhysicalMaterial` (clearcoat + sheen), warm studio lighting, `Environment
+  preset="apartment"` with the same procedural fallback as the hero, orbit/zoom auto-rotation, and a
+  ⭐ spinner. Runs `frameloop="demand"` and pauses off-screen.
+- **Product page** — server component composing client parts: gallery tabs (3D / images), colour and
+  size pickers with a size-guide modal, quantity, add-to-bag + wishlist, trust badges, four accordions,
+  review summary with distribution bars and three mock parent reviews, related products, and
+  Product JSON-LD including `audience` (min/max age, gender), sizes, colours and availability.
+
+### Known limitations
+
+- Cart lines merge by product id, so colour/size choices of an *earlier* add win until lines become
+  variant-keyed (cart-store work belongs to a later step).
+- The wishlist is session-scoped (no persistence yet).
+- Image placeholders are gradient + emoji tiles; `product.images` holds tokens, not file paths.
+
 ## Next up (not built yet)
 
-Hero + collections sections, shop grid with filters, product detail with variants and add-to-bag,
-auth flow, admin CRUD, database, and the react-three-fiber showcase.
+Auth flow, admin CRUD, database, real product photography and `.glb` models
+(`public/models`), plus variant-keyed cart lines.
