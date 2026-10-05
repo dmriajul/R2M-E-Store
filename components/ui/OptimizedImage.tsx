@@ -1,176 +1,198 @@
 "use client";
 
-import { useState } from "react";
-import Image, { type ImageLoader } from "next/image";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { isRenderableImage } from "@/lib/images";
-import {
-  IMAGE_PRESETS_KEYS,
-  PRESET_SIZES,
-  cloudinaryUrl,
-  getBlurDataUrl,
-  getOptimizedUrl,
-  isCloudinaryUrl,
-  type ImagePreset,
-} from "@/lib/image-optimizer";
-import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
-
-/* -------------------------------------------------------------------------- */
-/*  Loaders                                                                    */
-/* -------------------------------------------------------------------------- */
 
 /**
- * `next/image` asks the loader for one URL per width in the `srcSet` it
- * generates, so Cloudinary assets get a properly transformed candidate for each
- * breakpoint — and everything else falls through unchanged.
+ * Responsive Cloudinary image presets.
  */
-const LOADERS: Readonly<Record<ImagePreset, ImageLoader>> = Object.fromEntries(
-  IMAGE_PRESETS_KEYS.map((preset) => [
-    preset,
-    ({ src, width }: { src: string; width: number }) =>
-      isCloudinaryUrl(src) ? cloudinaryUrl(src, preset, width) : src,
-  ]),
-) as Readonly<Record<ImagePreset, ImageLoader>>;
+export type ImagePreset = "thumbnail" | "card" | "detail" | "zoom" | "blur";
 
-/** Soft shimmer sweep used while a photo is still in flight. */
-const SHIMMER_STYLE: React.CSSProperties = {
-  backgroundImage:
-    "linear-gradient(90deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.13) 50%, rgba(255,255,255,0.02) 100%)",
-  backgroundSize: "200% 100%",
-};
+export const IMAGE_PRESETS = {
+  thumbnail: { width: 100, height: 100, quality: 70 },
+  card: { width: 400, height: 500, quality: 80 },
+  detail: { width: 800, height: 1000, quality: 85 },
+  zoom: { width: 1600, height: 2000, quality: 90 },
+  blur: { width: 40, height: 40, quality: 10 },
+} as const;
 
-export interface OptimizedImageProps {
-  /** Photo URL. Placeholder tokens ("floral-summer-dress-1") render the fallback. */
-  src?: string;
+interface OptimizedImageProps {
+  src?: string | null;
   alt: string;
   preset?: ImagePreset;
-  /** Overrides the preset's default `sizes` attribute. */
-  sizes?: string;
-  /** Classes for the positioned wrapper — put your aspect ratio here. */
   className?: string;
-  /** Extra classes for the `<Image>` itself (hover zoom, object position…). */
-  imageClassName?: string;
-  priority?: boolean;
-  quality?: number;
-  /** Skip Next's optimiser (used for `/uploads/…` files we already sized). */
-  unoptimized?: boolean;
-  /** Custom tile for the no-photo case; defaults to a gradient + emoji. */
-  fallback?: React.ReactNode;
-  /** Emoji for the built-in gradient fallback tile. */
+  width?: number;
+  height?: number;
+  style?: React.CSSProperties;
+  fallbackGradient?: string;
   fallbackEmoji?: string;
+  priority?: boolean;
+  sizes?: string;
+  onError?: () => void;
+  fallback?: React.ReactNode;
 }
 
 /**
- * The storefront's single image primitive.
- *
- * - real photos render through `next/image` with a responsive `srcSet`,
- * - Cloudinary assets get `f_auto,q_auto` crops per breakpoint,
- * - a blurred 24px preview fades in behind the photo (blur placeholder),
- * - a shimmer keeps the frame alive while loading,
- * - placeholder tokens / broken URLs fall back to a gradient tile, never blank.
+ * Optimized image component with Cloudinary integration and CSS gradient
+ * placeholder fallback when images are absent or fail to load.
  */
 export function OptimizedImage({
   src,
   alt,
   preset = "card",
-  sizes,
   className,
-  imageClassName,
+  width,
+  height,
+  style,
+  fallbackGradient = "from-gray-700 to-gray-900",
+  fallbackEmoji,
   priority = false,
-  quality = 82,
-  unoptimized,
+  sizes = "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw",
+  onError,
   fallback,
-  fallbackEmoji = "🧸",
 }: OptimizedImageProps) {
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const reducedMotion = usePrefersReducedMotion();
+  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const imgRef = useRef<HTMLImageElement>(null);
 
-  const renderable = isRenderableImage(src) && !failed;
-  const placeholder = renderable && src ? getBlurDataUrl(src) : undefined;
+  const presetConfig = IMAGE_PRESETS[preset];
+  const placeholderWidth = presetConfig.width;
+  const placeholderHeight = presetConfig.height;
 
-  /* ---------- No photo (or the photo 404'd): gradient tile ---------- */
-  if (!renderable || !src) {
+  const cloudinaryUrl = src ? buildCloudinaryUrl(src, preset) : null;
+
+  // Handle image load errors
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+
+    const handleError = () => {
+      setHasError(true);
+      setIsLoading(false);
+      onError?.();
+    };
+
+    const handleLoad = () => {
+      setIsLoading(false);
+    };
+
+    img.addEventListener("error", handleError);
+    img.addEventListener("load", handleLoad);
+
+    return () => {
+      img.removeEventListener("error", handleError);
+      img.removeEventListener("load", handleLoad);
+    };
+  }, [onError]);
+
+  const fallbackClass = cn(
+    "relative overflow-hidden rounded-lg bg-gradient-to-br",
+    fallbackGradient,
+    "aspect-square",
+  );
+
+  if (!src || hasError) {
+    if (fallback) {
+      return (
+        <div
+          className={cn("", className)}
+          style={{ width: width, height: height, ...style }}
+        >
+          {fallback}
+        </div>
+      );
+    }
     return (
       <div
-        className={cn(
-          "relative flex items-center justify-center overflow-hidden",
-          className,
-        )}
+        className={cn(fallbackClass, className)}
+        style={{ width: width, height: height, ...style }}
+        aria-label={alt}
       >
-        {fallback ?? (
-          <>
-            <span
-              aria-hidden
-              className="absolute inset-0 bg-linear-to-br from-[#2a2438] via-[#1b1b24] to-[#0f0f12]"
-            />
-            <span
-              aria-hidden
-              className="absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_115%,rgba(10,10,10,0.85)_0%,rgba(10,10,10,0.3)_50%,transparent_78%)]"
-            />
-            <span
-              aria-hidden
-              className="emoji-pop relative z-10 text-5xl drop-shadow-[0_6px_24px_rgba(0,0,0,0.55)] sm:text-6xl"
-            >
-              {fallbackEmoji}
-            </span>
-          </>
+        {fallbackEmoji && (
+          <span className="absolute inset-0 flex items-center justify-center text-4xl opacity-40">
+            {fallbackEmoji}
+          </span>
         )}
       </div>
     );
   }
 
-  const localFile = src.startsWith("/uploads/");
-
   return (
-    <div className={cn("relative overflow-hidden bg-[#0d0d0d]", className)}>
-      {/* ---------- Blur placeholder (Cloudinary only) ---------- */}
-      {placeholder && !loaded && (
-        <span
-          aria-hidden
-          className="absolute inset-0 scale-110 bg-cover bg-center blur-xl"
-          style={{ backgroundImage: `url(${placeholder})` }}
+    <div className={cn("relative overflow-hidden rounded-lg", className)} style={style}>
+      {/* Blur placeholder */}
+      {isLoading && (
+        <div
+          className="absolute inset-0 bg-gray-900 animate-pulse"
+          style={{ width: "100%", height: "100%" }}
         />
       )}
 
-      {/* ---------- Shimmer ---------- */}
-      <AnimatePresence>
-        {!loaded && (
-          <motion.span
-            aria-hidden
-            initial={{ opacity: 0 }}
-            animate={{ opacity: reducedMotion ? 0.35 : 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reducedMotion ? 0.2 : 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute inset-0 z-10 overflow-hidden"
-          >
-            <span aria-hidden className="animate-shimmer absolute inset-0" style={SHIMMER_STYLE} />
-          </motion.span>
+      <Image
+        ref={imgRef}
+        src={cloudinaryUrl ?? src}
+        alt={alt}
+        width={width ?? placeholderWidth}
+        height={height ?? placeholderHeight}
+        className={cn(
+          "object-cover transition-opacity duration-300",
+          isLoading ? "opacity-0" : "opacity-100",
         )}
-      </AnimatePresence>
-
-      {/* ---------- The photo ---------- */}
-      <motion.span
-        initial={false}
-        animate={{ opacity: loaded ? 1 : 0 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        className="absolute inset-0"
-      >
-        <Image
-          src={getOptimizedUrl(src, preset)}
-          alt={alt}
-          fill
-          sizes={sizes ?? PRESET_SIZES[preset]}
-          loader={isCloudinaryUrl(src) ? LOADERS[preset] : undefined}
-          quality={quality}
-          priority={priority}
-          unoptimized={unoptimized ?? localFile}
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
-          className={cn("object-cover", imageClassName)}
-        />
-      </motion.span>
+        priority={priority}
+        sizes={sizes}
+        loading={priority ? "eager" : "lazy"}
+      />
     </div>
   );
+}
+
+/**
+ * Build a Cloudinary transformation URL for the given preset.
+ * If Cloudinary is not configured, return the original URL.
+ */
+function buildCloudinaryUrl(
+  imageId: string,
+  preset: ImagePreset,
+  options?: {
+    effect?: string;
+    overlay?: string;
+    opacity?: number;
+  },
+): string {
+  const config = IMAGE_PRESETS[preset];
+  const { width, height, quality } = config;
+
+  // Check if we're using Cloudinary
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const useCloudinary = cloudName && cloudName.trim().length > 0;
+
+  if (!useCloudinary) {
+    // Return as-is (local or CDN URL)
+    return imageId;
+  }
+
+  // Build Cloudinary URL with transformations
+  const transformations = [
+    `w_${width}`,
+    `h_${height}`,
+    `c_fill`,
+    `q_${quality}`,
+    "f_auto",
+  ];
+
+  if (options?.effect) {
+    transformations.push(options.effect);
+  }
+
+  const transformString = transformations.join(",");
+  return `https://res.cloudinary.com/${cloudName}/image/upload/${transformString}/${imageId}`;
+}
+
+/**
+ * Generate a blur placeholder data URL for lazy loading.
+ */
+export function generateBlurPlaceholder(
+  _gradient?: string,
+): string {
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%234B5563'/%3E%3Cstop offset='100%25' stop-color='%231F2937'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='40' height='40' fill='url(%23g)'/%3E%3C/svg%3E`;
 }

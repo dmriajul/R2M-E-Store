@@ -32,23 +32,26 @@ const inter = localFont({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
   title: {
-    default: "Little Luxe — Premium Kids Fashion",
-    template: "%s | Little Luxe — Premium Kids Fashion",
+    default: "LITTLE LUXE — Premium Kids Fashion Bangladesh",
+    template: "%s | LITTLE LUXE — Premium Kids Fashion BD",
   },
   description: SITE.description,
-  applicationName: "Little Luxe",
+  applicationName: "LITTLE LUXE",
   keywords: [
-    "kids fashion",
-    "children's clothing Bangladesh",
+    "kids fashion Bangladesh",
+    "children's clothing BD",
     "organic kids clothes",
-    "toddler outfits",
-    "kids shoes",
+    "toddler outfits Bangladesh",
+    "kids shoes BD",
     "baby clothes",
     "little luxe",
+    "premium kids fashion",
+    "kids wear Dhaka",
+    "children fashion Bangladesh",
   ],
-  authors: [{ name: "Little Luxe", url: SITE.url }],
-  creator: "Little Luxe",
-  publisher: "Little Luxe",
+  authors: [{ name: "LITTLE LUXE", url: SITE.url }],
+  creator: "LITTLE LUXE",
+  publisher: "LITTLE LUXE",
   category: "shopping",
   // Every route canonicalises to itself; pages may override with an absolute URL.
   alternates: { canonical: "./" },
@@ -66,15 +69,15 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "Little Luxe",
+    title: "LITTLE LUXE",
     statusBarStyle: "black-translucent",
   },
   formatDetection: { telephone: false, address: false, email: false },
   // ---------- Social ----------
   openGraph: {
     type: "website",
-    siteName: "Little Luxe",
-    title: "Little Luxe — Premium Kids Fashion",
+    siteName: "LITTLE LUXE",
+    title: "LITTLE LUXE — Premium Kids Fashion Bangladesh",
     description: SITE.description,
     url: SITE.url,
     locale: "en_BD",
@@ -82,7 +85,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Little Luxe — Premium Kids Fashion",
+    title: "LITTLE LUXE — Premium Kids Fashion Bangladesh",
     description: SITE.description,
     site: "@littleluxe",
     creator: "@littleluxe",
@@ -108,6 +111,27 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+/** Organization JSON-LD Schema */
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "LITTLE LUXE",
+  url: SITE.url,
+  logo: `${SITE.url}/icons/icon-192.png`,
+  description: "Premium kids fashion for ages 0-14. Where Magic Meets Style.",
+  contactPoint: {
+    "@type": "ContactPoint",
+    telephone: "+8801712345678",
+    contactType: "customer service",
+    availableLanguage: ["English", "Bengali"],
+  },
+  sameAs: [
+    "https://www.facebook.com/littleluxe",
+    "https://www.instagram.com/littleluxe",
+    "https://www.twitter.com/littleluxe",
+  ],
+};
+
 /**
  * Root layout: fonts, metadata, structured chrome.
  *
@@ -120,6 +144,13 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${inter.variable} dark`} suppressHydrationWarning>
+      <head>
+        {/* JSON-LD Structured Data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        />
+      </head>
       <body className="flex min-h-dvh flex-col bg-background text-foreground">
         {/* First Tab stop on every page. */}
         <SkipToContent />
@@ -136,4 +167,38 @@ export default function RootLayout({
       </body>
     </html>
   );
+}
+
+/**
+ * Helper for product pages to add Product JSON-LD schema.
+ */
+export function getProductJsonLd(product: {
+  name: string;
+  description: string;
+  image: string;
+  price: number;
+  currency: string;
+  brand: string;
+  sku?: string;
+}): string {
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.description,
+    image: product.image,
+    brand: {
+      "@type": "Brand",
+      name: product.brand || "LITTLE LUXE",
+    },
+    offers: {
+      "@type": "Offer",
+      url: `${SITE.url}/product/${product.sku || product.name.toLowerCase().replace(/\s+/g, "-")}`,
+      priceCurrency: product.currency || "BDT",
+      price: product.price,
+      priceValidUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      availability: product.price > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+    },
+  };
+  return JSON.stringify(schema);
 }

@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Menu, Search, ShoppingBag, X, type LucideIcon } from "lucide-react";
+import { Menu, Search, ShoppingBag, X, Type, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_LINKS, SITE } from "@/lib/site";
 import { useCartStore, selectCartItemCount } from "@/store/useCartStore";
+import { useLanguageStore } from "@/store/useLanguageStore";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,9 @@ export function Navbar() {
   const pathname = usePathname();
   const itemCount = useCartStore(selectCartItemCount);
   const reducedMotion = usePrefersReducedMotion();
+  const language = useLanguageStore((state) => state.language);
+  const toggleLanguage = useLanguageStore((state) => state.toggleLanguage);
+
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -91,6 +95,13 @@ export function Navbar() {
     setIsCartOpen(false);
     setIsSearchOpen(false);
   }, [pathname]);
+
+  const navLinks = language === "bn" ? [
+    { label: "হোম", href: "/" },
+    { label: "দেখুন", href: "/shop" },
+    { label: "সংগ্রহ", href: "/#collections" },
+    { label: "পরিচয়", href: "/#about" },
+  ] : NAV_LINKS;
 
   return (
     <header
@@ -119,7 +130,7 @@ export function Navbar() {
 
         {/* ---------- Desktop nav ---------- */}
         <ul className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 lg:flex">
-          {NAV_LINKS.map((link) => {
+          {navLinks.map((link) => {
             const isActive =
               pathname === link.href ||
               (link.href !== "/" && pathname.startsWith(link.href));
@@ -157,6 +168,18 @@ export function Navbar() {
             label="Search products"
             onClick={() => setIsSearchOpen(true)}
           />
+
+          {/* Language Toggle */}
+          <button
+            type="button"
+            onClick={toggleLanguage}
+            aria-label={`Switch language: ${language === "en" ? "বাংলা" : "English"}`}
+            className="group relative inline-flex items-center gap-1 rounded-full border border-glass-border bg-glass px-2 py-1 text-xs font-medium transition-all duration-300 hover:border-primary/40 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <Type className="size-3 opacity-60" />
+            <span className="hidden sm:inline">{language === "en" ? "EN" : "বাং"}</span>
+            <span className="sm:hidden">{language === "en" ? "EN" : "বাং"}</span>
+          </button>
 
           <button
             type="button"
@@ -239,6 +262,24 @@ export function Navbar() {
               </SheetHeader>
 
               <MobileMenu onNavigate={() => setIsMobileOpen(false)} />
+
+              {/* Mobile language toggle */}
+              <div className="border-t border-glass-border px-4 py-4">
+                <button
+                  type="button"
+                  onClick={toggleLanguage}
+                  aria-label={`Switch language: ${language === "en" ? "বাংলা" : "English"}`}
+                  className="w-full flex items-center justify-between rounded-xl border border-glass-border bg-glass px-4 py-3 text-sm font-medium transition-colors hover:border-primary/40 hover:text-primary"
+                >
+                  <span className="flex items-center gap-2">
+                    <Type className="size-4 opacity-60" />
+                    {language === "en" ? "English" : "বাংলা"}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {language === "en" ? "→ বাংলা" : "→ EN"}
+                  </span>
+                </button>
+              </div>
             </SheetContent>
           </Sheet>
         </div>

@@ -21,19 +21,28 @@ const SYMBOLS: Readonly<Record<CurrencyCode, string>> = {
   BDT: "৳",
 };
 
-/** Demo default is USD — the seeded catalogue is priced in dollars. */
+/** Default is BDT for Bangladesh market. */
 export const STORE_CURRENCY: CurrencyCode = ((): CurrencyCode => {
-  const raw = (process.env.NEXT_PUBLIC_CURRENCY ?? "USD").toUpperCase();
-  return raw in SYMBOLS ? (raw as CurrencyCode) : "USD";
+  const raw = (process.env.NEXT_PUBLIC_CURRENCY ?? "BDT").toUpperCase();
+  return raw in SYMBOLS ? (raw as CurrencyCode) : "BDT";
 })();
 
 export function currencySymbol(code: CurrencyCode = STORE_CURRENCY): string {
-  return SYMBOLS[code] ?? "$";
+  return SYMBOLS[code] ?? "৳";
 }
 
-/** "৳52.98" / "$52.98" — used by the payment instructions and receipts. */
+/**
+ * Format money in BDT style — no decimals.
+ * Examples: "৳3,499", "৳80", "৳5,000"
+ */
 export function formatMoney(amount: number, code: CurrencyCode = STORE_CURRENCY): string {
-  return `${currencySymbol(code)}${amount.toFixed(2)}`;
+  const symbol = currencySymbol(code);
+  // Format with thousands separator, no decimals
+  const formatted = new Intl.NumberFormat("en-BD", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.round(amount));
+  return `${symbol}${formatted}`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -42,9 +51,24 @@ export function formatMoney(amount: number, code: CurrencyCode = STORE_CURRENCY)
 
 export const STORE = {
   name: process.env.NEXT_PUBLIC_STORE_NAME ?? "Little Luxe",
-  /** Demo default matches `lib/cart.ts`; override for taka pricing. */
-  freeShippingThreshold: Number(process.env.NEXT_PUBLIC_FREE_SHIPPING_THRESHOLD ?? 50),
+  /** Free shipping threshold in BDT */
+  freeShippingThreshold: Number(process.env.NEXT_PUBLIC_FREE_SHIPPING_THRESHOLD ?? 5000),
   supportEmail: process.env.STORE_SUPPORT_EMAIL ?? "hello@littleluxe.com",
+} as const;
+
+/* -------------------------------------------------------------------------- */
+/*  Shipping Rates                                                            */
+/* -------------------------------------------------------------------------- */
+
+export const SHIPPING_RATES = {
+  /** Inside Dhaka — 1-2 days delivery */
+  standard: 80,
+  /** Outside Dhaka — 3-5 days delivery */
+  express: 150,
+  /** Gift wrap option */
+  giftWrap: 50,
+  /** Free shipping threshold */
+  freeThreshold: 5000,
 } as const;
 
 /* -------------------------------------------------------------------------- */

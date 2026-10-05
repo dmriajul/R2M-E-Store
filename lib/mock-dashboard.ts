@@ -54,7 +54,7 @@ export const DEMO_USER: DashboardUser = {
   gender: "Female",
   kids: [...DEMO_KIDS],
   rewardPoints: 350,
-  totalSpent: 284.97,
+  totalSpent: 28497, // ৳28,497 in BDT
 };
 
 export const MOCK_ADDRESSES: Address[] = [

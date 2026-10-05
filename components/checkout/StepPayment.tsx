@@ -24,6 +24,8 @@ import { isManualPayment, PAYMENT_METHODS } from "@/lib/payments";
 import { humanFileSize } from "@/lib/images";
 import { useCartStore } from "@/store/useCartStore";
 import { useCheckoutStore } from "@/store/useCheckoutStore";
+import { useLanguageStore } from "@/store/useLanguageStore";
+import { t } from "@/lib/utils";
 import { Field, checkoutInputClass } from "@/components/checkout/Field";
 import {
   CopyableValue,
@@ -49,6 +51,8 @@ export function StepPayment() {
 
   const items = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
+
+  const language = useLanguageStore((state) => state.language);
 
   const [placing, setPlacing] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -90,7 +94,7 @@ export function StepPayment() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      toast.error("Upload a PNG, JPEG or WebP screenshot");
+      toast.error(t("common.error", language));
       return;
     }
     if (file.size > MAX_SCREENSHOT_BYTES) {
@@ -121,7 +125,7 @@ export function StepPayment() {
       setValue("screenshotUrl", "", { shouldValidate: true });
       setLocalPreview(null);
       toast.error("Couldn't upload that screenshot", {
-        description: error instanceof Error ? error.message : "Please try again",
+        description: error instanceof Error ? error.message : t("common.error", language),
       });
     } finally {
       setUploading(false);
@@ -219,7 +223,9 @@ export function StepPayment() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
       <header>
-        <h2 className="text-2xl font-bold tracking-tight">Payment Method</h2>
+        <h2 className="text-2xl font-bold tracking-tight">
+          {language === "bn" ? "পেমেন্ট মেথড" : "Payment Method"}
+        </h2>
         <PaymentSecurityNote />
       </header>
 
@@ -237,11 +243,14 @@ export function StepPayment() {
         <div className="glass-soft flex flex-col gap-3 rounded-2xl border border-glass-border p-5">
           <p className="flex items-center gap-2 text-sm font-semibold">
             <Wallet className="size-4 text-emerald-400" aria-hidden />
-            You&apos;ll pay {formatMoney(totals.total)} in cash when your order arrives
+            {language === "bn"
+              ? `আপনার অর্ডার আসার সময় ৳${totals.total.toLocaleString("bn-BD")} নগদ পেমেন্ট দিন`
+              : `You'll pay ${formatMoney(totals.total)} in cash when your order arrives`}
           </p>
           <p className="text-sm text-muted-foreground">
-            Please keep exact change ready. Our delivery partner collects payment at your doorstep
-            and hands over a printed receipt. 🚚
+            {language === "bn"
+              ? "দয়া করে সঠিক পরিমাণ নগদ রাখুন। আমাদের ডেলিভারি পার্টনার আপনার দোরগোড়ায় পেমেন্ট সংগ্রহ করেন এবং একটি মুদ্রণ রসিদ দেন। 🚚"
+              : "Please keep exact change ready. Our delivery partner collects payment at your doorstep and hands over a printed receipt. 🚚"}
           </p>
         </div>
       )}
@@ -252,51 +261,61 @@ export function StepPayment() {
           <div className="glass-soft flex flex-col gap-3 rounded-2xl border border-glass-border p-5">
             <p className="flex items-center gap-2 text-sm font-semibold">
               <Smartphone className="size-4 text-rose" aria-hidden />
-              Send {formatMoney(totals.total)} to one of these {config.name} numbers
+              {language === "bn"
+                ? `${config.name} নম্বরগুলোর মধ্যে যেকোনো একটিতে ${formatMoney(totals.total)} পাঠান`
+                : `Send ${formatMoney(totals.total)} to one of these ${config.name} numbers`}
             </p>
 
             <div className="grid gap-2 sm:grid-cols-2">
               {(config.numbers ?? []).map((number, index) => (
                 <CopyableValue
                   key={number}
-                  label={`${config.name} number ${index + 1}`}
+                  label={language === "bn" ? `${config.name} নম্বর ${index + 1}` : `${config.name} number ${index + 1}`}
                   value={number}
-                  hint={index === 0 ? "Preferred — verified fastest" : undefined}
+                  hint={index === 0 ? (language === "bn" ? "পছন্দের — দ্রুত যাচাইকরণ" : "Preferred — verified fastest") : undefined}
                 />
               ))}
             </div>
 
             <div className="rounded-xl border border-glass-border bg-[#141414] px-4 py-3">
               <p className="text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-                Reference
+                {language === "bn" ? "রেফারেন্স" : "Reference"}
               </p>
               <p className="mt-0.5 text-sm text-foreground">
-                Your <span className="font-mono">LL-…</span> order number, generated when you place
-                the order
+                {language === "bn"
+                  ? "আপনার <span className=\"font-mono\">LL-…</span> অর্ডার নম্বর, অর্ডার করার সময় তৈরি হয়"
+                  : `Your <span className="font-mono">LL-...</span> order number, generated when you place the order`}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                Quote it in the {config.name} reference field so we can match your payment
+                {language === "bn"
+                  ? `${config.name} রেফারেন্স ফিল্ডে এটি উল্লেখ করুন যাতে আমরা আপনার পেমেন্ট মিলাতে পারি`
+                  : `Quote it in the ${config.name} reference field so we can match your payment`}
               </p>
             </div>
 
             {config.ussd && (
               <p className="text-xs text-muted-foreground">
-                Prefer USSD? Dial <span className="font-mono text-foreground">{config.ussd}</span>{" "}
-                and follow the prompts.
+                {language === "bn"
+                  ? `USSD পছন্দ? <span className="font-mono text-foreground">${config.ussd}</span> ডায়ল করুন এবং নির্দেশাবলী অনুসরণ করুন।`
+                  : `Prefer USSD? Dial <span className="font-mono text-foreground">${config.ussd}</span> and follow the prompts.`}
               </p>
             )}
 
             <ol className="mt-1 flex flex-col gap-1.5 text-xs text-muted-foreground">
-              {(config.instructions ?? "").split("\n").map((step) => (
-                <li key={step}>{step}</li>
-              ))}
+              {(config.instructions ?? "")
+                .replace(/\{number\}/g, config.numbers?.[0] ?? "")
+                .replace(/\{amount\}/g, formatMoney(totals.total))
+                .split("\n")
+                .map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
             </ol>
           </div>
 
           {/* Screenshot upload */}
           <div className="flex flex-col gap-3">
             <p className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-              Payment screenshot
+              {language === "bn" ? "পেমেন্ট স্ক্রিনশট" : "Payment screenshot"}
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -320,23 +339,25 @@ export function StepPayment() {
                 {uploading ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    Uploading…
+                    {language === "bn" ? "আপলোড হচ্ছে…" : "Uploading…"}
                   </>
                 ) : (
                   <>
                     <ImagePlus className="size-4" />
-                    Upload Payment Screenshot
+                    {language === "bn" ? "পেমেন্ট স্ক্রিনশট আপলোড করুন" : "Upload Payment Screenshot"}
                   </>
                 )}
               </Button>
-              <span className="text-xs text-muted-foreground">Image only · max 2MB</span>
+              <span className="text-xs text-muted-foreground">
+                {language === "bn" ? "শুধু ছবি · সর্বোচ্চ ২MB" : "Image only · max 2MB"}
+              </span>
             </div>
 
             {(localPreview || screenshotUrl) && (
               <div className="relative w-fit overflow-hidden rounded-xl border border-glass-border">
                 <Image
                   src={screenshotUrl || localPreview || ""}
-                  alt="Payment screenshot preview"
+                  alt={language === "bn" ? "পেমেন্ট স্ক্রিনশট প্রিভিউ" : "Payment screenshot preview"}
                   width={220}
                   height={220}
                   unoptimized={Boolean(screenshotUrl) && !screenshotUrl.startsWith("/uploads")}
@@ -348,7 +369,7 @@ export function StepPayment() {
                     setValue("screenshotUrl", "", { shouldValidate: true });
                     setLocalPreview(null);
                   }}
-                  aria-label="Remove screenshot"
+                  aria-label={language === "bn" ? "স্ক্রিনশট সরান" : "Remove screenshot"}
                   className="absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-full border border-glass-border bg-[#0A0A0A]/85 text-muted-foreground transition-colors duration-300 hover:text-rose focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                   <Trash2 className="size-3.5" />
@@ -363,10 +384,10 @@ export function StepPayment() {
             )}
 
             <Field
-              label="Transaction ID (optional)"
+              label={language === "bn" ? "ট্রানজ্যাকশন আইডি (ঐচ্ছিক)" : "Transaction ID (optional)"}
               htmlFor="pay-transaction"
               error={errors.transactionId?.message}
-              hint="Found in the wallet's confirmation SMS."
+              hint={language === "bn" ? "ওয়ালেটের কনফার্মেশন SMS-এ পাওয়া যায়।" : "Found in the wallet's confirmation SMS."}
             >
               <Input
                 id="pay-transaction"
@@ -377,10 +398,10 @@ export function StepPayment() {
             </Field>
 
             <Field
-              label="Number you're sending from"
+              label={language === "bn" ? "পাঠানোর নম্বর" : "Number you're sending from"}
               htmlFor="pay-sender"
               error={errors.senderNumber?.message}
-              hint={senderHint ? `Send from your own ${config.name} number` : undefined}
+              hint={senderHint ? (language === "bn" ? `আপনার নিজের ${config.name} নম্বর থেকে পাঠান` : `Send from your own ${config.name} number`) : undefined}
             >
               <Input
                 id="pay-sender"
@@ -400,10 +421,13 @@ export function StepPayment() {
                 {...register("confirmed")}
               />
               <span>
-                I&apos;ve completed the payment
+                {language === "bn"
+                  ? "আমি পেমেন্ট সম্পন্ন করেছি"
+                  : "I've completed the payment"}
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  Your order will be confirmed after payment verification (usually within 1–2
-                  hours).
+                  {language === "bn"
+                    ? "আপনার অর্ডার পেমেন্ট যাচাইকরণের পর নিশ্চিত করা হবে (সাধারণত ১-২ ঘণ্টার মধ্যে)।"
+                    : "Your order will be confirmed after payment verification (usually within 1–2 hours)."}
                 </span>
               </span>
             </label>
@@ -421,10 +445,13 @@ export function StepPayment() {
         <div className="glass-soft flex items-start gap-3 rounded-2xl border border-glass-border p-5">
           <Info className="mt-0.5 size-5 shrink-0 text-cyan" aria-hidden />
           <div>
-            <p className="text-sm font-semibold">Coming soon</p>
+            <p className="text-sm font-semibold">
+              {language === "bn" ? "শীঘ্রই আসছে" : "Coming soon"}
+            </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {config.comingSoon} Until then, cash on delivery and the mobile wallets are ready to
-              go. 💳
+              {config.comingSoon} {language === "bn"
+                ? "ততক্ষণে, ক্যাশ অন ডেলিভারি এবং মোবাইল ওয়ালেট প্রস্তুত। 💳"
+                : "Until then, cash on delivery and the mobile wallets are ready to go. 💳"}
             </p>
           </div>
         </div>
@@ -439,7 +466,7 @@ export function StepPayment() {
           className="h-12 w-full gap-2 rounded-full border-glass-border bg-glass text-xs font-semibold tracking-[0.16em] uppercase transition-colors duration-300 hover:border-primary/50 hover:text-primary sm:w-auto"
         >
           <ArrowLeft className="size-4" />
-          Back
+          {language === "bn" ? "পিছু যান" : "Back"}
         </Button>
 
         <Button
@@ -450,12 +477,18 @@ export function StepPayment() {
           {placing ? (
             <>
               <Loader2 className="size-4 animate-spin" />
-              Processing…
+              {language === "bn" ? "প্রসেস করা হচ্ছে…" : "Processing…"}
             </>
           ) : (
             <>
               <Sparkles className="size-4" />
-              {method === "COD" ? "Place Order 🎉" : "Submit for Verification"}
+              {method === "COD"
+                ? language === "bn"
+                  ? "অর্ডার করুন 🎉"
+                  : "Place Order 🎉"
+                : language === "bn"
+                  ? "যাচাইকরণের জন্য জমা দিন"
+                  : "Submit for Verification"}
             </>
           )}
         </Button>
@@ -464,7 +497,9 @@ export function StepPayment() {
       {manual && !confirmed && (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <ClipboardCopy className="size-3.5" aria-hidden />
-          Tip: send the exact amount and keep the reference handy — verification is manual.
+          {language === "bn"
+            ? "টিপস: সঠিক পরিমাণ পাঠান এবং রেফারেন্স ধরে রাখুন — যাচাইকরণ ম্যানুয়াল।"
+            : "Tip: send the exact amount and keep the reference handy — verification is manual."}
         </p>
       )}
     </form>

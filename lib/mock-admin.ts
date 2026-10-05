@@ -59,7 +59,7 @@ export const ADMIN_KPIS: readonly AdminKpi[] = [
     id: "revenue",
     emoji: "💰",
     label: "Today's Revenue",
-    value: "$1,247.50",
+    value: "৳1,24,750", // BDT
     trend: 12.5,
     trendUnit: "percent",
     spark: [9, 12, 8, 14, 11, 16, 19],
@@ -93,49 +93,49 @@ export const ADMIN_KPIS: readonly AdminKpi[] = [
   },
 ] as const;
 
-/** Mon–Sun. Sums to $8,432.00 → avg $1,204.57/day, matching the brief. */
+/** Mon–Sun. Sums to ৳84,320 → avg ৳12,046/day, matching BDT pricing. */
 export const REVENUE_7D: readonly RevenuePoint[] = [
-  { label: "Mon", value: 1020.5 },
-  { label: "Tue", value: 1180.75 },
-  { label: "Wed", value: 980.25 },
-  { label: "Thu", value: 1340.0 },
-  { label: "Fri", value: 1462.5 },
-  { label: "Sat", value: 1248.0 },
-  { label: "Sun", value: 1200.0 },
+  { label: "Mon", value: 10205 },
+  { label: "Tue", value: 11808 },
+  { label: "Wed", value: 9803 },
+  { label: "Thu", value: 13400 },
+  { label: "Fri", value: 14625 },
+  { label: "Sat", value: 12480 },
+  { label: "Sun", value: 12000 },
 ] as const;
 
 /** Thirty-day series; labelled every fifth day when charted. */
 export const REVENUE_30D: readonly RevenuePoint[] = [
-  { label: "Sep 2", value: 860 },
-  { label: "Sep 3", value: 940 },
-  { label: "Sep 4", value: 1015 },
-  { label: "Sep 5", value: 780 },
-  { label: "Sep 6", value: 1290 },
-  { label: "Sep 7", value: 1420 },
-  { label: "Sep 8", value: 1105 },
-  { label: "Sep 9", value: 995 },
-  { label: "Sep 10", value: 1180 },
-  { label: "Sep 11", value: 1345 },
-  { label: "Sep 12", value: 1560 },
-  { label: "Sep 13", value: 1210 },
-  { label: "Sep 14", value: 1040 },
-  { label: "Sep 15", value: 890 },
-  { label: "Sep 16", value: 1120 },
-  { label: "Sep 17", value: 1380 },
-  { label: "Sep 18", value: 1475 },
-  { label: "Sep 19", value: 1265 },
-  { label: "Sep 20", value: 1330 },
-  { label: "Sep 21", value: 970 },
-  { label: "Sep 22", value: 1085 },
-  { label: "Sep 23", value: 1215 },
-  { label: "Sep 24", value: 1405 },
-  { label: "Sep 25", value: 1520 },
-  { label: "Sep 26", value: 1310 },
-  { label: "Sep 27", value: 1180 },
-  { label: "Sep 28", value: 1090 },
-  { label: "Sep 29", value: 1245 },
-  { label: "Sep 30", value: 1390 },
-  { label: "Oct 1", value: 1247.5 },
+  { label: "Sep 2", value: 8600 },
+  { label: "Sep 3", value: 9400 },
+  { label: "Sep 4", value: 10150 },
+  { label: "Sep 5", value: 7800 },
+  { label: "Sep 6", value: 12900 },
+  { label: "Sep 7", value: 14200 },
+  { label: "Sep 8", value: 11050 },
+  { label: "Sep 9", value: 9950 },
+  { label: "Sep 10", value: 11800 },
+  { label: "Sep 11", value: 13450 },
+  { label: "Sep 12", value: 15600 },
+  { label: "Sep 13", value: 12100 },
+  { label: "Sep 14", value: 10400 },
+  { label: "Sep 15", value: 8900 },
+  { label: "Sep 16", value: 11200 },
+  { label: "Sep 17", value: 13800 },
+  { label: "Sep 18", value: 14750 },
+  { label: "Sep 19", value: 12650 },
+  { label: "Sep 20", value: 13300 },
+  { label: "Sep 21", value: 9700 },
+  { label: "Sep 22", value: 10850 },
+  { label: "Sep 23", value: 12150 },
+  { label: "Sep 24", value: 14050 },
+  { label: "Sep 25", value: 15200 },
+  { label: "Sep 26", value: 13100 },
+  { label: "Sep 27", value: 11800 },
+  { label: "Sep 28", value: 10900 },
+  { label: "Sep 29", value: 12450 },
+  { label: "Sep 30", value: 13900 },
+  { label: "Oct 1", value: 12475 },
 ] as const;
 
 export interface RevenueSummary {
@@ -167,7 +167,7 @@ export const ADMIN_BESTSELLERS: readonly Bestseller[] = BESTSELLER_UNITS.map(
       productId,
       name: product?.name ?? productId,
       unitsSold,
-      revenue: Math.round((product?.price ?? 0) * unitsSold * 100) / 100,
+      revenue: Math.round((product?.price ?? 0) * unitsSold),
     };
   },
 );
@@ -202,7 +202,7 @@ export function buildAdminProducts(): AdminProduct[] {
   return PRODUCTS.map((product, index) => ({
     ...product,
     sku: makeSku(product, index),
-    costPerItem: Math.round(product.price * 0.45 * 100) / 100,
+    costPerItem: Math.round(product.price * 0.45),
     lowStockThreshold: ADMIN_LOW_STOCK_THRESHOLD,
     trackInventory: true,
     metaTitle: `${product.name} | Little Luxe`,
@@ -586,7 +586,7 @@ export function buildAdminCustomers(orders: readonly AdminOrder[]): AdminCustome
       joinedAt: seed.joinedAt,
       active: seed.active,
       orderCount: mine.length,
-      totalSpent: Math.round(totalSpent * 100) / 100,
+      totalSpent: Math.round(totalSpent),
       addresses: [addressFor(person, index)],
     };
   });
@@ -604,7 +604,7 @@ export const ADMIN_COUPONS: readonly AdminCoupon[] = [
     code: "WELCOME10",
     type: "percentage",
     value: 10,
-    minOrder: 50,
+    minOrder: 5000,
     uses: 45,
     usageLimit: 100,
     startsAt: "2026-01-01",
@@ -616,8 +616,8 @@ export const ADMIN_COUPONS: readonly AdminCoupon[] = [
     id: "coupon-summer25",
     code: "SUMMER25",
     type: "fixed",
-    value: 25,
-    minOrder: 100,
+    value: 250,
+    minOrder: 10000,
     uses: 12,
     usageLimit: 50,
     startsAt: "2026-06-01",
@@ -643,7 +643,7 @@ export const ADMIN_COUPONS: readonly AdminCoupon[] = [
     code: "BIRTHDAY",
     type: "percentage",
     value: 20,
-    minOrder: 30,
+    minOrder: 3000,
     uses: 5,
     usageLimit: 20,
     startsAt: "2026-06-01",
@@ -659,10 +659,10 @@ export const COUPON_TYPE_LABEL: Readonly<Record<AdminCoupon["type"], string>> = 
   "free-shipping": "Free Shipping",
 };
 
-/** Value column text, e.g. "10% off" / "$25 off" / "Free shipping". */
+/** Value column text, e.g. "10% off" / "৳250 off" / "Free shipping". */
 export function describeCouponValue(coupon: AdminCoupon): string {
   if (coupon.type === "percentage") return `${coupon.value}% off`;
-  if (coupon.type === "fixed") return `$${coupon.value.toFixed(2)} off`;
+  if (coupon.type === "fixed") return `৳${coupon.value.toLocaleString("en-BD")} off`;
   return "Free shipping";
 }
 
@@ -760,7 +760,7 @@ export const ADMIN_NOTIFICATIONS: readonly AdminNotification[] = [
   {
     id: "admin-notif-1",
     emoji: "🛒",
-    title: "New order #LL-2025-00171 — $52.98",
+    title: "New order #LL-2025-00171 — ৳5,299",
     createdAt: "2026-10-01T06:12:00Z",
     href: "/admin/orders",
     read: false,
@@ -801,14 +801,14 @@ export const ADMIN_SETTINGS: AdminSettings = {
     storeEmail: "hello@littleluxe.com",
     phone: "+880 1712 345678",
     address: "House 24, Road 7, Dhanmondi, Dhaka 1209, Bangladesh",
-    currency: "USD",
+    currency: "BDT",
     timezone: "Asia/Dhaka",
   },
   shipping: {
-    freeShippingThreshold: 50,
-    standardRate: 4.99,
-    expressRate: 9.99,
-    giftWrapPrice: 3.99,
+    freeShippingThreshold: 5000,
+    standardRate: 80,
+    expressRate: 150,
+    giftWrapPrice: 50,
   },
   payments: {
     stripeKey: "sk_live_51N8x•••••••••••••4f2a",
@@ -826,7 +826,7 @@ export const ADMIN_SETTINGS: AdminSettings = {
   },
 };
 
-export const ADMIN_CURRENCIES = ["USD", "EUR", "GBP"] as const;
+export const ADMIN_CURRENCIES = ["BDT", "USD", "EUR"] as const;
 export const ADMIN_TIMEZONES = ["Asia/Dhaka", "Asia/Kolkata", "Europe/London", "America/New_York"] as const;
 export const ADMIN_STATUSES: readonly AdminOrderStatus[] = [
   "pending",
@@ -855,7 +855,7 @@ export function ordersToCsv(orders: readonly AdminOrder[]): string {
       order.customer.name,
       order.customer.email,
       order.items.reduce((sum, item) => sum + item.quantity, 0),
-      order.totals.total.toFixed(2),
+      order.totals.total.toLocaleString("en-BD"),
       order.paymentMethod,
       order.status,
       order.placedAt.slice(0, 10),
