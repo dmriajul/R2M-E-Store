@@ -7,6 +7,7 @@ import { ArrowRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SceneLoadingFallback } from "@/components/three/SceneLoadingFallback";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
+import { useLanguageStore } from "@/store/useLanguageStore";
 
 /**
  * The 3D scene is client-only: WebGL cannot be server-rendered, and loading it
@@ -28,9 +29,14 @@ const container: Variants = {
 
 function buildItemVariants(reducedMotion: boolean): Variants {
   return {
-    hidden: { opacity: 0, y: reducedMotion ? 0 : 40 },
+    hidden: {
+      opacity: 0,
+      filter: reducedMotion ? "blur(0px)" : "blur(10px)",
+      y: reducedMotion ? 0 : 40,
+    },
     visible: {
       opacity: 1,
+      filter: "blur(0px)",
       y: 0,
       transition: { duration: reducedMotion ? 0.5 : 0.8, ease: EASE_LUXE },
     },
@@ -40,12 +46,25 @@ function buildItemVariants(reducedMotion: boolean): Variants {
 export function HeroSection() {
   const reducedMotion = usePrefersReducedMotion();
   const item = buildItemVariants(reducedMotion);
+  const language = useLanguageStore((state) => state.language);
 
   const scrollToFeatured = () => {
     document
       .getElementById("featured")
       ?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth" });
   };
+
+  const badgeText = language === "bn" ? "✨ প্রিমিয়াম কিডস ফ্যাশন" : "✨ Premium Kids Fashion";
+  const titleText = "Where Magic Meets Style";
+  const subtitleText =
+    language === "bn"
+      ? "আপনার স্নিগ্ধ ছোটদের জন্য সুন্দরভাবে তৈরি, আরামদায়ক এবং আকর্ষণীয় পোশাক আবিষ্কার করুন। ০-১৪ বছর বয়স।"
+      : "Discover beautifully crafted, comfortable, and adorable outfits for your little ones. Ages 0-14.";
+  const shopNowText = language === "bn" ? "এখন দেখুন" : "Shop Now";
+  const exploreText = language === "bn" ? "অন্বেষণ করুন" : "Explore";
+  const freeShippingText = language === "bn" ? "ফ্রি সারা দেশে শিপিং" : "Free nationwide shipping";
+  const easyReturnsText = language === "bn" ? "সহজ রিটার্নস" : "30-day easy returns";
+  const scrollText = language === "bn" ? "স্ক্রল করুন" : "Scroll";
 
   return (
     <section
@@ -83,12 +102,12 @@ export function HeroSection() {
         >
           {/* Badge */}
           <motion.div variants={item}>
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 py-1.5 text-[11px] font-semibold tracking-[0.28em] text-primary uppercase backdrop-blur-md">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 py-1.5 text-[11px] font-semibold tracking-[0.28em] text-primary uppercase backdrop-blur-md glass-pill-glow">
               <span
                 aria-hidden
                 className="size-1.5 rounded-full bg-primary shadow-[0_0_10px_2px_rgba(212,175,55,0.8)]"
               />
-              New Collection 2025
+              {badgeText}
             </span>
           </motion.div>
 
@@ -97,17 +116,15 @@ export function HeroSection() {
             variants={item}
             className="mt-6 text-6xl font-bold tracking-tight text-white md:text-8xl"
           >
-            Redefine
-            <br />
-            Luxury
+            {titleText}
           </motion.h1>
 
           {/* Subtitle */}
           <motion.p
             variants={item}
-            className="mt-6 max-w-md text-lg leading-relaxed text-gray-400"
+            className="mt-6 max-w-md text-lg leading-relaxed text-muted-foreground"
           >
-            Experience craftsmanship meets innovation
+            {subtitleText}
           </motion.p>
 
           {/* CTAs */}
@@ -121,7 +138,7 @@ export function HeroSection() {
               className="group h-12 bg-primary px-8 text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:bg-primary hover:shadow-[0_0_40px_-6px_rgba(212,175,55,0.85)]"
             >
               <Link href="/shop">
-                Shop Now
+                {shopNowText}
                 <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
             </Button>
@@ -133,7 +150,7 @@ export function HeroSection() {
               className="h-12 border-glass-border bg-glass px-8 text-sm font-semibold tracking-[0.16em] text-white uppercase backdrop-blur-md transition-all duration-500 ease-[var(--ease-luxe)] hover:border-primary/60 hover:bg-white/10 hover:text-white"
             >
               <button type="button" onClick={scrollToFeatured}>
-                Explore
+                {exploreText}
               </button>
             </Button>
           </motion.div>
@@ -145,11 +162,11 @@ export function HeroSection() {
           >
             <div className="flex items-center gap-2">
               <dt className="sr-only">Shipping</dt>
-              <dd>Free worldwide shipping</dd>
+              <dd>{freeShippingText}</dd>
             </div>
             <div className="flex items-center gap-2">
               <dt className="sr-only">Warranty</dt>
-              <dd>5-year warranty</dd>
+              <dd>{easyReturnsText}</dd>
             </div>
           </motion.dl>
         </motion.div>
@@ -159,11 +176,11 @@ export function HeroSection() {
       <button
         type="button"
         onClick={scrollToFeatured}
-        aria-label="Scroll to the curated selection"
+        aria-label={`${scrollText} to the curated selection`}
         className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2 rounded-full p-2 text-muted-foreground transition-colors duration-300 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <span className="flex flex-col items-center gap-2">
-          <span className="text-[10px] tracking-[0.3em] uppercase">Scroll</span>
+          <span className="text-[10px] tracking-[0.3em] uppercase">{scrollText}</span>
           <motion.span
             animate={reducedMotion ? undefined : { y: [0, 8, 0] }}
             transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}

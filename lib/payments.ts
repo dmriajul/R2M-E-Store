@@ -10,7 +10,6 @@ import { PAYMENT_NUMBERS, formatMoney } from "@/lib/config";
  * screenshot and the admin verifies it. SSLCommerz is a placeholder that stays
  * disabled until a merchant account exists.
  */
-
 export type PaymentKey = "COD" | "BKASH" | "NAGAD" | "ROCKET" | "SSLCOMMERZ";
 
 export interface PaymentMethodConfig {

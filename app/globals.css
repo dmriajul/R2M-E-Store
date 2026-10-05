@@ -2,74 +2,74 @@
 @import "tw-animate-css";
 
 /* ==========================================================================
-   LUXE — Dark Luxury Design System
-   Dark-only theme. Tokens follow the shadcn/ui contract and extend it with
-   brand tokens (gold / neon cyan / glassmorphism).
+   LITTLE LUXE — Midnight Navy & Royal Gold Design System
+   Premium kids fashion. Warm, cinematic, high-end luxury, parent-friendly.
    ========================================================================== */
 
 :root,
 .dark {
-  /* ---- Core surfaces ---- */
-  --background: #0a0a0a;
-  --foreground: #fafafa;
+  /* ---- Core surfaces — Midnight Navy ---- */
+  --background: #050816;
+  --foreground: #F9FAFB;
 
-  --card: #101010;
-  --card-foreground: #fafafa;
+  --card: #0B1224;
+  --card-foreground: #F9FAFB;
 
-  --popover: #0f0f0f;
-  --popover-foreground: #fafafa;
+  --popover: #0B1224;
+  --popover-foreground: #F9FAFB;
 
-  /* ---- Brand: gold primary ---- */
-  --primary: #d4af37;
-  --primary-foreground: #0a0a0a;
+  /* ---- Brand: Royal Gold primary ---- */
+  --primary: #D4AF37;
+  --primary-foreground: #050816;
 
   /* ---- Secondary / muted ---- */
-  --secondary: #1a1a1a;
-  --secondary-foreground: #fafafa;
+  --secondary: #1A2744;
+  --secondary-foreground: #F9FAFB;
 
-  --muted: #1a1a1a;
-  --muted-foreground: #a1a1aa;
+  --muted: #1A2744;
+  --muted-foreground: #94A3B8;
 
-  /* ---- Accent: neon cyan ---- */
-  --accent: #00f0ff;
-  --accent-foreground: #0a0a0a;
+  /* ---- Accent ---- */
+  --accent: #D4AF37;
+  --accent-foreground: #050816;
 
   /* ---- Feedback ---- */
-  --destructive: #ef4444;
-  --destructive-foreground: #fafafa;
+  --destructive: #EF4444;
+  --destructive-foreground: #F9FAFB;
 
-  --success: #22c55e;
-  --warning: #f59e0b;
+  --success: #22C55E;
+  --warning: #F59E0B;
 
   /* ---- Lines & focus ---- */
-  --border: #2a2a2a;
-  --input: #2a2a2a;
-  --ring: #d4af37;
+  --border: #1A2744;
+  --input: #1A2744;
+  --ring: #D4AF37;
 
   /* ---- Glassmorphism ---- */
-  --glass: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-strong: rgba(10, 10, 10, 0.72);
+  --glass: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(212, 175, 55, 0.15);
+  --glass-strong: rgba(5, 8, 22, 0.85);
 
   /* ---- Brand helpers ---- */
-  --gold: #d4af37;
+  --gold: #D4AF37;
   --gold-soft: rgba(212, 175, 55, 0.15);
-  --gold-strong: #f1d97a;
-  --cyan: #00f0ff;
-  --cyan-soft: rgba(0, 240, 255, 0.12);
+  --gold-strong: #F1D97A;
+  --gold-glow: rgba(212, 175, 55, 0.25);
 
   /* ---- Kids line: warm secondary accents ---- */
-  --rose: #f472b6;
+  --rose: #F472B6;
   --rose-soft: rgba(244, 114, 182, 0.14);
-  --lavender: #a78bfa;
+  --lavender: #A78BFA;
   --lavender-soft: rgba(167, 139, 250, 0.14);
+  --coral: #FB7185;
+  --sky: #38BDF8;
 
   /* ---- Charts ---- */
-  --chart-1: #d4af37;
-  --chart-2: #00f0ff;
-  --chart-3: #a1a1aa;
-  --chart-4: #f1d97a;
-  --chart-5: #3f3f46;
+  --chart-1: #D4AF37;
+  --chart-2: #F472B6;
+  --chart-3: #94A3B8;
+  --chart-4: #F1D97A;
+  --chart-5: #3F3F46;
 
   /* ---- Radius ---- */
   --radius: 0.75rem;
@@ -117,13 +117,13 @@
   --color-gold: var(--gold);
   --color-gold-soft: var(--gold-soft);
   --color-gold-strong: var(--gold-strong);
-  --color-cyan: var(--cyan);
-  --color-cyan-soft: var(--cyan-soft);
-
+  --color-gold-glow: var(--gold-glow);
   --color-rose: var(--rose);
   --color-rose-soft: var(--rose-soft);
   --color-lavender: var(--lavender);
   --color-lavender-soft: var(--lavender-soft);
+  --color-coral: var(--coral);
+  --color-sky: var(--sky);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -137,13 +137,14 @@
   --radius-xl: calc(var(--radius) + 4px);
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, sans-serif;
+    "Segoe UI", Roboto, "Noto Sans Bengali", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     monospace;
 
   --animate-shimmer: shimmer 2.4s linear infinite;
   --animate-float: float 6s ease-in-out infinite;
   --animate-marquee: marquee 48s linear infinite;
+  --animate-glow-pulse: glow-pulse 3s ease-in-out infinite;
 }
 
 @keyframes shimmer {
@@ -175,6 +176,16 @@
   }
 }
 
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(212, 175, 55, 0.4);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -202,7 +213,7 @@
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    opacity: 0.035;
+    opacity: 0.03;
     mix-blend-mode: overlay;
     background-repeat: repeat;
     background-size: 200px 200px;
@@ -222,7 +233,7 @@
     outline-offset: 2px;
   }
 
-  /* ---- Thin gold scrollbar ---- */
+  /* ---- Gold accent scrollbar ---- */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--gold) var(--background);
@@ -244,14 +255,14 @@
       180deg,
       var(--gold-strong) 0%,
       var(--gold) 45%,
-      #8a6f1f 100%
+      #8A6F1F 100%
     );
   }
 
   ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(
       180deg,
-      #fff3c4 0%,
+      #FFF3C4 0%,
       var(--gold-strong) 50%,
       var(--gold) 100%
     );
@@ -314,9 +325,9 @@
   .text-gradient-gold {
     background-image: linear-gradient(
       100deg,
-      #f6e7ab 0%,
+      #F6E7AB 0%,
       var(--gold) 42%,
-      #8a6f1f 100%
+      #8A6F1F 100%
     );
     background-clip: text;
     -webkit-background-clip: text;
@@ -337,27 +348,31 @@
   .glow-gold {
     box-shadow:
       0 0 0 1px rgba(212, 175, 55, 0.25),
-      0 8px 40px -12px rgba(212, 175, 55, 0.45);
+      0 8px 30px -12px rgba(212, 175, 55, 0.35);
+  }
+
+  .glow-gold-hover {
+    box-shadow:
+      0 0 0 1px rgba(212, 175, 55, 0.35),
+      0 8px 30px -8px rgba(212, 175, 55, 0.5);
   }
 
   .glow-cyan {
     box-shadow:
       0 0 0 1px rgba(0, 240, 255, 0.25),
-      0 8px 40px -12px rgba(0, 240, 255, 0.4);
+      0 8px 30px -12px rgba(0, 240, 255, 0.35);
   }
 
   /* ---- Kids line helpers -------------------------------------------------
-     Scoped to the shop/product surfaces so the Step 1–2 look is untouched. */
-
-  /* Warmer, softer glass for cards aimed at parents. */
+     Warmer, softer glass for cards aimed at parents. */
   .glass-soft {
-    background-color: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(212, 175, 55, 0.12);
     -webkit-backdrop-filter: blur(14px) saturate(150%);
     backdrop-filter: blur(14px) saturate(150%);
   }
 
-  /* Friendly lift used on product tiles instead of a hard gold glow. */
+  /* Friendly lift used on product tiles. */
   .shadow-playful {
     box-shadow:
       0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
@@ -368,7 +383,7 @@
     box-shadow:
       0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
       0 28px 60px -26px rgba(0, 0, 0, 0.95),
-      0 0 34px -14px rgba(244, 114, 182, 0.45);
+      0 0 34px -14px rgba(244, 114, 182, 0.4);
   }
 
   /* Relaxed reading rhythm for descriptions and long-form copy. */
@@ -397,6 +412,11 @@
     );
     background-size: 200% 100%;
     animation: var(--animate-shimmer);
+  }
+
+  /* Glowing glass pill for hero badge */
+  .glass-pill-glow {
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
   }
 }
 

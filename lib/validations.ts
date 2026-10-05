@@ -558,7 +558,7 @@ export const settingsGeneralSchema = z.object({
     .min(1, "Phone is required")
     .regex(/^[+()\-\s0-9]{7,20}$/, "Enter a valid phone number"),
   address: requiredString("Address", 5),
-  currency: z.enum(["USD", "EUR", "GBP"]),
+  currency: z.enum(["USD", "EUR", "GBP", "BDT"]),
   timezone: z.string().min(1, "Pick a timezone"),
 });
 

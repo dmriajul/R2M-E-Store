@@ -10,7 +10,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn, formatPrice, formatShortDate } from "@/lib/utils";
+import { cn, formatShortDate } from "@/lib/utils";
 import {
   ADMIN_ORDER_STATUS_LABEL,
   ADMIN_STATUSES,
@@ -22,7 +22,11 @@ import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { OrderStatusBadge } from "@/components/admin/StatusBadge";
 import { PaymentStatusBadge } from "@/components/admin/PaymentStatusBadge";
 import { paymentMethodFromLabel } from "@/lib/payments";
+import {
+  formatMoney,
+} from "@/lib/config";
 import { OrderDetailSheet } from "@/components/admin/OrderDetailSheet";
+import { ScreenshotViewer } from "@/components/admin/ScreenshotViewer";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +38,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { adminButtonGhost, adminInputClass } from "@/components/admin/Field";
 import { useAdminStore } from "@/store/useAdminStore";
+import { useLanguageStore } from "@/store/useLanguageStore";
 import type { AdminOrder, AdminOrderStatus } from "@/types";
 
 type StatusTab = "all" | AdminOrderStatus;
@@ -41,26 +46,30 @@ type DateRange = "all" | "7" | "30" | "custom";
 
 const DAY = 86_400_000;
 
-const STATUS_TABS: readonly { id: StatusTab; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "pending", label: "Pending" },
-  { id: "processing", label: "Processing" },
-  { id: "shipped", label: "Shipped" },
-  { id: "delivered", label: "Delivered" },
-  { id: "cancelled", label: "Cancelled" },
-  { id: "refunded", label: "Refunded" },
+const STATUS_TABS: readonly { id: StatusTab; label: { en: string; bn: string } }[] = [
+  { id: "all", label: { en: "All", bn: "সব" } },
+  { id: "pending", label: { en: "Pending", bn: "লম্বা" } },
+  { id: "processing", label: { en: "Processing", bn: "প্রক্রিয়াকরণ" } },
+  { id: "shipped", label: { en: "Shipped", bn: "পাঠানো হয়েছে" } },
+  { id: "delivered", label: { en: "Delivered", bn: "বিতরণ" } },
+  { id: "cancelled", label: { en: "Cancelled", bn: "বাতিল" } },
+  { id: "refunded", label: { en: "Refunded", bn: "মুদ্রিত" } },
 ];
 
-const DATE_RANGES: readonly { id: DateRange; label: string }[] = [
-  { id: "all", label: "All time" },
-  { id: "7", label: "Last 7 days" },
-  { id: "30", label: "Last 30 days" },
-  { id: "custom", label: "Custom range" },
+const DATE_RANGES: readonly { id: DateRange; label: { en: string; bn: string } }[] = [
+  { id: "all", label: { en: "All time", bn: "সব সময়" } },
+  { id: "7", label: { en: "Last 7 days", bn: "গত ৭ দিন" } },
+  { id: "30", label: { en: "Last 30 days", bn: "গত ৩০ দিন" } },
+  { id: "custom", label: { en: "Custom range", bn: "কাস্টম রেঞ্জ" } },
 ];
 
 export default function AdminOrdersPage() {
   const orders = useAdminStore((state) => state.orders);
   const updateOrderStatus = useAdminStore((state) => state.updateOrderStatus);
+  const verifyPayment = useAdminStore((state) => state.verifyPayment);
+  const rejectPayment = useAdminStore((state) => state.rejectPayment);
+
+  const language = useLanguageStore((state) => state.language);
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusTab>("all");
@@ -68,6 +77,29 @@ export default function AdminOrdersPage() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [verifyingOrderId, setVerifyingOrderId] = useState<string | null>(null);
+  const [approvalLoading, setApprovalLoading] = useState<string | null>(null);
+
+  const t = (key: string) => {
+    const translations: Record<string, string> = {
+      allOrders: language === "bn" ? "সব অর্ডার" : "All Orders",
+      pendingOrders: language === "bn" ? "লম্বা অর্ডার" : "Pending Orders",
+      processingOrders: language === "bn" ? "প্রক্রিয়াকরণে" : "Processing",
+      "Order statistics": language === "bn" ? "অর্ডার পরিসংখ্যান" : "Order statistics",
+      searchOrders: language === "bn" ? "অর্ডার খুঁজুন" : "Search orders",
+      "Search order # or customer...": language === "bn" ? "অর্ডার # অথবা গ্রাহক খুঁজুন..." : "Search order # or customer...",
+      exportCsv: language === "bn" ? "CSV রপ্তানি 📥" : "Export CSV 📥",
+      updateStatus: language === "bn" ? "স্ট্যাটাস আপডেট করুন" : "Update status",
+      viewDetails: language === "bn" ? "বিস্তারিত দেখুন" : "View details",
+      printInvoice: language === "bn" ? "ইনভয়েস প্রিন্ট করুন" : "Print invoice",
+      noOrders: language === "bn" ? "এই ফিল্টারে কোনো অর্ডার নেই।" : "No orders match these filters.",
+      demoDate: language === "bn" ? "ডেমো \"আজ\", " : "demo 'today', ",
+    };
+    return translations[key] ?? key;
+  };
+
+  const showingOf = (a: number, b: number) =>
+    language === "bn" ? `${b} থেকে ${a}টি দেখাচ্ছে` : `Showing ${a} of ${b}`;
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -101,13 +133,33 @@ export default function AdminOrdersPage() {
   const stats = useMemo(
     () =>
       [
-        { label: "Total Orders", value: ORDER_STATS.total, accent: "text-foreground" },
-        { label: "Pending", value: ORDER_STATS.pending, accent: "text-amber-400" },
-        { label: "Shipped", value: ORDER_STATS.shipped, accent: "text-violet-400" },
-        { label: "Delivered", value: ORDER_STATS.delivered, accent: "text-emerald-400" },
-        { label: "Cancelled", value: ORDER_STATS.cancelled, accent: "text-rose-400" },
+        {
+          label: language === "bn" ? "মোট অর্ডার" : "Total Orders",
+          value: ORDER_STATS.total,
+          accent: "text-foreground",
+        },
+        {
+          label: language === "bn" ? "লম্বা" : "Pending",
+          value: ORDER_STATS.pending,
+          accent: "text-amber-400",
+        },
+        {
+          label: language === "bn" ? "পাঠানো হয়েছে" : "Shipped",
+          value: ORDER_STATS.shipped,
+          accent: "text-violet-400",
+        },
+        {
+          label: language === "bn" ? "বিতরণ" : "Delivered",
+          value: ORDER_STATS.delivered,
+          accent: "text-emerald-400",
+        },
+        {
+          label: language === "bn" ? "বাতিল" : "Cancelled",
+          value: ORDER_STATS.cancelled,
+          accent: "text-rose-400",
+        },
       ] as const,
-    [],
+    [language],
   );
 
   const handleExport = () => {
@@ -119,14 +171,75 @@ export default function AdminOrdersPage() {
     link.download = `little-luxe-orders-${DEMO_NOW.slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    toast.success(`Exported ${rows.length} orders 📥`);
+    toast.success(
+      language === "bn" ? `${rows.length}টি অর্ডার রপ্তানি করা হয়েছে 📥` : `Exported ${rows.length} orders 📥`,
+    );
   };
 
   const handleStatusChange = (order: AdminOrder, next: AdminOrderStatus) => {
     updateOrderStatus(order.id, next);
-    toast.success("Order status updated! ✅", {
-      description: `${order.number} is now ${ADMIN_ORDER_STATUS_LABEL[next]}.`,
-    });
+    const statusLabel =
+      language === "bn"
+        ? {
+            pending: "লম্বা",
+            processing: "প্রক্রিয়াকরণ",
+            shipped: "পাঠানো হয়েছে",
+            delivered: "বিতরণ",
+            cancelled: "বাতিল",
+            refunded: "মুদ্রিত",
+          }
+        : {
+            pending: "Pending",
+            processing: "Processing",
+            shipped: "Shipped",
+            delivered: "Delivered",
+            cancelled: "Cancelled",
+            refunded: "Refunded",
+          };
+    toast.success(
+      language === "bn" ? "অর্ডার স্ট্যাটাস আপডেট! ✅" : "Order status updated! ✅",
+      {
+        description: `${order.number} এখন ${statusLabel[next]}।`,
+      },
+    );
+  };
+
+  const handlePaymentVerification = async (
+    order: AdminOrder,
+    action: "approve" | "reject",
+  ) => {
+    const orderNumber = order.number;
+    setApprovalLoading(order.id);
+
+    try {
+      // Simulate verification delay
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      if (action === "approve") {
+        verifyPayment(order.id);
+        toast.success(
+          language === "bn" ? "পেমেন্ট অনুমোদন করা হয়েছে! ✅" : "Payment approved! ✅",
+          {
+            description: `${orderNumber} এর পেমেন্ট যাচাইকরণ সম্পন্ন।`,
+          },
+        );
+      } else {
+        rejectPayment(order.id);
+        toast.success(
+          language === "bn" ? "পেমেন্ট প্রত্যাখ্যান করা হয়েছে ❌" : "Payment rejected ❌",
+          {
+            description: `${orderNumber} এর পেমেন্ট যাচাইকরণ ব্যর্থ।`,
+          },
+        );
+      }
+    } catch {
+      toast.error(
+        language === "bn" ? "যাচাইকরণ ব্যর্থ হয়েছে" : "Verification failed",
+      );
+    } finally {
+      setApprovalLoading(null);
+      setVerifyingOrderId(null);
+    }
   };
 
   const columns: readonly DataTableColumn<AdminOrder>[] = [
@@ -141,7 +254,7 @@ export default function AdminOrdersPage() {
     },
     {
       key: "customer",
-      label: "Customer",
+      label: language === "bn" ? "গ্রাহক" : "Customer",
       sortable: true,
       sortValue: (order) => order.customer.name,
       render: (order) => (
@@ -153,7 +266,7 @@ export default function AdminOrdersPage() {
     },
     {
       key: "items",
-      label: "Items",
+      label: language === "bn" ? "আইটেম" : "Items",
       align: "center",
       sortable: true,
       sortValue: (order) => order.items.reduce((sum, item) => sum + item.quantity, 0),
@@ -165,19 +278,19 @@ export default function AdminOrdersPage() {
     },
     {
       key: "total",
-      label: "Total",
+      label: language === "bn" ? "মোট" : "Total",
       align: "right",
       sortable: true,
       sortValue: (order) => order.totals.total,
       render: (order) => (
         <span className="font-medium text-foreground tabular-nums">
-          {formatPrice(order.totals.total)}
+          {formatMoney(order.totals.total)}
         </span>
       ),
     },
     {
       key: "payment",
-      label: "Payment",
+      label: language === "bn" ? "পেমেন্ট" : "Payment",
       render: (order) => {
         const kind = paymentMethodFromLabel(order.paymentMethod);
         return (
@@ -192,12 +305,12 @@ export default function AdminOrdersPage() {
     },
     {
       key: "status",
-      label: "Status",
+      label: language === "bn" ? "স্ট্যাটাস" : "Status",
       render: (order) => <OrderStatusBadge status={order.status} />,
     },
     {
       key: "date",
-      label: "Date",
+      label: language === "bn" ? "তারিখ" : "Date",
       sortable: true,
       sortValue: (order) => order.placedAt,
       render: (order) => (
@@ -208,9 +321,9 @@ export default function AdminOrdersPage() {
     },
     {
       key: "actions",
-      label: "Actions",
+      label: language === "bn" ? "কার্যক্রম" : "Actions",
       align: "right",
-      className: "w-40",
+      className: "w-48",
       render: (order) => (
         <span
           className="inline-flex items-center justify-end gap-1"
@@ -220,18 +333,32 @@ export default function AdminOrdersPage() {
             type="button"
             onClick={() => setActiveOrderId(order.id)}
             aria-label={`View ${order.number}`}
-            title="View details"
+            title={language === "bn" ? "বিস্তারিত দেখুন" : "View details"}
             className="inline-flex size-8 items-center justify-center rounded-md border border-[#2A2A2A] text-muted-foreground transition-colors duration-200 hover:border-[#3A3A3A] hover:text-foreground focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
           >
             <Eye aria-hidden className="size-3.5" />
           </button>
+
+          {/* Payment verification button for manual payments */}
+          {(order.paymentStatus === "PENDING" ||
+            (order.paymentStatus === "PAID" && order.paymentMethod.toLowerCase().includes("bkash"))) && (
+            <button
+              type="button"
+              onClick={() => setVerifyingOrderId(order.id)}
+              aria-label={`Verify payment for ${order.number}`}
+              title={language === "bn" ? "পেমেন্ট যাচাইকরণ" : "Verify payment"}
+              className="inline-flex size-8 items-center justify-center rounded-md border border-[#2A2A2A] text-muted-foreground transition-colors duration-200 hover:border-blue-500/50 hover:text-blue-300 focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
+            >
+              <RefreshCw aria-hidden className="size-3.5" />
+            </button>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-label={`Update status for ${order.number}`}
-                title="Update status"
+                title={language === "bn" ? "স্ট্যাটাস আপডেট করুন" : "Update status"}
                 className="inline-flex h-8 items-center gap-1 rounded-md border border-[#2A2A2A] px-2 text-[11px] text-muted-foreground transition-colors duration-200 hover:border-[#3A3A3A] hover:text-foreground focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
               >
                 <RefreshCw aria-hidden className="size-3.5" />
@@ -240,7 +367,7 @@ export default function AdminOrdersPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44 border-[#2A2A2A] bg-[#141414]">
               <DropdownMenuLabel className="text-[11px] text-muted-foreground">
-                Update status
+                {language === "bn" ? "স্ট্যাটাস আপডেট করুন" : "Update status"}
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-[#242424]" />
               <DropdownMenuRadioGroup
@@ -263,12 +390,15 @@ export default function AdminOrdersPage() {
           <button
             type="button"
             onClick={() =>
-              toast.info("Invoice opened 🧾", {
-                description: `${order.number} — use the print dialog to save a PDF.`,
-              })
+              toast.info(
+                language === "bn" ? "ইনভয়েস খোলা হয়েছে 🧾" : "Invoice opened 🧾",
+                {
+                  description: `${order.number} — use the print dialog to save a PDF.`,
+                },
+              )
             }
             aria-label={`Print invoice for ${order.number}`}
-            title="Print invoice"
+            title={language === "bn" ? "ইনভয়েস প্রিন্ট করুন" : "Print invoice"}
             className="inline-flex size-8 items-center justify-center rounded-md border border-[#2A2A2A] text-muted-foreground transition-colors duration-200 hover:border-[#3A3A3A] hover:text-foreground focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
           >
             <Printer aria-hidden className="size-3.5" />
@@ -281,7 +411,7 @@ export default function AdminOrdersPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* ---------- Stats ---------- */}
-      <section aria-label="Order statistics" className="grid gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <section aria-label={t("Order statistics")} className="grid gap-3 sm:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => (
           <article
             key={stat.label}
@@ -300,14 +430,14 @@ export default function AdminOrdersPage() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="min-w-0 flex-1 sm:max-w-xs">
             <label htmlFor="order-search" className="sr-only">
-              Search orders
+              {t("searchOrders")}
             </label>
             <input
               id="order-search"
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search order # or customer..."
+              placeholder={t("Search order # or customer...")}
               className={adminInputClass}
             />
           </div>
@@ -316,7 +446,7 @@ export default function AdminOrdersPage() {
             <DropdownMenuTrigger asChild>
               <button type="button" className={cn(adminButtonGhost, "min-h-10")}>
                 <CalendarRange aria-hidden className="size-3.5" />
-                {DATE_RANGES.find((entry) => entry.id === range)?.label}
+                {DATE_RANGES.find((entry) => entry.id === range)?.label[language]}
                 <ChevronDown aria-hidden className="size-3" />
               </button>
             </DropdownMenuTrigger>
@@ -331,7 +461,7 @@ export default function AdminOrdersPage() {
                     value={entry.id}
                     className="text-xs focus:bg-white/6"
                   >
-                    {entry.label}
+                    {entry.label[language]}
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
@@ -340,7 +470,7 @@ export default function AdminOrdersPage() {
 
           <button type="button" onClick={handleExport} className={cn(adminButtonGhost, "min-h-10")}>
             <Download aria-hidden className="size-3.5" />
-            Export CSV 📥
+            {t("exportCsv")}
           </button>
         </div>
 
@@ -348,7 +478,7 @@ export default function AdminOrdersPage() {
           <div className="flex flex-wrap items-end gap-2">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="order-from" className="text-[11px] text-muted-foreground uppercase">
-                From
+                {language === "bn" ? "শুরু" : "From"}
               </label>
               <input
                 id="order-from"
@@ -360,7 +490,7 @@ export default function AdminOrdersPage() {
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="order-to" className="text-[11px] text-muted-foreground uppercase">
-                To
+                {language === "bn" ? "শেষ" : "To"}
               </label>
               <input
                 id="order-to"
@@ -374,7 +504,7 @@ export default function AdminOrdersPage() {
         )}
 
         {/* Status tabs */}
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter by status">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label={language === "bn" ? "স্ট্যাটাস দ্বারা ফিল্টার" : "Filter by status"}>
           {STATUS_TABS.map((tab) => {
             const active = status === tab.id;
             const count =
@@ -395,7 +525,7 @@ export default function AdminOrdersPage() {
                     : "border-[#2A2A2A] text-muted-foreground hover:border-[#3A3A3A] hover:text-foreground",
                 )}
               >
-                {tab.label}
+                {tab.label[language]}
                 <span className="ml-1.5 text-[11px] opacity-70 tabular-nums">{count}</span>
               </button>
             );
@@ -411,17 +541,38 @@ export default function AdminOrdersPage() {
         rowKey={(order) => order.id}
         initialSort={{ key: "number", direction: "desc" }}
         onRowClick={(order) => setActiveOrderId(order.id)}
-        emptyMessage="No orders match these filters."
+        emptyMessage={t("noOrders")}
       />
 
       <p className="text-[11px] text-muted-foreground">
-        Showing {rows.length} of {orders.length} demo orders. Date ranges are measured from the
-        demo “today”, {formatShortDate(DEMO_NOW)}.
+        {showingOf(rows.length, orders.length)}{" "}
+        {t("demoDate")}{formatShortDate(DEMO_NOW)}.
       </p>
 
       <OrderDetailSheet
         orderId={activeOrderId}
         onOpenChange={(open) => !open && setActiveOrderId(null)}
+      />
+
+      {/* Payment verification modal */}
+      <ScreenshotViewer
+        isOpen={!!verifyingOrderId}
+        onClose={() => setVerifyingOrderId(null)}
+        orderNumber={activeOrderId ? `#${activeOrderId}` : "LL-00000"}
+        screenshotUrl={
+          activeOrderId
+            ? orders.find((o) => o.id === activeOrderId)?.paymentRef ?? null
+            : null
+        }
+        onApprove={() => {
+          const order = orders.find((o) => o.id === activeOrderId);
+          if (order) handlePaymentVerification(order, "approve");
+        }}
+        onReject={() => {
+          const order = orders.find((o) => o.id === activeOrderId);
+          if (order) handlePaymentVerification(order, "reject");
+        }}
+        isVerifying={!!approvalLoading}
       />
     </div>
   );

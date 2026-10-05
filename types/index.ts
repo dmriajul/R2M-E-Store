@@ -4,7 +4,7 @@
  * server components and the 3D viewer alike.
  */
 
-export type CurrencyCode = "USD" | "EUR" | "GBP";
+export type CurrencyCode = "USD" | "EUR" | "GBP" | "BDT";
 
 /** Merchandising categories. */
 export type ProductCategory =

@@ -8,13 +8,13 @@ import type {
 } from "@/types";
 
 export const SITE = {
-  name: "LUXE",
+  name: "LITTLE LUXE",
   /** Kids line — used by the shop/product metadata and headings. */
   kidsBrand: "LITTLE LUXE",
-  tagline: "Objects of quiet distinction.",
-  kidsTagline: "Adorable styles for your little ones ✨",
+  tagline: "Where Magic Meets Style",
+  kidsTagline: "আপনার স্নিগ্ধ ছোটদের জন্য সুন্দর পোশাক ✨",
   description:
-    "Discover adorable, premium kids fashion at Little Luxe. Shop dresses, shoes, outerwear and more for ages 0-14. Free shipping over ৳500. COD, bKash, Nagad, Rocket accepted. 🇧🇩",
+    "Discover beautifully crafted, comfortable, and adorable outfits for your little ones. Ages 0-14. Premium kids fashion in Bangladesh with global standards.",
   /**
    * Canonical origin: metadataBase, canonicals, sitemap, robots and OG images
    * all derive from this. Override with NEXT_PUBLIC_SITE_URL on previews.
@@ -58,10 +58,10 @@ export const FOOTER_LINKS: Readonly<Record<string, readonly NavLink[]>> = {
     { label: "FAQ", href: "/#faq" },
   ],
   Legal: [
-    { label: "Privacy Policy", href: "/#privacy" },
-    { label: "Terms of Service", href: "/#terms" },
-    { label: "Cookie Policy", href: "/#cookies" },
-    { label: "Accessibility", href: "/#accessibility" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms of Service", href: "/terms" },
+    { label: "Returns Policy", href: "/returns" },
+    { label: "Shipping Info", href: "/shipping" },
   ],
 } as const;
 
@@ -215,8 +215,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Twirl-ready organic cotton with a sunshine print.",
     description:
       "A breezy A-line dress in breathable organic cotton that keeps little ones cool on warm days. The hidden back buttons make dressing quick, and the full skirt is made for spinning.",
-    price: 34.99,
-    currency: "USD",
+    price: 3499,
+    currency: "BDT",
     category: "Dresses",
     ageRange: "3-6Y",
     gender: "Girls",
@@ -240,8 +240,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Roar-some print on super-soft jersey.",
     description:
       "Soft cotton jersey with a water-based dinosaur print that stays bright wash after wash. The relaxed neckline pulls on easily and never scratches.",
-    price: 19.99,
-    currency: "USD",
+    price: 1999,
+    currency: "BDT",
     category: "Tops & Tees",
     ageRange: "4-8Y",
     gender: "Boys",
@@ -265,8 +265,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Layers of soft tulle with a rainbow waistband.",
     description:
       "Feather-light tulle layered over a cotton lining so it never itches. The elasticated rainbow waistband grows with them and stays put through the wiggliest of days.",
-    price: 27.99,
-    currency: "USD",
+    price: 2799,
+    currency: "BDT",
     category: "Bottoms",
     ageRange: "2-5Y",
     gender: "Girls",
@@ -290,8 +290,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Every step lights up in colour.",
     description:
       "Vegan leather uppers with a cushioned mesh lining and LED soles that flash as they walk. Easy velcro straps mean no laces to learn — and no morning battles.",
-    price: 44.99,
-    currency: "USD",
+    price: 4499,
+    currency: "BDT",
     category: "Shoes",
     ageRange: "5-10Y",
     gender: "Unisex",
@@ -315,8 +315,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Fleece-lined hood with the cutest little ears.",
     description:
       "Brushed fleece inside organic cotton keeps them warm without bulk. Three-dimensional bear ears on the hood and a kangaroo pocket for treasures found along the way.",
-    price: 39.99,
-    currency: "USD",
+    price: 3999,
+    currency: "BDT",
     category: "Outerwear",
     ageRange: "3-7Y",
     gender: "Unisex",
@@ -340,8 +340,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Six sparkly clips, endless hairstyles.",
     description:
       "A set of six butterfly clips made from smooth recycled acetate with rounded edges that never tug. Strong enough for a full day of play, gentle enough for fine hair.",
-    price: 12.99,
-    currency: "USD",
+    price: 1299,
+    currency: "BDT",
     category: "Accessories",
     ageRange: "2-8Y",
     gender: "Girls",
@@ -365,9 +365,9 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Satin bodice, full tulle skirt, proper sparkle.",
     description:
       "A proper party gown with a soft satin bodice and a layered tulle skirt lined in cotton, so nothing scratches. Machine washable — because celebrations get messy.",
-    price: 59.99,
-    originalPrice: 79.99,
-    currency: "USD",
+    price: 5999,
+    originalPrice: 7999,
+    currency: "BDT",
     category: "Dresses",
     ageRange: "4-8Y",
     gender: "Girls",
@@ -391,8 +391,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Water-resistant shell with glow-in-the-dark planets.",
     description:
       "A lightweight recycled shell that shrugs off drizzle, lined with soft jersey for warmth. Glow-in-the-dark planet patches make it a favourite for night-time adventurers.",
-    price: 49.99,
-    currency: "USD",
+    price: 4999,
+    currency: "BDT",
     category: "Outerwear",
     ageRange: "6-12Y",
     gender: "Boys",
@@ -416,8 +416,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Classic dungarees in softly washed denim.",
     description:
       "Pre-washed cotton denim that feels broken-in from day one, with adjustable straps that grow with them. Popper legs make nappy changes and toilet trips quick work.",
-    price: 36.99,
-    currency: "USD",
+    price: 3699,
+    currency: "BDT",
     category: "Bottoms",
     ageRange: "1-4Y",
     gender: "Unisex",
@@ -440,8 +440,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Padded straps, magic horn, room for snacks.",
     description:
       "A small-person backpack with wide padded straps that sit comfortably on little shoulders. Water-resistant lining, an insulated snack pocket and a shimmering unicorn horn.",
-    price: 24.99,
-    currency: "USD",
+    price: 2499,
+    currency: "BDT",
     category: "Accessories",
     ageRange: "3-8Y",
     gender: "Girls",
@@ -465,8 +465,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Buttery-soft organic cotton for long sleeps.",
     description:
       "Snug-fit shorts and a matching tee in GOTS-certified organic cotton that gets softer with every wash. Flat seams and a covered waistband mean no midnight fidgeting.",
-    price: 22.99,
-    currency: "USD",
+    price: 2299,
+    currency: "BDT",
     category: "Tops & Tees",
     ageRange: "2-6Y",
     gender: "Unisex",
@@ -490,8 +490,8 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     tagline: "Party shoes that stay comfortable all day.",
     description:
       "Velvet uppers over a padded leather insole with a flexible rubber sole — dressy enough for a wedding, forgiving enough for the dance floor afterwards.",
-    price: 38.99,
-    currency: "USD",
+    price: 3899,
+    currency: "BDT",
     category: "Shoes",
     ageRange: "3-7Y",
     gender: "Girls",
@@ -757,7 +757,7 @@ export const SIZE_CHART: readonly SizeChartRow[] = [
 
 /** Shown as a row of reassurance chips under the buy box. */
 export const TRUST_BADGES = [
-  { emoji: "🚚", label: "Free Shipping over $50" },
+  { emoji: "🚚", label: "Free Shipping over ৳5,000" },
   { emoji: "🔄", label: "30-Day Easy Returns" },
   { emoji: "🌿", label: "Kid-Safe Materials" },
   { emoji: "✅", label: "Quality Guaranteed" },
