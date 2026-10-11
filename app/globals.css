@@ -203,16 +203,21 @@
 }
 
 .animate-marquee-left {
-  animation: marquee-left 25s linear infinite;
+  animation: marquee-left 35s linear infinite;
 }
 
 .animate-marquee-right {
-  animation: marquee-right 25s linear infinite;
+  animation: marquee-right 35s linear infinite;
 }
 
+/* Pause at the current animation frame anywhere over the row/card, then resume seamlessly. */
+.marquee-viewport:hover .animate-marquee-left,
+.marquee-viewport:hover .animate-marquee-right,
+.marquee-viewport:focus-within .animate-marquee-left,
+.marquee-viewport:focus-within .animate-marquee-right,
 .animate-marquee-left:hover,
 .animate-marquee-right:hover {
-  animation-play-state: paused;
+  animation-play-state: paused !important;
 }
 
 @keyframes glow-pulse {
@@ -360,11 +365,11 @@
     }
 
     .animate-marquee-left {
-      animation: marquee-left 25s linear infinite !important;
+      animation: marquee-left 35s linear infinite !important;
     }
 
     .animate-marquee-right {
-      animation: marquee-right 25s linear infinite !important;
+      animation: marquee-right 35s linear infinite !important;
     }
   }
 }

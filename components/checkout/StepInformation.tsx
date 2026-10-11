@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Mail, Phone } from "lucide-react";
@@ -16,6 +18,9 @@ import { Input } from "@/components/ui/input";
  * the email for the order).
  */
 export function StepInformation() {
+  const { data: session, status } = useSession();
+  const profileEmail = session?.user?.email ?? "";
+  const profilePhone = session?.user?.phone ?? "";
   const contact = useCheckoutStore((state) => state.contact);
   const setContact = useCheckoutStore((state) => state.setContact);
   const goNext = useCheckoutStore((state) => state.goNext);
@@ -23,6 +28,8 @@ export function StepInformation() {
   const {
     register,
     handleSubmit,
+    getValues,
+    setValue,
     formState: { errors, isValid },
   } = useForm<ContactValues>({
     resolver: zodResolver(contactSchema),
@@ -33,6 +40,17 @@ export function StepInformation() {
       marketingOptIn: true,
     },
   });
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    if (profileEmail && !getValues("email").trim()) {
+      setValue("email", profileEmail, { shouldValidate: true });
+    }
+    if (profilePhone && !getValues("phone").trim()) {
+      setValue("phone", profilePhone, { shouldValidate: true });
+    }
+  }, [getValues, profileEmail, profilePhone, setValue, status]);
 
   const onSubmit = (values: ContactValues) => {
     setContact(values);
@@ -90,15 +108,17 @@ export function StepInformation() {
         {...register("marketingOptIn")}
       />
 
-      <p className="text-sm text-muted-foreground">
-        Already have an account?{" "}
-        <Link
-          href="/login"
-          className="font-medium text-primary underline-offset-4 transition-colors duration-300 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        >
-          Log in
-        </Link>
-      </p>
+      {status === "unauthenticated" && (
+        <p className="text-sm text-muted-foreground">
+          Already have an account?{" "}
+          <Link
+            href="/login"
+            className="font-medium text-primary underline-offset-4 transition-colors duration-300 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            Log in
+          </Link>
+        </p>
+      )}
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Button

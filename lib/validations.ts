@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isBangladeshDistrict, isBangladeshDivision } from "@/lib/bangladesh-locations";
 
 /**
  * Shared Zod schemas. The client forms and the checkout store use the same
@@ -44,18 +45,45 @@ export const COUNTRIES = [
   "Singapore",
 ] as const;
 
-export const shippingSchema = z.object({
-  fullName: requiredString("Full name", 3),
-  address1: requiredString("Address", 5),
-  address2: z.string().trim().optional(),
-  city: requiredString("City", 2),
-  state: z.string().trim().optional(),
-  postalCode: requiredString("Postal code", 3),
-  country: z.string().min(1, "Select a country"),
-  saveAddress: z.boolean(),
-  method: z.enum(["standard", "express"]),
-  giftWrap: z.boolean(),
-});
+export const shippingSchema = z
+  .object({
+    fullName: requiredString("Full name", 3),
+    address1: requiredString("Address", 5),
+    address2: z.string().trim().optional(),
+    city: requiredString("City", 2),
+    state: z.string().trim().optional(),
+    postalCode: requiredString("Postal code", 3),
+    country: z.string().min(1, "Select a country"),
+    saveAddress: z.boolean(),
+    method: z.enum(["standard", "express"]),
+    giftWrap: z.boolean(),
+  })
+  .superRefine((values, ctx) => {
+    if (values.country !== "Bangladesh") return;
+
+    const division = values.state ?? "";
+    if (!isBangladeshDivision(division)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["state"],
+        message: "Select a division in Bangladesh",
+      });
+    } else if (!isBangladeshDistrict(division, values.city)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["city"],
+        message: "Choose a district from the selected division",
+      });
+    }
+
+    if (!/^\d{4}$/.test(values.postalCode)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["postalCode"],
+        message: "Use a 4-digit Bangladesh postal code",
+      });
+    }
+  });
 
 export type ShippingValues = z.infer<typeof shippingSchema>;
 

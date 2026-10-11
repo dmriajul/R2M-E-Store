@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Plus } from "lucide-react";
@@ -30,7 +30,9 @@ function AddToCartButton({ product }: { product: Product }) {
   );
   const [justAdded, setJustAdded] = useState(false);
 
-  const handleAdd = () => {
+  const handleAdd = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
     addItem(product, 1);
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1600);
@@ -81,18 +83,29 @@ function ProductCard({
         delay: reducedMotion ? 0 : index * 0.09,
         ease: EASE_LUXE,
       }}
-      whileHover={reducedMotion ? undefined : { y: -8 }}
-      className="group glass relative flex w-[280px] shrink-0 flex-col overflow-hidden rounded-2xl p-3 transition-[box-shadow,border-color] duration-500 ease-[var(--ease-luxe)] hover:border-primary/45 hover:shadow-[0_0_46px_-14px_rgba(212,175,55,0.75)] sm:w-[320px]"
+      whileHover={
+        reducedMotion
+          ? undefined
+          : {
+              y: -8,
+              scale: 1.02,
+              transition: { duration: 0.3, ease: EASE_LUXE },
+            }
+      }
+      className="group glass relative flex w-[280px] shrink-0 flex-col overflow-hidden rounded-2xl p-3 will-change-transform transition-[box-shadow,border-color] duration-500 ease-[var(--ease-luxe)] hover:border-primary/45 hover:shadow-[0_0_46px_-14px_rgba(212,175,55,0.75)] sm:w-[320px]"
     >
       <Link
         href={`/product/${product.id}`}
         aria-label={product.name}
         tabIndex={duplicate ? -1 : undefined}
-        className="relative block aspect-4/5 overflow-hidden rounded-xl bg-[#101010] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-      >
+        className="absolute inset-0 z-10 rounded-2xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none"
+      />
+
+      <div className="pointer-events-none relative block aspect-4/5 overflow-hidden rounded-xl bg-[#101010]">
         <ProductArtwork
           product={product}
           size="card"
+          imageClassName="transition-transform duration-500 ease-out group-hover:scale-[1.08]"
           className="absolute inset-0 h-full w-full rounded-xl"
         />
         <span
@@ -118,17 +131,11 @@ function ProductCard({
         >
           {translateCategory(product.category, language)}
         </Badge>
-      </Link>
+      </div>
 
-      <div className="flex flex-1 flex-col p-4">
+      <div className="pointer-events-none relative z-20 flex flex-1 flex-col p-4">
         <h3 className="text-base font-semibold tracking-tight text-foreground">
-          <Link
-            href={`/product/${product.id}`}
-            tabIndex={duplicate ? -1 : undefined}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {product.name}
-          </Link>
+          {product.name}
         </h3>
         <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
           {product.tagline}
@@ -145,7 +152,7 @@ function ProductCard({
           )}
         </div>
 
-        <div className="mt-4">
+        <div className="pointer-events-auto mt-4">
           <AddToCartButton product={product} />
         </div>
       </div>
@@ -169,12 +176,12 @@ function ProductMarquee({
     (_, index) => products[index % products.length]!,
   );
   return (
-    <div className="overflow-hidden pb-3">
+    <div className="marquee-viewport overflow-hidden py-4">
       <div
         className={
           reverse
-            ? "animate-marquee-right flex w-max flex-nowrap"
-            : "animate-marquee-left flex w-max flex-nowrap"
+            ? "animate-marquee-right flex w-max flex-nowrap will-change-transform"
+            : "animate-marquee-left flex w-max flex-nowrap will-change-transform"
         }
       >
         {[0, 1].map((copy) => (
