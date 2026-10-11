@@ -408,6 +408,7 @@ export const PRODUCT_CATEGORY_NAMES = [
   "Winter Bottoms / Trousers",
   "Winter Sets & Tracksuits",
   "Tops & Tees",
+  "Frocks & Dresses",
   "Innerwear & Thermals",
   "Accessories",
 ] as const;

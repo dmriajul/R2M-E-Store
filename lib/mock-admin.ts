@@ -708,6 +708,7 @@ const CATEGORY_BLURB: Readonly<Record<ProductCategory, string>> = {
   "Winter Bottoms / Trousers": "Warm trousers made for playground adventures.",
   "Winter Sets & Tracksuits": "Coordinated sets for comfort and warmth.",
   "Tops & Tees": "Everyday polos, tees and casual tops.",
+  "Frocks & Dresses": "Party frocks and everyday dresses made to twirl.",
   "Innerwear & Thermals": "Comfortable essentials and warm base layers.",
   Accessories: "Bags, clips and finishing touches.",
 };

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { MotionConfig } from "framer-motion";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { organizationSchema } from "@/lib/seo";
-import { CATEGORY_META, SITE } from "@/lib/site";
-import type { Product, ProductCategory } from "@/types";
+import { SHOP_BY_CATEGORY, SITE, productMatchesCategory } from "@/lib/site";
+import type { Product } from "@/types";
 import { listProducts } from "@/lib/data/products";
 import { getHeroSettings } from "@/lib/data/hero-settings";
 import { HeroSection } from "@/components/sections/HeroSection";
@@ -11,9 +11,9 @@ import { VirtualBoutique } from "@/components/sections/VirtualBoutique";
 import { BrandMarquee } from "@/components/sections/BrandMarquee";
 import { FeaturedProducts } from "@/components/sections/FeaturedProducts";
 import {
-  CollectionsGrid,
-  type CollectionSummary,
-} from "@/components/sections/CollectionsGrid";
+  ShopByCategory,
+  type ShopCategoryCard,
+} from "@/components/sections/ShopByCategory";
 import { StatsSection } from "@/components/sections/StatsSection";
 import { Reveal } from "@/components/sections/Reveal";
 import { WelcomeOverlay } from "@/components/ui/WelcomeOverlay";
@@ -33,23 +33,17 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 /**
- * The three fullest real categories, counted the same way the shop filters
- * them (main category or any extra assigned category), so each card's number
- * matches what `/shop?category=…` actually lists.
+ * "Shop by Category" cards with live counts, matched exactly the way the shop
+ * filters (groups expand to their categories; extra assigned categories
+ * count), so each card's number equals what `/shop?category=…` lists.
  */
-function topCollections(products: readonly Product[]): CollectionSummary[] {
-  return (Object.keys(CATEGORY_META) as ProductCategory[])
-    .map((category) => ({
-      category,
-      count: products.filter(
-        (product) =>
-          product.category === category ||
-          product.categories?.includes(category),
-      ).length,
-    }))
-    .filter((collection) => collection.count > 0)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 3);
+function shopByCategoryCards(products: readonly Product[]): ShopCategoryCard[] {
+  return SHOP_BY_CATEGORY.map((card) => ({
+    ...card,
+    count: products.filter((product) =>
+      productMatchesCategory(product, card.filter),
+    ).length,
+  }));
 }
 
 /**
@@ -106,7 +100,7 @@ export default async function HomePage() {
         </Reveal>
 
         <Reveal>
-          <CollectionsGrid collections={topCollections(catalogue.products)} />
+          <ShopByCategory cards={shopByCategoryCards(catalogue.products)} />
         </Reveal>
 
         <Reveal>
