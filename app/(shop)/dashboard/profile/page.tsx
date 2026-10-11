@@ -12,10 +12,10 @@ import {
 export default function DashboardProfilePage() {
   return (
     <>
-      <title>My Profile | LITTLE LUXE</title>
+      <title>My Profile | MUKRA</title>
       <meta
         name="description"
-        content="Your Little Luxe profile — contact details, password, notification preferences and more."
+        content="Your Mukra profile — contact details, password, notification preferences and more."
       />
       <meta name="robots" content="noindex" />
 

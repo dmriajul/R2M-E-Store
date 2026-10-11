@@ -50,10 +50,10 @@ export function formatMoney(amount: number, code: CurrencyCode = STORE_CURRENCY)
 /* -------------------------------------------------------------------------- */
 
 export const STORE = {
-  name: process.env.NEXT_PUBLIC_STORE_NAME ?? "Little Luxe",
+  name: process.env.NEXT_PUBLIC_STORE_NAME ?? "Mukra",
   /** Free shipping threshold in BDT */
   freeShippingThreshold: Number(process.env.NEXT_PUBLIC_FREE_SHIPPING_THRESHOLD ?? 5000),
-  supportEmail: process.env.STORE_SUPPORT_EMAIL ?? "hello@littleluxe.com",
+  supportEmail: process.env.STORE_SUPPORT_EMAIL ?? "hello@mukra.com",
 } as const;
 
 /* -------------------------------------------------------------------------- */

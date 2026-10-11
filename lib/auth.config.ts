@@ -25,7 +25,8 @@ export const authConfig = {
 
       if (!user) return false; // → redirect to pages.signIn with callbackUrl
 
-      if (pathname.startsWith("/admin") && user.role !== "ADMIN") {
+      const role = typeof user.role === "string" ? user.role : null;
+      if (pathname.startsWith("/admin") && role !== "ADMIN") {
         // Signed in but not staff: send them to their own area.
         return Response.redirect(new URL("/dashboard", request.nextUrl));
       }

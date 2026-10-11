@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Home, WifiOff } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: { absolute: "You're offline | Little Luxe" },
+  title: { absolute: "You're offline | Mukra" },
   robots: { index: false, follow: false },
 };
 
@@ -29,7 +29,7 @@ export default function OfflinePage() {
         You&rsquo;re offline
       </h1>
       <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
-        Little Luxe needs a connection to load fresh prices and stock. Reconnect
+        Mukra needs a connection to load fresh prices and stock. Reconnect
         and we&rsquo;ll pick up right where you left off — your bag is saved on
         this device.
       </p>

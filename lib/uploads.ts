@@ -14,8 +14,8 @@ export const UPLOAD_ROOT = path.join(process.cwd(), ".uploads");
 /** Public URL prefix the stored files are reachable at. */
 export const UPLOAD_URL_PREFIX = "/uploads";
 
-/** Buckets: one for product images, one for `.glb` models. */
-export const UPLOAD_BUCKETS = { products: "products", models: "models" } as const;
+/** Local storage buckets for uploaded assets. */
+export const UPLOAD_BUCKETS = { products: "products", hero: "hero" } as const;
 
 /** Content types we ever store locally. Anything else is refused. */
 export const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
@@ -25,5 +25,6 @@ export const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   webp: "image/webp",
   gif: "image/gif",
   svg: "image/svg+xml",
-  glb: "model/gltf-binary",
+  mp4: "video/mp4",
+  webm: "video/webm",
 };

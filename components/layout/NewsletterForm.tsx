@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Check } from "lucide-react";
+import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -12,12 +13,16 @@ import { Input } from "@/components/ui/input";
 export function NewsletterForm() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const isCaptchaEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!email.trim()) return;
+    if (isCaptchaEnabled && !captchaToken) return;
     setSubmitted(true);
     setEmail("");
+    setCaptchaToken("");
   };
 
   return (
@@ -39,7 +44,8 @@ export function NewsletterForm() {
           type="submit"
           size="icon"
           aria-label="Subscribe to the newsletter"
-          className="size-9 shrink-0 rounded-full transition-transform duration-300 hover:scale-105"
+          disabled={isCaptchaEnabled && !captchaToken}
+          className="size-9 shrink-0 rounded-full transition-transform duration-300 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitted ? (
             <Check className="size-4" />
@@ -48,6 +54,15 @@ export function NewsletterForm() {
           )}
         </Button>
       </div>
+      {isCaptchaEnabled && (
+        <div className="mt-3">
+          <TurnstileCaptcha
+            onVerify={setCaptchaToken}
+            onError={() => setCaptchaToken("")}
+            theme="dark"
+          />
+        </div>
+      )}
       <p
         aria-live="polite"
         className="mt-3 h-4 text-xs text-muted-foreground transition-opacity duration-300"

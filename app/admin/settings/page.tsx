@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, CreditCard, Store, Truck } from "lucide-react";
+import { Bell, CreditCard, Image as ImageIcon, Store, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { HeroSettingsForm } from "@/components/admin/HeroSettingsForm";
 import {
   GeneralSettingsForm,
   NotificationSettingsForm,
@@ -11,10 +12,11 @@ import {
   ShippingSettingsForm,
 } from "@/components/admin/SettingsForms";
 
-type TabId = "general" | "shipping" | "payments" | "notifications";
+type TabId = "general" | "hero" | "shipping" | "payments" | "notifications";
 
 const TABS: readonly { id: TabId; label: string; icon: typeof Store }[] = [
   { id: "general", label: "General", icon: Store },
+  { id: "hero", label: "Homepage Hero", icon: ImageIcon },
   { id: "shipping", label: "Shipping", icon: Truck },
   { id: "payments", label: "Payments", icon: CreditCard },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -66,6 +68,7 @@ export default function AdminSettingsPage() {
             transition={{ duration: 0.28, ease: EASE }}
           >
             {tab === "general" && <GeneralSettingsForm />}
+            {tab === "hero" && <HeroSettingsForm />}
             {tab === "shipping" && <ShippingSettingsForm />}
             {tab === "payments" && <PaymentsSettingsForm />}
             {tab === "notifications" && <NotificationSettingsForm />}
@@ -74,8 +77,7 @@ export default function AdminSettingsPage() {
       </section>
 
       <p className="text-[11px] text-muted-foreground">
-        Settings are stored in the client store for this demo — refresh and they reset to the
-        seeded values.
+        Homepage hero changes are stored in the database. The other settings sections remain demo-only.
       </p>
     </div>
   );

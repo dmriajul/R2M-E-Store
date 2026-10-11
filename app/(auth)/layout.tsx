@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SITE } from "@/lib/site";
+import { MukraLogo } from "@/components/brand/MukraLogo";
 
 /**
  * Focused auth shell: no navbar, no footer. The backdrop is pure CSS — two
@@ -31,9 +31,10 @@ export default function AuthLayout({
           <div className="mb-8 text-center">
             <Link
               href="/"
-              className="text-gradient-gold text-2xl font-bold tracking-widest transition-opacity duration-300 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              aria-label="MUKRA home"
+              className="inline-flex transition-opacity duration-300 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
-              LITTLE {SITE.name}
+              <MukraLogo variant="wordmark" size="lg" priority />
             </Link>
             <p className="mt-2 text-xs tracking-[0.28em] text-muted-foreground uppercase">
               Adorable styles for little ones

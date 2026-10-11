@@ -8,18 +8,18 @@ import type {
 } from "@/types";
 
 export const SITE = {
-  name: "LITTLE LUXE",
+  name: "MUKRA",
   /** Kids line — used by the shop/product metadata and headings. */
-  kidsBrand: "LITTLE LUXE",
+  kidsBrand: "MUKRA",
   tagline: "Where Magic Meets Style",
   kidsTagline: "আপনার স্নিগ্ধ ছোটদের জন্য সুন্দর পোশাক ✨",
   description:
-    "Discover beautifully crafted, comfortable, and adorable outfits for your little ones. Ages 0-14. Premium kids fashion in Bangladesh with global standards.",
+    "MUKRA brings premium fashion to Bangladesh — Where Magic Meets Style. Discover beautifully crafted outfits for ages 0-12.",
   /**
    * Canonical origin: metadataBase, canonicals, sitemap, robots and OG images
    * all derive from this. Override with NEXT_PUBLIC_SITE_URL on previews.
    */
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://littleluxe.com",
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://mukra.com",
 } as const;
 
 export interface NavLink {
@@ -37,11 +37,12 @@ export const NAV_LINKS: readonly NavLink[] = [
 
 /** Outline text rolled in the home-page marquee. */
 export const MARQUEE_WORDS: readonly string[] = [
+  "MUKRA",
   "LUXURY",
   "CRAFTSMANSHIP",
-  "INNOVATION",
-  "PREMIUM",
-  "EXCLUSIVE",
+  "KIDS FASHION",
+  "ELEGANCE",
+  "EXCLUSIVITY",
 ] as const;
 
 export const FOOTER_LINKS: Readonly<Record<string, readonly NavLink[]>> = {
@@ -71,11 +72,13 @@ export const FOOTER_LINKS: Readonly<Record<string, readonly NavLink[]>> = {
 
 export const categories = [
   "All",
-  "Dresses",
+  "Jackets & Coats",
+  "Sweatshirts & Hoodies",
+  "Sweaters & Cardigans",
+  "Winter Bottoms / Trousers",
+  "Winter Sets & Tracksuits",
   "Tops & Tees",
-  "Bottoms",
-  "Shoes",
-  "Outerwear",
+  "Innerwear & Thermals",
   "Accessories",
 ] as const satisfies readonly (ProductCategory | "All")[];
 
@@ -86,7 +89,7 @@ export const ageFilters = [
   "0-2Y",
   "3-5Y",
   "6-8Y",
-  "9-14Y",
+  "9-12Y",
 ] as const satisfies readonly AgeFilter[];
 
 export const genderFilters = [
@@ -118,14 +121,38 @@ export interface CategoryMeta {
   emoji: string;
   /** Tailwind gradient stops for the placeholder artwork. */
   gradient: string;
-  /** Soft glow colour used for shadows and 3D lighting. */
+  /*  * Soft glow colour used for shadows and decorative highlights. */
   glow: string;
 }
 
 export const CATEGORY_META: Readonly<Record<ProductCategory, CategoryMeta>> = {
-  Dresses: {
-    slug: "dresses",
-    emoji: "👗",
+  "Jackets & Coats": {
+    slug: "jackets-coats",
+    emoji: "🧥",
+    gradient: "from-teal-400 to-emerald-600",
+    glow: "#2DD4BF",
+  },
+  "Sweatshirts & Hoodies": {
+    slug: "sweatshirts-hoodies",
+    emoji: "🧥",
+    gradient: "from-violet-400 to-purple-600",
+    glow: "#A78BFA",
+  },
+  "Sweaters & Cardigans": {
+    slug: "sweaters-cardigans",
+    emoji: "🧶",
+    gradient: "from-amber-400 to-orange-600",
+    glow: "#F59E0B",
+  },
+  "Winter Bottoms / Trousers": {
+    slug: "winter-bottoms-trousers",
+    emoji: "👖",
+    gradient: "from-blue-400 to-indigo-600",
+    glow: "#60A5FA",
+  },
+  "Winter Sets & Tracksuits": {
+    slug: "winter-sets-tracksuits",
+    emoji: "🧸",
     gradient: "from-pink-400 to-rose-600",
     glow: "#F472B6",
   },
@@ -135,23 +162,11 @@ export const CATEGORY_META: Readonly<Record<ProductCategory, CategoryMeta>> = {
     gradient: "from-sky-400 to-blue-600",
     glow: "#38BDF8",
   },
-  Bottoms: {
-    slug: "bottoms",
-    emoji: "👖",
-    gradient: "from-violet-400 to-purple-600",
-    glow: "#A78BFA",
-  },
-  Shoes: {
-    slug: "shoes",
-    emoji: "👟",
-    gradient: "from-amber-400 to-orange-600",
-    glow: "#F59E0B",
-  },
-  Outerwear: {
-    slug: "outerwear",
-    emoji: "🧥",
-    gradient: "from-teal-400 to-emerald-600",
-    glow: "#2DD4BF",
+  "Innerwear & Thermals": {
+    slug: "innerwear-thermals",
+    emoji: "🧦",
+    gradient: "from-cyan-400 to-sky-600",
+    glow: "#22D3EE",
   },
   Accessories: {
     slug: "accessories",
@@ -217,14 +232,13 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "A breezy A-line dress in breathable organic cotton that keeps little ones cool on warm days. The hidden back buttons make dressing quick, and the full skirt is made for spinning.",
     price: 3499,
     currency: "BDT",
-    category: "Dresses",
+    category: "Tops & Tees",
     ageRange: "3-6Y",
     gender: "Girls",
     colors: ["Pink", "Lavender", "White"],
     sizes: ["2T", "3T", "4T", "5", "6"],
     material: "100% Organic Cotton",
     badge: "Bestseller",
-    modelColor: "#F472B6",
     tags: ["dresses", "organic", "summer", "twirl"],
     rating: 4.8,
     reviewCount: 124,
@@ -249,7 +263,6 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     sizes: ["3T", "4T", "5", "6", "7", "8"],
     material: "Soft Cotton Jersey",
     badge: "New",
-    modelColor: "#2DD4BF",
     tags: ["tops", "tshirt", "dino", "everyday"],
     rating: 4.6,
     reviewCount: 98,
@@ -267,14 +280,13 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "Feather-light tulle layered over a cotton lining so it never itches. The elasticated rainbow waistband grows with them and stays put through the wiggliest of days.",
     price: 2799,
     currency: "BDT",
-    category: "Bottoms",
+    category: "Winter Bottoms / Trousers",
     ageRange: "2-5Y",
     gender: "Girls",
     colors: ["Pink", "Purple", "Yellow"],
     sizes: ["2T", "3T", "4T", "5"],
     material: "Tulle & Cotton Blend",
     badge: "New",
-    modelColor: "#A78BFA",
     tags: ["bottoms", "skirt", "tutu", "party"],
     rating: 4.7,
     reviewCount: 76,
@@ -292,14 +304,13 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "Vegan leather uppers with a cushioned mesh lining and LED soles that flash as they walk. Easy velcro straps mean no laces to learn — and no morning battles.",
     price: 4499,
     currency: "BDT",
-    category: "Shoes",
+    category: "Accessories",
     ageRange: "5-10Y",
     gender: "Unisex",
     colors: ["White", "Blue", "Black"],
     sizes: ["10", "11", "12", "13", "1", "2"],
     material: "Vegan Leather & Mesh",
     badge: "Bestseller",
-    modelColor: "#38BDF8",
     tags: ["shoes", "sneakers", "light-up", "active"],
     rating: 4.9,
     reviewCount: 210,
@@ -317,19 +328,19 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "Brushed fleece inside organic cotton keeps them warm without bulk. Three-dimensional bear ears on the hood and a kangaroo pocket for treasures found along the way.",
     price: 3999,
     currency: "BDT",
-    category: "Outerwear",
+    category: "Sweatshirts & Hoodies",
     ageRange: "3-7Y",
     gender: "Unisex",
     colors: ["Cream", "Beige", "Grey"],
     sizes: ["2T", "3T", "4T", "5", "6"],
     material: "Fleece-Backed Organic Cotton",
     badge: "Organic",
-    modelColor: "#E7D3B3",
     tags: ["outerwear", "hoodie", "organic", "winter"],
     rating: 4.8,
     reviewCount: 152,
     stock: 22,
     featured: false,
+    virtualBoutique: true,
     status: "active",
     createdAt: "2026-01-26T10:00:00.000Z",
   },
@@ -349,7 +360,6 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     sizes: ["One Size"],
     material: "Recycled Acetate",
     badge: "New",
-    modelColor: "#C084FC",
     tags: ["accessories", "hair", "clips", "gift"],
     rating: 4.5,
     reviewCount: 64,
@@ -368,19 +378,19 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     price: 5999,
     originalPrice: 7999,
     currency: "BDT",
-    category: "Dresses",
+    category: "Winter Sets & Tracksuits",
     ageRange: "4-8Y",
     gender: "Girls",
     colors: ["Lavender", "White", "Rose"],
     sizes: ["3T", "4T", "5", "6", "7"],
     material: "Satin & Tulle",
     badge: "Sale",
-    modelColor: "#C084FC",
     tags: ["dresses", "party", "occasion", "sale"],
     rating: 4.9,
     reviewCount: 187,
     stock: 12,
     featured: true,
+    virtualBoutique: true,
     status: "active",
     createdAt: "2026-02-08T10:00:00.000Z",
   },
@@ -393,19 +403,19 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "A lightweight recycled shell that shrugs off drizzle, lined with soft jersey for warmth. Glow-in-the-dark planet patches make it a favourite for night-time adventurers.",
     price: 4999,
     currency: "BDT",
-    category: "Outerwear",
+    category: "Jackets & Coats",
     ageRange: "6-12Y",
     gender: "Boys",
     colors: ["Navy", "Grey", "Sky"],
     sizes: ["5", "6", "7", "8", "10", "12"],
     material: "Recycled Polyester Shell",
     badge: "Bestseller",
-    modelColor: "#1E3A8A",
     tags: ["outerwear", "jacket", "rain", "space"],
     rating: 4.7,
     reviewCount: 141,
     stock: 20,
     featured: false,
+    virtualBoutique: true,
     status: "active",
     createdAt: "2026-01-09T10:00:00.000Z",
   },
@@ -418,13 +428,12 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "Pre-washed cotton denim that feels broken-in from day one, with adjustable straps that grow with them. Popper legs make nappy changes and toilet trips quick work.",
     price: 3699,
     currency: "BDT",
-    category: "Bottoms",
+    category: "Winter Sets & Tracksuits",
     ageRange: "1-4Y",
     gender: "Unisex",
     colors: ["Denim", "Blue", "Cream"],
     sizes: ["12M", "18M", "2T", "3T", "4T"],
     material: "Soft Cotton Denim",
-    modelColor: "#4F6D9A",
     tags: ["bottoms", "dungarees", "denim", "toddler"],
     rating: 4.6,
     reviewCount: 88,
@@ -449,7 +458,6 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     sizes: ["One Size"],
     material: "Water-Resistant Recycled Polyester",
     badge: "Bestseller",
-    modelColor: "#F472B6",
     tags: ["accessories", "backpack", "school", "unicorn"],
     rating: 4.8,
     reviewCount: 176,
@@ -474,7 +482,6 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     sizes: ["2T", "3T", "4T", "5", "6"],
     material: "100% Organic Cotton",
     badge: "Organic",
-    modelColor: "#60A5FA",
     tags: ["tops", "pajamas", "organic", "sleep"],
     rating: 4.9,
     reviewCount: 203,
@@ -492,13 +499,12 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "Velvet uppers over a padded leather insole with a flexible rubber sole — dressy enough for a wedding, forgiving enough for the dance floor afterwards.",
     price: 3899,
     currency: "BDT",
-    category: "Shoes",
+    category: "Accessories",
     ageRange: "3-7Y",
     gender: "Girls",
     colors: ["Rose", "Black", "Cream"],
     sizes: ["8", "9", "10", "11", "12", "13"],
     material: "Velvet & Leather",
-    modelColor: "#FB7185",
     tags: ["shoes", "mary-janes", "party", "velvet"],
     rating: 4.4,
     reviewCount: 57,
@@ -509,13 +515,32 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
   },
 ] as const;
 
+const pexelsPhoto = (photoId: string) =>
+  `https://images.pexels.com/photos/${photoId}/pexels-photo-${photoId}.jpeg?auto=compress&cs=tinysrgb&w=1200&h=1600&fit=crop`;
+
+/** Curated kids-fashion demo photography, also used for legacy demo seed rows. */
+export const PRODUCT_IMAGES: Readonly<Record<string, readonly string[]>> = {
+  "floral-summer-dress": [pexelsPhoto("3662845")],
+  "dino-graphic-tee": [pexelsPhoto("3662667")],
+  "rainbow-tutu-skirt": [pexelsPhoto("3662845")],
+  "light-up-sneakers": [pexelsPhoto("3662667")],
+  "cozy-bear-hoodie": [pexelsPhoto("1620653")],
+  "butterfly-hair-clips": [pexelsPhoto("3662668")],
+  "princess-party-gown": [pexelsPhoto("3662845")],
+  "space-explorer-jacket": [pexelsPhoto("1620653")],
+  "denim-dungaree-set": [pexelsPhoto("5559986")],
+  "unicorn-backpack": [pexelsPhoto("3662850")],
+  "cotton-pajama-set": [pexelsPhoto("1620760")],
+  "velvet-mary-janes": [pexelsPhoto("3662667")],
+};
+
 /**
- * The catalogue. `inStock`, placeholder `images` and the back-compat
+ * The catalogue. `inStock`, product photography and the back-compat
  * `compareAtPrice` alias are derived here so the seed data stays DRY.
  */
 export const PRODUCTS: readonly Product[] = PRODUCT_SEEDS.map((seed) => ({
   ...seed,
-  images: Array.from({ length: 4 }, (_, index) => `${seed.slug}-${index + 1}`),
+  images: [...(PRODUCT_IMAGES[seed.slug] ?? [])],
   inStock: seed.stock > 0,
   compareAtPrice: seed.originalPrice,
 }));
@@ -539,13 +564,13 @@ export interface ProductQuery {
   limit?: number;
 }
 
-/** "3-6Y" → [3, 6]. Falls back to [0, 14] for anything unparseable. */
+/** "3-6Y" → [3, 6]. Falls back to [0, 12] for anything unparseable. */
 export function parseAgeRange(range: string): [number, number] {
   const parts = range.replace(/[^0-9-]/g, "").split("-");
   const min = Number.parseInt(parts[0] ?? "", 10);
   const max = Number.parseInt(parts[1] ?? "", 10);
 
-  if (Number.isNaN(min)) return [0, 14];
+  if (Number.isNaN(min)) return [0, 12];
   if (Number.isNaN(max)) return [min, min];
   return [min, max];
 }
@@ -582,6 +607,7 @@ function sortProducts(products: Product[], sort: string): Product[] {
       return sorted.sort(
         (a, b) =>
           Number(b.featured) - Number(a.featured) ||
+          (a.featuredOrder ?? 0) - (b.featuredOrder ?? 0) ||
           b.rating - a.rating ||
           b.reviewCount - a.reviewCount,
       );
@@ -595,7 +621,7 @@ function sortProducts(products: Product[], sort: string): Product[] {
  * Gender note: picking "Girls" also returns Unisex pieces, since those are
  * wearable by girls — only the explicit "Unisex" pill narrows to Unisex alone.
  */
-export function getProducts(query: ProductQuery = {}): Product[] {
+export function getProducts(query: ProductQuery = {}, catalogue: readonly Product[] = PRODUCTS): Product[] {
   const {
     category = "All",
     age = "All Ages",
@@ -605,10 +631,14 @@ export function getProducts(query: ProductQuery = {}): Product[] {
     limit,
   } = query;
 
-  let products = PRODUCTS.filter((product) => product.status === "active");
+  let products = catalogue.filter((product) => product.status === "active");
 
   if (category && category !== "All") {
-    products = products.filter((product) => product.category === category);
+    products = products.filter(
+      (product) =>
+        product.category === category ||
+        product.categories?.some((assignedCategory) => assignedCategory === category),
+    );
   }
 
   if (age && age !== "All Ages") {

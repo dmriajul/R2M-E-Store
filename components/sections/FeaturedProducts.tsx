@@ -1,24 +1,29 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { motion, useInView } from "framer-motion";
-import { ArrowRight, Plus, Check } from "lucide-react";
-import { formatPrice } from "@/lib/utils";
-import { MOCK_PRODUCTS } from "@/lib/site";
-import { useCartStore } from "@/store/useCartStore";
-import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
-import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
+import { ArrowRight, Check, Plus } from "lucide-react";
+import { ProductArtwork } from "@/components/product/ProductArtwork";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
+import { formatPrice, t, translateCategory } from "@/lib/utils";
+import { useCartStore } from "@/store/useCartStore";
+import { useLanguageStore } from "@/store/useLanguageStore";
 import type { Product } from "@/types";
 
 const EASE_LUXE = [0.22, 1, 0.36, 1] as const;
 
-/* -------------------------------------------------------------------------- */
-/*  Card                                                                      */
-/* -------------------------------------------------------------------------- */
+interface ProductCardProps {
+  product: Product;
+  index: number;
+  reducedMotion: boolean;
+  duplicate: boolean;
+}
 
 function AddToCartButton({ product }: { product: Product }) {
+  const language = useLanguageStore((state) => state.language);
   const addItem = useCartStore((state) => state.addItem);
   const inCart = useCartStore((state) =>
     state.items.some((item) => item.id === product.id),
@@ -41,61 +46,67 @@ function AddToCartButton({ product }: { product: Product }) {
       {justAdded ? (
         <>
           <Check className="size-3.5" />
-          {inCart ? "In bag" : "Added"}
+          {inCart ? t("common.inBag", language) : t("common.added", language)}
         </>
       ) : (
         <>
           <Plus className="size-3.5" />
-          Add to Cart
+          {t("common.addToCart", language)}
         </>
       )}
     </Button>
   );
 }
 
-interface ProductCardProps {
-  product: Product;
-  index: number;
-  reducedMotion: boolean;
-}
-
-function ProductCard({ product, index, reducedMotion }: ProductCardProps) {
-  const cardRef = useRef<HTMLElement>(null);
-  const inView = useInView(cardRef, { once: true, amount: 0.25 });
+function ProductCard({
+  product,
+  index,
+  reducedMotion,
+  duplicate,
+}: ProductCardProps) {
+  const language = useLanguageStore((state) => state.language);
   const discount = product.compareAtPrice
     ? Math.round((1 - product.price / product.compareAtPrice) * 100)
     : null;
 
   return (
     <motion.article
-      ref={cardRef}
+      aria-hidden={duplicate || undefined}
+      inert={duplicate}
       initial={{ opacity: 0, y: reducedMotion ? 0 : 32 }}
-      animate={inView ? { opacity: 1, y: 0 } : undefined}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.15 }}
       transition={{
         duration: reducedMotion ? 0.5 : 0.7,
         delay: reducedMotion ? 0 : index * 0.09,
         ease: EASE_LUXE,
       }}
       whileHover={reducedMotion ? undefined : { y: -8 }}
-      className="group glass relative flex w-[78vw] shrink-0 snap-start flex-col overflow-hidden rounded-2xl p-3 transition-[box-shadow,border-color] duration-500 ease-[var(--ease-luxe)] hover:border-primary/45 hover:shadow-[0_0_46px_-14px_rgba(212,175,55,0.75)] sm:w-[22rem]"
+      className="group glass relative flex w-[280px] shrink-0 flex-col overflow-hidden rounded-2xl p-3 transition-[box-shadow,border-color] duration-500 ease-[var(--ease-luxe)] hover:border-primary/45 hover:shadow-[0_0_46px_-14px_rgba(212,175,55,0.75)] sm:w-[320px]"
     >
-      {/* Media placeholder — pure CSS gradient, no external images. */}
-      <div className="relative aspect-4/5 overflow-hidden rounded-xl bg-[linear-gradient(145deg,rgba(212,175,55,0.26)_0%,rgba(212,175,55,0.06)_38%,rgba(0,0,0,0.75)_100%)]">
-        <span
-          aria-hidden
-          className="absolute inset-0 bg-[radial-gradient(80%_60%_at_70%_15%,rgba(0,240,255,0.16)_0%,transparent_60%)]"
+      <Link
+        href={`/product/${product.id}`}
+        aria-label={product.name}
+        tabIndex={duplicate ? -1 : undefined}
+        className="relative block aspect-4/5 overflow-hidden rounded-xl bg-[#101010] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <ProductArtwork
+          product={product}
+          size="card"
+          className="absolute inset-0 h-full w-full rounded-xl"
         />
         <span
           aria-hidden
-          className="absolute inset-0 flex items-center justify-center px-6 text-center text-2xl font-bold tracking-tight text-white/90 transition-transform duration-700 ease-[var(--ease-luxe)] group-hover:scale-105 md:text-3xl"
-        >
-          {product.name}
-        </span>
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_60%_at_70%_15%,rgba(0,240,255,0.12)_0%,transparent_60%)]"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/35 to-transparent"
+        />
         <span
           aria-hidden
           className="absolute inset-x-6 bottom-6 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"
         />
-
         {discount !== null && (
           <Badge className="absolute top-3 left-3 border-0 bg-primary text-[10px] font-bold tracking-wider text-primary-foreground">
             −{discount}%
@@ -105,14 +116,19 @@ function ProductCard({ product, index, reducedMotion }: ProductCardProps) {
           variant="outline"
           className="absolute top-3 right-3 border-glass-border bg-black/40 text-[10px] tracking-[0.18em] text-white/80 uppercase backdrop-blur-md"
         >
-          {product.category}
+          {translateCategory(product.category, language)}
         </Badge>
-      </div>
+      </Link>
 
-      {/* Details */}
       <div className="flex flex-1 flex-col p-4">
         <h3 className="text-base font-semibold tracking-tight text-foreground">
-          {product.name}
+          <Link
+            href={`/product/${product.id}`}
+            tabIndex={duplicate ? -1 : undefined}
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {product.name}
+          </Link>
         </h3>
         <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
           {product.tagline}
@@ -137,54 +153,136 @@ function ProductCard({ product, index, reducedMotion }: ProductCardProps) {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Section                                                                   */
-/* -------------------------------------------------------------------------- */
+interface ProductMarqueeProps {
+  products: Product[];
+  reverse?: boolean;
+  reducedMotion: boolean;
+}
 
-export function FeaturedProducts() {
+function ProductMarquee({
+  products,
+  reverse = false,
+  reducedMotion,
+}: ProductMarqueeProps) {
+  const repeatedProducts = Array.from(
+    { length: Math.max(products.length, 10) },
+    (_, index) => products[index % products.length]!,
+  );
+  return (
+    <div className="overflow-hidden pb-3">
+      <div
+        className={
+          reverse
+            ? "animate-marquee-right flex w-max flex-nowrap"
+            : "animate-marquee-left flex w-max flex-nowrap"
+        }
+      >
+        {[0, 1].map((copy) => (
+          <div
+            key={copy}
+            aria-hidden={copy === 1 || undefined}
+            inert={copy === 1}
+            className="flex shrink-0 flex-nowrap gap-6 pr-6"
+          >
+            {repeatedProducts.map((product, index) => (
+              <ProductCard
+                key={`${copy}-${index}-${product.id}`}
+                product={product}
+                index={index}
+                reducedMotion={reducedMotion}
+                duplicate={copy === 1 || index >= products.length}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface FeaturedProductsProps {
+  products: Product[];
+  id?: string;
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+}
+
+export function FeaturedProducts({
+  products,
+  id = "featured",
+  eyebrow = "Featured",
+  title = "Curated Selection",
+  description = "A curated selection from the current release — each made in small numbers and finished by hand.",
+}: FeaturedProductsProps) {
+  const language = useLanguageStore((state) => state.language);
   const reducedMotion = usePrefersReducedMotion();
-  const featured = MOCK_PRODUCTS.filter((product) => product.featured);
-  // Top up with the rest of the catalogue so the row always shows four pieces.
-  const products = [
-    ...featured,
-    ...MOCK_PRODUCTS.filter((product) => !product.featured),
-  ].slice(0, 4);
+  const row1Products = products.filter((_, index) => index % 2 === 0);
+  const row2Products = products.filter((_, index) => index % 2 === 1);
+  const translations: Record<
+    string,
+    { eyebrow: string; title: string; description: string }
+  > = {
+    featured: {
+      eyebrow: "sections.featuredEyebrow",
+      title: "sections.featured",
+      description: "sections.featuredDescription",
+    },
+    "new-arrivals": {
+      eyebrow: "sections.newArrivalsEyebrow",
+      title: "sections.newArrivals",
+      description: "sections.newArrivalsDescription",
+    },
+    "best-sellers": {
+      eyebrow: "sections.bestSellersEyebrow",
+      title: "sections.bestSellers",
+      description: "sections.bestSellersDescription",
+    },
+  };
+  const keys = translations[id];
+  const sectionEyebrow = keys ? t(keys.eyebrow, language) : eyebrow;
+  const sectionTitle = keys ? t(keys.title, language) : title;
+  const sectionDescription = keys ? t(keys.description, language) : description;
+
+  if (products.length === 0) return null;
 
   return (
-    <section id="featured" className="relative py-24 lg:py-32">
+    <section id={id} className="relative w-full overflow-hidden py-24 lg:py-32">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* Heading */}
-        <div className="flex flex-wrap items-end justify-between gap-6">
+        <header className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <p className="text-xs font-semibold tracking-[0.3em] text-primary uppercase">
-              Featured
+              {sectionEyebrow}
             </p>
             <h2 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-              Curated Selection
+              {sectionTitle}
             </h2>
             <span
               aria-hidden
               className="mt-5 block h-px w-24 bg-gradient-to-r from-primary via-primary/50 to-transparent"
             />
           </div>
-
-          <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-            Four pieces from the current release — each made in small numbers and
-            finished by hand.
+          <p className="w-full max-w-sm text-sm leading-relaxed text-muted-foreground sm:w-auto">
+            {sectionDescription}
           </p>
-        </div>
+        </header>
       </div>
 
-      {/* Horizontal rail: native scrolling, snap points, no scroll-jacking. */}
-      <div className="mt-14 flex snap-x snap-mandatory gap-5 overflow-x-auto px-4 pb-6 sm:px-6 lg:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {products.map((product, index) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            index={index}
+      <div
+        role="region"
+        aria-label={language === "bn" ? `${sectionTitle} ক্যারোসেল` : `${sectionTitle} carousel`}
+        className="mt-14 space-y-5 overflow-hidden px-4 pb-6 sm:px-6 lg:px-8"
+      >
+        {row1Products.length > 0 && (
+          <ProductMarquee products={row1Products} reducedMotion={reducedMotion} />
+        )}
+        {row2Products.length > 0 && (
+          <ProductMarquee
+            products={row2Products}
+            reverse
             reducedMotion={reducedMotion}
           />
-        ))}
+        )}
       </div>
 
       <div className="mx-auto mt-4 flex w-full max-w-7xl justify-end px-4 sm:px-6 lg:px-8">
@@ -194,7 +292,7 @@ export function FeaturedProducts() {
           className="group gap-2 text-sm tracking-[0.16em] text-primary uppercase transition-colors duration-300 hover:bg-glass hover:text-primary"
         >
           <Link href="/shop">
-            View All
+            {t("common.viewAll", language)}
             <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
           </Link>
         </Button>

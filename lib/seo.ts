@@ -28,13 +28,13 @@ export function organizationSchema() {
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "Little Luxe",
+    name: "Mukra",
     alternateName: SITE.kidsBrand,
     url: SITE.url,
     logo: LOGO_URL,
     image: LOGO_URL,
     description: "Premium kids fashion in Bangladesh",
-    email: "hello@littleluxe.com",
+    email: "hello@mukra.com",
     contactPoint: {
       "@type": "ContactPoint",
       telephone: "+8801707302038",
@@ -83,4 +83,36 @@ export function faqSchema(lang: "en" | "bn" = "en") {
       },
     })),
   };
+}
+
+/** Product JSON-LD builder for product pages. */
+export function getProductJsonLd(product: {
+  name: string;
+  description: string;
+  image: string;
+  price: number;
+  currency: string;
+  brand: string;
+  sku?: string;
+}): string {
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.description,
+    image: product.image,
+    brand: {
+      "@type": "Brand",
+      name: product.brand || "MUKRA",
+    },
+    offers: {
+      "@type": "Offer",
+      url: `${SITE.url}/product/${product.sku || product.name.toLowerCase().replace(/\s+/g, "-")}`,
+      priceCurrency: product.currency || "BDT",
+      price: product.price,
+      priceValidUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      availability: product.price > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+    },
+  };
+  return JSON.stringify(schema);
 }

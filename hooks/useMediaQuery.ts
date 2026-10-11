@@ -22,7 +22,7 @@ export function useMediaQuery(query: string, defaultValue = false): boolean {
   return matches;
 }
 
-/** True below the `md` breakpoint (768px by default). Used to downgrade the 3D scene. */
+/** True below the `md` breakpoint (768px by default). */
 export function useIsMobile(breakpointPx = 768): boolean {
   return useMediaQuery(`(max-width: ${breakpointPx - 1}px)`);
 }

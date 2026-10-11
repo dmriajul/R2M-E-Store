@@ -1,22 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { motion, type Variants } from "framer-motion";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SceneLoadingFallback } from "@/components/three/SceneLoadingFallback";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { useLanguageStore } from "@/store/useLanguageStore";
-
-/**
- * The 3D scene is client-only: WebGL cannot be server-rendered, and loading it
- * lazily keeps three/fiber/postprocessing out of the initial page bundle.
- */
-const HeroScene = dynamic(() => import("@/components/three/HeroScene"), {
-  ssr: false,
-  loading: () => <SceneLoadingFallback />,
-});
+import type { HeroSettings } from "@/lib/hero-settings";
+import { t } from "@/lib/utils";
 
 const EASE_LUXE = [0.22, 1, 0.36, 1] as const;
 
@@ -43,7 +35,7 @@ function buildItemVariants(reducedMotion: boolean): Variants {
   };
 }
 
-export function HeroSection() {
+export function HeroSection({ settings }: { settings: HeroSettings }) {
   const reducedMotion = usePrefersReducedMotion();
   const item = buildItemVariants(reducedMotion);
   const language = useLanguageStore((state) => state.language);
@@ -54,14 +46,19 @@ export function HeroSection() {
       ?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth" });
   };
 
-  const badgeText = language === "bn" ? "✨ প্রিমিয়াম কিডস ফ্যাশন" : "✨ Premium Kids Fashion";
-  const titleText = "Where Magic Meets Style";
-  const subtitleText =
-    language === "bn"
-      ? "আপনার স্নিগ্ধ ছোটদের জন্য সুন্দরভাবে তৈরি, আরামদায়ক এবং আকর্ষণীয় পোশাক আবিষ্কার করুন। ০-১৪ বছর বয়স।"
-      : "Discover beautifully crafted, comfortable, and adorable outfits for your little ones. Ages 0-14.";
-  const shopNowText = language === "bn" ? "এখন দেখুন" : "Shop Now";
-  const exploreText = language === "bn" ? "অন্বেষণ করুন" : "Explore";
+  const badgeText =
+    settings.heroBadgeText ||
+    (language === "bn" ? "✨ প্রিমিয়াম কিডস ফ্যাশন" : "✨ Premium Kids Fashion");
+  const titleText = settings.heroTitle || t("hero.title", language);
+  const subtitleText = settings.heroSubtitle || t("hero.subtitle", language);
+  const shopNowText = t("common.shopNow", language);
+  const exploreText = t("common.explore", language);
+  const primaryCtaText = settings.primaryCtaText || shopNowText;
+  const primaryCtaLink = settings.primaryCtaLink || "/shop";
+  const secondaryCtaText = settings.secondaryCtaText || exploreText;
+  const secondaryCtaLink = settings.secondaryCtaLink || "#featured";
+  const mediaUrl = settings.heroMediaUrl || "/hero-fashion.mp4";
+  const showImage = settings.heroMediaType === "image" && Boolean(settings.heroMediaUrl);
   const freeShippingText = language === "bn" ? "ফ্রি সারা দেশে শিপিং" : "Free nationwide shipping";
   const easyReturnsText = language === "bn" ? "সহজ রিটার্নস" : "30-day easy returns";
   const scrollText = language === "bn" ? "স্ক্রল করুন" : "Scroll";
@@ -71,29 +68,78 @@ export function HeroSection() {
       id="hero"
       className="relative flex min-h-screen items-center overflow-hidden"
     >
-      {/* Ambient depth — keeps the hero premium even before WebGL paints. */}
       <div
         aria-hidden
-        className="absolute inset-0 bg-[radial-gradient(120%_90%_at_75%_35%,rgba(212,175,55,0.16)_0%,rgba(212,175,55,0.04)_35%,transparent_65%)]"
+        className="absolute inset-0 z-0 bg-gradient-to-b from-[#0A3622]/70 via-[#050816] to-[#050816]"
+      />
+      {showImage ? (
+        <Image
+          src={mediaUrl}
+          alt=""
+          fill
+          priority
+          unoptimized
+          sizes="100vw"
+          aria-hidden="true"
+          className="absolute inset-0 z-0 object-cover opacity-75"
+        />
+      ) : (
+        <video
+          src={mediaUrl}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          aria-hidden="true"
+          className="absolute inset-0 z-0 h-full w-full object-cover opacity-75"
+        />
+      )}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-r from-[#050816]/80 via-[#050816]/40 to-transparent"
       />
       <div
         aria-hidden
-        className="absolute inset-0 bg-[radial-gradient(70%_60%_at_15%_80%,rgba(0,240,255,0.07)_0%,transparent_60%)]"
+        className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-[#050816] via-transparent to-[#050816]/30"
       />
-
-      {/* 3D layer — absolute, behind the copy, never intercepts the pointer. */}
-      <div className="absolute inset-0 z-0">
-        <HeroScene />
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-[-15%] z-[1] bg-[radial-gradient(ellipse_at_25%_32%,rgba(10,54,34,0.55),transparent_48%),radial-gradient(ellipse_at_74%_42%,rgba(212,175,55,0.2),transparent_34%)]"
+        animate={
+          reducedMotion
+            ? undefined
+            : { scale: [1, 1.08, 1], opacity: [0.75, 1, 0.75] }
+        }
+        transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[2] overflow-hidden"
+      >
+        {[
+          { left: "18%", top: "28%", delay: 0 },
+          { left: "32%", top: "72%", delay: 1.1 },
+          { left: "58%", top: "20%", delay: 2.2 },
+          { left: "76%", top: "62%", delay: 0.6 },
+          { left: "88%", top: "36%", delay: 1.7 },
+        ].map((particle) => (
+          <motion.span
+            key={`${particle.left}-${particle.top}`}
+            className="absolute size-1 rounded-full bg-[#D4AF37] shadow-[0_0_12px_3px_rgba(212,175,55,0.55)]"
+            style={{ left: particle.left, top: particle.top }}
+            animate={{ y: [0, -18, 0], opacity: [0.3, 0.9, 0.3] }}
+            transition={{
+              duration: 4,
+              delay: particle.delay,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+        ))}
       </div>
 
-      {/* Legibility scrim: vertical on phones (copy sits under the form),
-          horizontal from the left on desktop (copy owns the left column). */}
-      <div
-        aria-hidden
-        className="absolute inset-0 z-[1] bg-gradient-to-b from-background/85 via-background/60 to-background lg:bg-gradient-to-r lg:from-background lg:via-background/55 lg:to-transparent"
-      />
-
-      <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-28 sm:px-6 lg:px-8">
+      <div className="relative z-20 mx-auto w-full max-w-7xl px-4 py-28 sm:px-6 lg:px-8">
         <motion.div
           variants={container}
           initial="hidden"
@@ -114,7 +160,7 @@ export function HeroSection() {
           {/* Headline */}
           <motion.h1
             variants={item}
-            className="mt-6 text-6xl font-bold tracking-tight text-white md:text-8xl"
+            className="notranslate mt-6 text-6xl font-bold tracking-tight text-white md:text-8xl"
           >
             {titleText}
           </motion.h1>
@@ -137,8 +183,8 @@ export function HeroSection() {
               size="lg"
               className="group h-12 bg-primary px-8 text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:bg-primary hover:shadow-[0_0_40px_-6px_rgba(212,175,55,0.85)]"
             >
-              <Link href="/shop">
-                {shopNowText}
+              <Link href={primaryCtaLink}>
+                {primaryCtaText}
                 <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
             </Button>
@@ -149,9 +195,7 @@ export function HeroSection() {
               variant="outline"
               className="h-12 border-glass-border bg-glass px-8 text-sm font-semibold tracking-[0.16em] text-white uppercase backdrop-blur-md transition-all duration-500 ease-[var(--ease-luxe)] hover:border-primary/60 hover:bg-white/10 hover:text-white"
             >
-              <button type="button" onClick={scrollToFeatured}>
-                {exploreText}
-              </button>
+              <Link href={secondaryCtaLink}>{secondaryCtaText}</Link>
             </Button>
           </motion.div>
 

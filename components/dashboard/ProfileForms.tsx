@@ -292,7 +292,7 @@ export function PreferencesCard() {
   return (
     <Panel
       title="Preferences"
-      description="Choose how Little Luxe keeps in touch."
+      description="Choose how Mukra keeps in touch."
       icon={<span aria-hidden>🔔</span>}
     >
       <ul className="flex flex-col divide-y divide-glass-border">

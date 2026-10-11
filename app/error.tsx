@@ -19,7 +19,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     // Surfaces in the browser console; wire to Sentry/Logflare in production.
-    console.error("[little-luxe] route error:", error);
+    console.error("[mukra] route error:", error);
   }, [error]);
 
   return (

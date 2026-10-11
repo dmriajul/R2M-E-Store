@@ -4,9 +4,9 @@ import { LEGAL_CONTENT, LEGAL_DOCS, LEGAL_UPDATED } from "@/lib/legal-content";
 import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: { absolute: "Shipping Information | LITTLE LUXE" },
+  title: { absolute: "Shipping Information | MUKRA" },
   description:
-    "LITTLE LUXE delivery across all 64 districts of Bangladesh: free over ৳500, flat ৳60 otherwise, 1–2 working days inside Dhaka and 3–5 days everywhere else.",
+    "MUKRA delivery across all 64 districts of Bangladesh: free over ৳500, flat ৳60 otherwise, 1–2 working days inside Dhaka and 3–5 days everywhere else.",
   keywords: [
     "kids clothes delivery",
     "shipping charges Bangladesh",
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     "order tracking",
   ],
   openGraph: {
-    title: "Shipping Information | LITTLE LUXE",
+    title: "Shipping Information | MUKRA",
     description: "Free delivery over ৳500 — 1–2 days in Dhaka, 3–5 days across Bangladesh.",
     type: "website",
     url: `${SITE.url}/shipping`,

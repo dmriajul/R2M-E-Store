@@ -6,10 +6,10 @@ import { OrdersExplorer } from "@/components/dashboard/OrdersExplorer";
 export default function DashboardOrdersPage() {
   return (
     <>
-      <title>My Orders | LITTLE LUXE</title>
+      <title>My Orders | MUKRA</title>
       <meta
         name="description"
-        content="Every Little Luxe order — track parcels, reorder favourites and start a return."
+        content="Every Mukra order — track parcels, reorder favourites and start a return."
       />
       <meta name="robots" content="noindex" />
 

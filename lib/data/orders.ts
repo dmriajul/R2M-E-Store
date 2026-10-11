@@ -38,7 +38,13 @@ function lineToCartItem(line: CreateOrderInput["items"][number], index: number):
     ageRange: product?.ageRange ?? "3-8Y",
     imageGradient: CATEGORY_META[category].gradient,
     emoji: CATEGORY_META[category].emoji,
-    stock: product?.stock ?? 0,
+    stock: product
+      ? product.variants
+        ? (product.variants.find(
+            (variant) => variant.color === line.color && variant.size === line.size,
+          )?.stock ?? 0)
+        : product.stock
+      : 0,
     addedAt: new Date().toISOString(),
   };
 }
@@ -174,7 +180,7 @@ export async function listOrdersForEmail(
       const rows = (await db.order.findMany({
         where: { shippingEmail: email },
         orderBy: { createdAt: "desc" },
-        include: { items: true },
+        include: { items: { include: { product: { select: { sizes: true, colors: true } } } } },
       })) as unknown as Array<Record<string, unknown>>;
 
       return rows.map((row) => hydrate(row));
@@ -190,7 +196,7 @@ export async function findOrderByNumber(orderNumber: string): Promise<OrderRecor
     async (db) => {
       const row = (await db.order.findFirst({
         where: { orderNumber },
-        include: { items: true },
+        include: { items: { include: { product: { select: { sizes: true, colors: true } } } } },
       })) as unknown as Record<string, unknown> | null;
       return row ? hydrate(row) : null;
     },
@@ -273,12 +279,19 @@ function hydrate(row: Record<string, unknown>): OrderRecord {
     giftWrap: Number(row.giftWrap),
     total: Number(row.total),
     items: items.map((line) => ({
+      id: typeof line.id === "string" ? line.id : undefined,
       productId: String(line.productId),
       name: String(line.name),
       color: String(line.color),
       size: String(line.size),
       quantity: Number(line.quantity),
       price: Number(line.price),
+      availableSizes: Array.isArray((line.product as Record<string, unknown> | undefined)?.sizes)
+        ? (line.product as Record<string, unknown>).sizes as string[]
+        : undefined,
+      availableColors: Array.isArray((line.product as Record<string, unknown> | undefined)?.colors)
+        ? (line.product as Record<string, unknown>).colors as string[]
+        : undefined,
     })),
     customerName: String(row.shippingName),
     email: String(row.shippingEmail),

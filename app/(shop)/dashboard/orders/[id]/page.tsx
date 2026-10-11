@@ -1,21 +1,53 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
 import { getOrderById } from "@/lib/mock-dashboard";
 import { OrderDetailView } from "@/components/dashboard/OrderDetailView";
 import { Button } from "@/components/ui/button";
+import { toDashboardOrder } from "@/lib/dashboard-orders";
+import type { ApiResponse, DashboardOrder, OrderRecord } from "@/types";
 
 export default function DashboardOrderDetailPage() {
   const params = useParams<{ id: string }>();
   const id = typeof params.id === "string" ? params.id : "";
-  const order = getOrderById(id);
+  const [order, setOrder] = useState<DashboardOrder | undefined>(() => getOrderById(id));
+  const [loading, setLoading] = useState(!order);
+
+  useEffect(() => {
+    let active = true;
+    const demoOrder = getOrderById(id);
+    setOrder(demoOrder);
+    setLoading(!demoOrder);
+    fetch("/api/orders", { cache: "no-store" })
+      .then(async (response) => {
+        const result = (await response.json()) as ApiResponse<OrderRecord[]>;
+        if (!response.ok || !result.success || !result.data) {
+          throw new Error(result.error ?? "Could not load this order");
+        }
+        const record = result.data.find((entry) => entry.id === id || entry.orderNumber === id);
+        if (active && record) setOrder(toDashboardOrder(record));
+        if (active) setLoading(false);
+      })
+      .catch((error: unknown) => {
+        console.warn("[dashboard] Could not load order details", error);
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  if (loading) {
+    return <div className="glass-soft rounded-3xl border border-glass-border p-8 text-center text-sm text-muted-foreground">Loading order details…</div>;
+  }
 
   if (!order) {
     return (
       <>
-        <title>Order not found | LITTLE LUXE</title>
+        <title>Order not found | MUKRA</title>
         <meta name="robots" content="noindex" />
 
         <div className="glass-soft flex flex-col items-center gap-4 rounded-3xl border border-glass-border px-6 py-16 text-center">
@@ -42,8 +74,8 @@ export default function DashboardOrderDetailPage() {
 
   return (
     <>
-      <title>{`Order ${order.number} | LITTLE LUXE`}</title>
-      <meta name="description" content={`Track and review your Little Luxe order ${order.number}.`} />
+      <title>{`Order ${order.number} | MUKRA`}</title>
+      <meta name="description" content={`Track and review your Mukra order ${order.number}.`} />
       <meta name="robots" content="noindex" />
 
       <OrderDetailView order={order} />

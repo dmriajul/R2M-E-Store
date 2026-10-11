@@ -80,6 +80,7 @@ export const useCartStore = create<CartState>()(
 
     const color = variant.color ?? product.colors[0] ?? "Default";
     const size = variant.size ?? product.sizes[0] ?? "One Size";
+    const stock = variant.stock ?? product.stock;
     const lineId = buildLineId(product.id, color, size);
 
     const { items, total: previousTotal } = get();
@@ -92,13 +93,13 @@ export const useCartStore = create<CartState>()(
       id: product.id,
       name: product.name,
       price: product.price,
-      quantity: clampQuantity(quantity, product.stock),
+      quantity: clampQuantity(quantity, stock),
       color,
       size,
       ageRange: product.ageRange,
       imageGradient: CATEGORY_META[product.category].gradient,
       emoji: CATEGORY_META[product.category].emoji,
-      stock: product.stock,
+      stock,
       addedAt: new Date().toISOString(),
     };
 

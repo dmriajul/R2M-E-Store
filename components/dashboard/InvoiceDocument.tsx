@@ -1,4 +1,5 @@
 import { formatPrice, formatShortDate } from "@/lib/utils";
+import { MukraLogo } from "@/components/brand/MukraLogo";
 import { ORDER_STATUS_META } from "@/lib/mock-dashboard";
 import type { DashboardOrder } from "@/types";
 
@@ -16,7 +17,7 @@ export function InvoiceDocument({ order }: { order: DashboardOrder }) {
     <article id="print-invoice" className="hidden bg-white text-black print:block">
       <header className="flex items-start justify-between gap-6 border-b border-black/15 pb-4">
         <div>
-          <p className="text-lg font-bold tracking-[0.34em]">LITTLE LUXE</p>
+          <MukraLogo variant="wordmark" size="md" priority tone="dark" />
           <p className="mt-1 text-xs text-black/60">Adorable styles for your little ones</p>
         </div>
         <div className="text-right text-xs">
@@ -106,9 +107,9 @@ export function InvoiceDocument({ order }: { order: DashboardOrder }) {
       </section>
 
       <footer className="mt-8 border-t border-black/15 pt-4 text-xs text-black/70">
-        <p>Thank you for shopping at Little Luxe! 🧸</p>
+        <p>Thank you for shopping at Mukra! 🧸</p>
         <p className="mt-1">
-          Questions? Reply to your confirmation email or write to hello@littleluxe.example.com —
+          Questions? Reply to your confirmation email or write to hello@mukra.com —
           we answer within 24 hours.
         </p>
       </footer>

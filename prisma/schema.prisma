@@ -57,6 +57,19 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum ReturnStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RECEIVED
+  COMPLETED
+}
+
+enum ReturnType {
+  REFUND
+  EXCHANGE
+}
+
 enum CouponType {
   PERCENTAGE
   FIXED
@@ -77,6 +90,7 @@ model User {
   avatar    String?
   addresses Address[]
   orders    Order[]
+  returnRequests ReturnRequest[]
   wishlist  WishlistItem[]
   reviews   Review[]
   createdAt DateTime @default(now())
@@ -89,21 +103,33 @@ model Product {
   id                String         @id @default(cuid())
   name              String
   slug              String         @unique
+  sku               String?        @unique
   description       String
   price             Float
+  costPrice         Float          @default(0)
   originalPrice     Float?
   category          String
+  categories        String[]       @default([])
   gender            String
   ageRange          String
   material          String?
   colors            String[] // colour names
   sizes             String[]
   images            String[] // Cloudinary URLs
-  modelColor        String?
+  modelColor        String?        // Legacy column retained for existing database compatibility.
   stock             Int            @default(0)
+  variants          ProductVariant[]
   lowStockThreshold Int            @default(10)
   badge             String? // New | Sale | Bestseller | Organic
   featured          Boolean        @default(false)
+  featuredOrder     Int            @default(0)
+  virtualBoutique   Boolean        @default(false)
+  newArrival        Boolean        @default(false)
+  bestSeller        Boolean        @default(false)
+  trackInventory    Boolean        @default(true)
+  modelUrl          String?        // Legacy column retained for existing database compatibility.
+  metaTitle         String?
+  metaDescription   String?
   active            Boolean        @default(true)
   orderItems        OrderItem[]
   wishlistItems     WishlistItem[]
@@ -112,7 +138,23 @@ model Product {
   updatedAt         DateTime       @updatedAt
 
   @@index([category])
-  @@index([featured, active])
+  @@index([featured, featuredOrder, active])
+  @@index([virtualBoutique, active])
+  @@index([newArrival, active])
+  @@index([bestSeller, active])
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size      String
+  color     String
+  stock     Int     @default(0)
+  sku       String?
+
+  @@unique([productId, size, color])
+  @@index([productId])
 }
 
 model Order {
@@ -121,6 +163,7 @@ model Order {
   userId            String
   user              User          @relation(fields: [userId], references: [id])
   items             OrderItem[]
+  returnRequests    ReturnRequest[]
   subtotal          Float
   shipping          Float         @default(0)
   discount          Float         @default(0)
@@ -158,8 +201,33 @@ model OrderItem {
   size      String
   quantity  Int
   price     Float
+  returnRequests ReturnRequest[]
 
   @@index([orderId])
+}
+
+model ReturnRequest {
+  id             String       @id @default(cuid())
+  orderId        String
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderItemId    String
+  orderItem      OrderItem    @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  type           ReturnType
+  reason         String
+  details        String?
+  requestedSize  String?
+  requestedColor String?
+  images         String[]
+  status         ReturnStatus @default(PENDING)
+  adminNote      String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([orderId])
+  @@index([userId, status])
+  @@index([status, createdAt])
 }
 
 model Address {
@@ -219,4 +287,17 @@ model Coupon {
   endDate     DateTime?
   active      Boolean    @default(true)
   createdAt   DateTime   @default(now())
+}
+
+model SiteSettings {
+  id                String  @id @default("global")
+  heroTitle         String?
+  heroSubtitle      String?
+  heroBadgeText     String?
+  heroMediaUrl      String?
+  heroMediaType     String  @default("video")
+  primaryCtaText    String?
+  primaryCtaLink    String?
+  secondaryCtaText  String?
+  secondaryCtaLink  String?
 }

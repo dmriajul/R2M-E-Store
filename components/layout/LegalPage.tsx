@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, ChevronDown, Languages, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
+import { useLanguageStore } from "@/store/useLanguageStore";
 import type { LegalContent, LegalLang } from "@/lib/legal-content";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -48,13 +49,13 @@ interface LegalPageProps {
 /**
  * Shared shell for every legal/help page.
  *
- * The language toggle is pure `useState` — switching EN ⇄ বাংলা swaps the copy
- * instantly, with no navigation and no refetch. Sections collapse with
- * framer-motion; when printing, every section is forced open (and the controls
- * disappear) so the paper copy is complete.
+ * Language selection is shared with the storefront through the language store.
+ * Sections collapse with framer-motion; when printing, every section is forced
+ * open (and the controls disappear) so the paper copy is complete.
  */
 export function LegalPage({ content, title, lastUpdated }: LegalPageProps) {
-  const [lang, setLang] = useState<LegalLang>("en");
+  const lang = useLanguageStore((state) => state.language);
+  const setLanguage = useLanguageStore((state) => state.setLanguage);
   const doc = content[lang];
   const copy = CHROME[lang];
   const reducedMotion = usePrefersReducedMotion();
@@ -98,7 +99,7 @@ export function LegalPage({ content, title, lastUpdated }: LegalPageProps) {
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => setLang(option.value)}
+                  onClick={() => setLanguage(option.value)}
                   aria-pressed={active}
                   lang={option.value}
                   className={cn(

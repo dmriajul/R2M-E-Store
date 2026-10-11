@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShoppingBag } from "lucide-react";
@@ -15,20 +15,47 @@ import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { OrderCard } from "@/components/dashboard/OrderCard";
 import { Button } from "@/components/ui/button";
 import type { OrderStatus } from "@/types";
+import type { ApiResponse, OrderRecord } from "@/types";
+import { toDashboardOrder } from "@/lib/dashboard-orders";
 
 const EASE_LUXE = [0.22, 1, 0.36, 1] as const;
 
 /** Status tabs with the gold underline, and the list of matching orders. */
 export function OrdersExplorer() {
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
+  const [liveOrders, setLiveOrders] = useState<OrderRecord[] | null>(null);
   const reducedMotion = usePrefersReducedMotion();
 
+  useEffect(() => {
+    let active = true;
+    fetch("/api/orders", { cache: "no-store" })
+      .then(async (response) => {
+        const result = (await response.json()) as ApiResponse<OrderRecord[]>;
+        if (!response.ok || !result.success || !result.data) {
+          throw new Error(result.error ?? "Could not load orders");
+        }
+        if (active && result.source === "database") setLiveOrders(result.data);
+      })
+      .catch((error: unknown) => {
+        console.warn("[dashboard] Showing demo orders because live orders could not be loaded", error);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const allOrders = useMemo(
+    () => liveOrders === null ? [...MOCK_ORDERS] : liveOrders.map(toDashboardOrder),
+    [liveOrders],
+  );
   const orders = useMemo(
-    () => (filter === "all" ? [...MOCK_ORDERS] : MOCK_ORDERS.filter((o) => o.status === filter)),
-    [filter],
+    () => (filter === "all" ? allOrders : allOrders.filter((o) => o.status === filter)),
+    [allOrders, filter],
   );
 
-  const activeCount = getActiveOrderCount();
+  const activeCount = liveOrders === null
+    ? getActiveOrderCount()
+    : allOrders.filter((order) => order.status === "processing" || order.status === "shipped").length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,7 +69,11 @@ export function OrdersExplorer() {
           {ORDER_FILTERS.map((tab) => {
             const active = filter === tab.value;
             const count =
-              tab.value === "all" ? MOCK_ORDERS.length : countOrdersByStatus(tab.value);
+              tab.value === "all"
+                ? allOrders.length
+                : liveOrders === null
+                  ? countOrdersByStatus(tab.value)
+                  : allOrders.filter((order) => order.status === tab.value).length;
 
             return (
               <button
@@ -79,7 +110,7 @@ export function OrdersExplorer() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {MOCK_ORDERS.length} orders · {activeCount} on the way 🚚
+        {allOrders.length} orders · {activeCount} on the way 🚚
       </p>
 
       {/* ---------- List ---------- */}

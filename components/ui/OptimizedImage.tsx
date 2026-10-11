@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +29,7 @@ interface OptimizedImageProps {
   fallbackEmoji?: string;
   priority?: boolean;
   sizes?: string;
+  objectFit?: "cover" | "contain";
   onError?: () => void;
   fallback?: React.ReactNode;
 }
@@ -49,42 +50,20 @@ export function OptimizedImage({
   fallbackEmoji,
   priority = false,
   sizes = "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw",
+  objectFit = "cover",
   onError,
   fallback,
 }: OptimizedImageProps) {
-  const [hasError, setHasError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const imgRef = useRef<HTMLImageElement>(null);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
 
   const presetConfig = IMAGE_PRESETS[preset];
   const placeholderWidth = presetConfig.width;
   const placeholderHeight = presetConfig.height;
 
   const cloudinaryUrl = src ? buildCloudinaryUrl(src, preset) : null;
-
-  // Handle image load errors
-  useEffect(() => {
-    const img = imgRef.current;
-    if (!img) return;
-
-    const handleError = () => {
-      setHasError(true);
-      setIsLoading(false);
-      onError?.();
-    };
-
-    const handleLoad = () => {
-      setIsLoading(false);
-    };
-
-    img.addEventListener("error", handleError);
-    img.addEventListener("load", handleLoad);
-
-    return () => {
-      img.removeEventListener("error", handleError);
-      img.removeEventListener("load", handleLoad);
-    };
-  }, [onError]);
+  const hasError = Boolean(src && failedSrc === src);
+  const isLoading = Boolean(src && loadedSrc !== src);
 
   const fallbackClass = cn(
     "relative overflow-hidden rounded-lg bg-gradient-to-br",
@@ -129,18 +108,25 @@ export function OptimizedImage({
       )}
 
       <Image
-        ref={imgRef}
         src={cloudinaryUrl ?? src}
         alt={alt}
         width={width ?? placeholderWidth}
         height={height ?? placeholderHeight}
         className={cn(
-          "object-cover transition-opacity duration-300",
+          "h-full w-full transition-opacity duration-300",
+          objectFit === "contain" ? "object-contain" : "object-cover",
           isLoading ? "opacity-0" : "opacity-100",
         )}
         priority={priority}
         sizes={sizes}
         loading={priority ? "eager" : "lazy"}
+        onLoad={() => setLoadedSrc(src)}
+        onError={() => {
+          if (!src) return;
+          setFailedSrc(src);
+          setLoadedSrc(src);
+          onError?.();
+        }}
       />
     </div>
   );

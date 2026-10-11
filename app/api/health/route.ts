@@ -25,7 +25,7 @@ export function GET() {
   const payload: ApiResponse<HealthPayload> = {
     data: {
       status: "ok",
-      service: "luxe-storefront",
+      service: "mukra-storefront",
       checkedAt: new Date().toISOString(),
       mode: integrations.demoMode ? "demo" : "live",
       integrations,

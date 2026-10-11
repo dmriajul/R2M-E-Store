@@ -3,7 +3,18 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Eye, Mail, MapPin, Printer, Receipt, Send, Wallet, X, XCircle } from "lucide-react";
+import {
+  Check,
+  Eye,
+  LoaderCircle,
+  MapPin,
+  Printer,
+  Receipt,
+  Send,
+  Wallet,
+  X,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatPrice, formatStamp } from "@/lib/utils";
 import { ADMIN_ORDER_STATUS_LABEL, ADMIN_STATUSES } from "@/lib/mock-admin";
@@ -17,6 +28,7 @@ import {
 } from "@/components/ui/sheet";
 import { OrderStatusBadge } from "@/components/admin/StatusBadge";
 import { PaymentStatusBadge } from "@/components/admin/PaymentStatusBadge";
+import { AdminOrderInvoice } from "@/components/admin/AdminOrderInvoice";
 import { ConfirmActionDialog } from "@/components/admin/ConfirmActionDialog";
 import {
   AdminField,
@@ -63,6 +75,7 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
     null,
   );
   const [showScreenshot, setShowScreenshot] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   useEffect(() => {
     if (order) {
@@ -136,6 +149,42 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
     addOrderNote(order.id, trimmed);
     setNote("");
     toast.success("Note added 📝");
+  };
+
+  const handlePrintInvoice = () => {
+    const cleanup = () => document.body.classList.remove("printing-invoice");
+    document.body.classList.add("printing-invoice");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+  };
+
+  const handleResendReceipt = async () => {
+    if (!order || isResending) return;
+    setIsResending(true);
+
+    try {
+      const response = await fetch(
+        `/api/admin/orders/${encodeURIComponent(order.number.replace(/^#/, ""))}/resend-receipt`,
+        { method: "POST" },
+      );
+      const result = (await response.json()) as {
+        data?: { email?: string };
+        error?: string | null;
+        success?: boolean;
+      };
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Could not resend the receipt.");
+      }
+
+      toast.success(`Receipt sent to ${result.data?.email ?? order.customer.email}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not resend the receipt.",
+      );
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
@@ -500,11 +549,7 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
                   <section className="flex flex-wrap items-center gap-2 rounded-xl border border-[#242424] bg-[#101010] p-4">
                     <button
                       type="button"
-                      onClick={() =>
-                        toast.info("Invoice opened 🧾", {
-                          description: "Use your browser's print dialog to save a PDF.",
-                        })
-                      }
+                      onClick={handlePrintInvoice}
                       className={cn(adminButtonGhost, "min-h-10")}
                     >
                       <Printer aria-hidden className="size-3.5" />
@@ -512,14 +557,15 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        toast.success("Receipt emailed 📧", {
-                          description: `${order.number} sent to ${order.customer.email}.`,
-                        })
-                      }
+                      onClick={handleResendReceipt}
+                      disabled={isResending}
                       className={cn(adminButtonGhost, "min-h-10")}
                     >
-                      <Receipt aria-hidden className="size-3.5" />
+                      {isResending ? (
+                        <LoaderCircle aria-hidden className="size-3.5 animate-spin" />
+                      ) : (
+                        <Receipt aria-hidden className="size-3.5" />
+                      )}
                       Resend Receipt
                     </button>
                     <button
@@ -535,17 +581,13 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
                     </button>
                   </section>
 
-                  <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <Mail aria-hidden className="size-3" />
-                    Customer emails are mocked — nothing leaves the browser.
-                  </p>
                 </div>
               </div>
             </>
           )}
         </SheetContent>
       </Sheet>
-
+      {order && <AdminOrderInvoice order={order} />}
       <ConfirmActionDialog
         open={confirmStatus}
         onOpenChange={setConfirmStatus}

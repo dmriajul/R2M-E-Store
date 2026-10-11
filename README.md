@@ -1,4 +1,4 @@
-# Little Luxe 👶✨
+# Mukra 👶✨
 
 **Premium Kids Fashion E-commerce** — a dark-luxury storefront for ages 0–14,
 built for Bangladesh: taka-aware shipping copy, cash on delivery, bKash / Nagad /
@@ -16,9 +16,9 @@ Rocket wallet payments, and a bilingual (English + বাংলা) help centre.
 
 ## Features
 
-- 🎨 **Dark luxury theme with a 3D product viewer** — gold-on-charcoal design
-  system, WebGL hero (React Three Fiber) and a per-product 3D viewer that
-  degrades to gradient artwork when WebGL is unavailable.
+- 🎨 **Dark luxury theme with high-resolution product photography** — gold-on-
+  charcoal design system, touch-friendly image galleries and zoomable product
+  details with graceful artwork fallbacks.
 - 🛍️ **Full e-commerce flow** — shop with URL-driven filters, quick view,
   product detail, cart, multi-step checkout, order confirmation and tracking.
 - 💳 **COD + bKash + Nagad + Rocket** — manual wallet payments with screenshot
@@ -31,7 +31,7 @@ Rocket wallet payments, and a bilingual (English + বাংলা) help centre.
   categories, with a payment-verification queue and printable invoices.
 - 📊 **Analytics dashboard** — KPI cards with sparklines, a CSS-only revenue
   chart, bestsellers, low-stock alerts and traffic breakdowns.
-- ⚡ **Next.js 15 + a 95+ Lighthouse target** — lazy 3D chunks, `next/font`
+- ⚡ **Next.js 15 + a 95+ Lighthouse target** — route-level code splitting, `next/font`
   self-hosted Inter, AVIF/WebP images, route-level code splitting and immutable
   cache headers for static assets.
 - 🗄️ **Supabase + Prisma with a demo mode included** — every integration is
@@ -48,12 +48,11 @@ Rocket wallet payments, and a bilingual (English + বাংলা) help centre.
 | Styling | Tailwind CSS v4, `tw-animate-css`, CSS custom-property design tokens |
 | UI primitives | shadcn/ui (new-york-v4) on the unified `radix-ui` package |
 | Animation | Framer Motion (page fades, accordions, drawers, confetti) |
-| 3D | three.js + `@react-three/fiber` + `@react-three/drei` (lazy, `ssr: false`) |
 | Forms | React Hook Form + Zod (shared schemas, inline errors) |
 | State | Zustand (`useCartStore` with `persist`, wishlist, checkout, admin, dashboard) |
 | Auth | Auth.js / NextAuth v5 (credentials, JWT, bcryptjs) |
 | Database | PostgreSQL via Supabase + Prisma ORM (8 models, 5 enums) |
-| Uploads | Cloudinary (images + `.glb`), local-disk fallback |
+| Uploads | Cloudinary (product images), local-disk fallback |
 | Toasts | Sonner (typed icons and colours) |
 | Icons | lucide-react |
 | Fonts | `next/font/local` — Inter variable, latin subset, `display: swap` |
@@ -63,8 +62,8 @@ Rocket wallet payments, and a bilingual (English + বাংলা) help centre.
 ## Quick Start
 
 ```bash
-git clone https://github.com/<you>/little-luxe.git
-cd little-luxe
+git clone https://github.com/<you>/mukra.git
+cd mukra
 
 npm install
 npm run dev            # http://localhost:3000
@@ -85,7 +84,7 @@ npm run db:studio      # browse the database
 ```
 
 **Demo credentials** — shopper: any email + `password123`; admin:
-`admin@littleluxe.com` / `admin123`.
+`admin@mukra.com` / `admin123`.
 
 ---
 
@@ -95,7 +94,7 @@ Every value is optional; each integration switches on independently.
 
 | Variable | Required | Default | What it does |
 | --- | --- | --- | --- |
-| `NEXT_PUBLIC_SITE_URL` | Production | `https://littleluxe.com` | Canonical origin for metadata, sitemap, robots, OG images |
+| `NEXT_PUBLIC_SITE_URL` | Production | `https://mukra.com` | Canonical origin for metadata, sitemap, robots, OG images |
 | `DATABASE_URL` | for real data | — | Supabase **pooled** Postgres URI (`?pgbouncer=true`) |
 | `DIRECT_URL` | for migrations | — | Supabase direct URI used by `prisma db push` |
 | `NEXTAUTH_SECRET` | Production | demo secret | JWT signing key — `openssl rand -base64 32` |
@@ -109,10 +108,13 @@ Every value is optional; each integration switches on independently.
 | `NEXT_PUBLIC_ENABLE_SSLCOMMERZ` | no | `false` | Shows the card option ("Coming soon" while false) |
 | `SSLCOMMERZ_STORE_ID` / `SSLCOMMERZ_STORE_PASSWORD` | no | — | Gateway credentials once cards go live |
 | `SSLCOMMERZ_SANDBOX` | no | `true` | Sandbox vs live SSLCommerz |
-| `NEXT_PUBLIC_STORE_NAME` | no | `Little Luxe` | Brand name used in copy |
+| `MAILJET_API_KEY` | for admin receipt emails | — | Mailjet API key used by the authenticated resend-receipt endpoint |
+| `MAILJET_SECRET_KEY` | for admin receipt emails | — | Mailjet secret key |
+| `MAILJET_SENDER_EMAIL` | for admin receipt emails | — | Verified sender email address configured in Mailjet |
+| `NEXT_PUBLIC_STORE_NAME` | no | `Mukra` | Brand name used in copy |
 | `NEXT_PUBLIC_CURRENCY` | no | `USD` | `USD` \| `EUR` \| `GBP` \| `BDT` |
 | `NEXT_PUBLIC_FREE_SHIPPING_THRESHOLD` | no | `50` | Order value that unlocks free delivery |
-| `STORE_SUPPORT_EMAIL` | no | `hello@littleluxe.com` | Support address in emails/legal pages |
+| `STORE_SUPPORT_EMAIL` | no | `hello@mukra.com` | Support address in emails/legal pages |
 
 Templates: [`.env.example`](./.env.example) (local) and
 [`.env.production.example`](./.env.production.example) (Vercel).
@@ -130,7 +132,7 @@ environment variables are present:
 | Auth | Any email + `password123`, `demo-<local>` user id | Supabase users, bcrypt hashes, JWT sessions |
 | Orders | In-memory records, `POST /api/orders` still re-prices the cart | Persisted `Order` + `OrderItem` rows |
 | Admin console | Client store seeded from `lib/mock-admin.ts` | Same UI, backed by the API |
-| Uploads | Written to `.uploads/` and served via `/uploads/…` | Cloudinary (`little-luxe/products`, `little-luxe/models`) |
+| Uploads | Written to `.uploads/` and served via `/uploads/…` | Cloudinary (`mukra/products`, `mukra/models`) |
 | Payments | Wallet numbers + manual verification, cards disabled | Same, plus SSLCommerz when enabled |
 | Images | CSS gradients + emoji per category | Cloudinary URLs through `OptimizedImage` |
 
@@ -141,6 +143,23 @@ exactly which integrations are live:
 ```json
 { "status": "ok", "mode": "demo", "database": "mock", "cloudinary": "local-disk", "sslcommerz": "disabled" }
 ```
+
+## Product display placement
+
+Admins can manage Virtual Boutique, Homepage Featured, New Arrivals and
+Best Sellers placement from **Admin → Products → Display & Visibility**. The
+existing `category` remains the primary category; additional assignments use
+the same fixed category names and are stored in `Product.categories`. Legacy
+rows with no additional assignments continue to use their primary category.
+Publication continues to use `Product.active`, and featured ordering uses
+`featuredOrder` (lower values appear first, with newest-first tie breaking).
+
+These settings persist across sessions when the Prisma database is enabled.
+Demo mode keeps the existing in-memory admin catalogue and is not a durable
+storage option. This repository uses `npm run db:push` rather than checked-in
+Prisma migration files. The additive schema changes have not been applied to a
+database; apply `npm run db:push` only through the approved database-change
+process, and do not point it at production without explicit approval.
 
 ---
 
@@ -228,10 +247,8 @@ screenshot, and tick "I've completed the payment". The team verifies within
 
 ## Performance, SEO & Accessibility
 
-- **Bundle discipline** — three.js/postprocessing only ever load inside the two
-  `next/dynamic({ ssr: false })` viewers; the shop, checkout and admin routes are
-  separate chunks; `experimental.optimizePackageImports` trims the icon and R3F
-  barrels.
+- **Bundle discipline** — the shop, checkout and admin routes are separate
+  chunks; `experimental.optimizePackageImports` trims icon and animation imports.
 - **Images** — every product image renders through `OptimizedImage` (a
   `next/image` wrapper) with a preset-aware loader, responsive `srcSet`, a
   blurred 24px placeholder, a golden shimmer while loading and a gradient
@@ -245,7 +262,7 @@ screenshot, and tick "I've completed the payment". The team verifies within
 - **Accessibility** — a Skip-to-content link, `#main-content` landmark, 2px gold
   focus outlines, ARIA labels on every icon-only control, `aria-describedby`
   error wiring, `aria-live` cart announcements, alt text on product imagery and
-  a 3D canvas label that explains how to interact with it.
+  keyboard-accessible image zoom controls.
 - **PWA** — `public/manifest.json`, 192/512/maskable PNGs plus an SVG icon,
   `theme-color: #D4AF37`, and Apple web-app metadata. Installable today; a
   service worker is a documented opt-in in DEPLOYMENT.md.

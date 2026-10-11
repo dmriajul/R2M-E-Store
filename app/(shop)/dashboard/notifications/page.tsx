@@ -13,10 +13,10 @@ export default function DashboardNotificationsPage() {
 
   return (
     <>
-      <title>Notifications | LITTLE LUXE</title>
+      <title>Notifications | MUKRA</title>
       <meta
         name="description"
-        content="Order updates, sale alerts and birthday reminders from Little Luxe."
+        content="Order updates, sale alerts and birthday reminders from Mukra."
       />
       <meta name="robots" content="noindex" />
 

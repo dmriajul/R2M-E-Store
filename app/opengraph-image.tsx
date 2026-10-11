@@ -9,7 +9,7 @@ import { ImageResponse } from "next/og";
  * Noto Sans subset, which has no emoji or Bengali coverage, and a tofu box on
  * every share is worse than plain words.
  */
-export const alt = "Little Luxe — Premium Kids Fashion";
+export const alt = "Mukra — Premium Kids Fashion";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -94,10 +94,10 @@ export default function OpengraphImage() {
                 letterSpacing: 10,
               }}
             >
-              LITTLE LUXE
+              MUKRA
             </div>
             <div style={{ color: "#A1A1AA", fontSize: 20, letterSpacing: 2 }}>
-              littleluxe.com
+              mukra.com
             </div>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function OpengraphImage() {
           }}
         >
           <div style={{ color: "#A1A1AA", fontSize: 22 }}>
-            Dresses · Tops · Bottoms · Shoes · Outerwear · Accessories
+            Jackets & Coats · Hoodies · Knits · Winter Sets · Tops · Accessories
           </div>
           <div style={{ color: "#D4AF37", fontSize: 22 }}>Made for small ones</div>
         </div>

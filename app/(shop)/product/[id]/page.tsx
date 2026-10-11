@@ -6,17 +6,17 @@ import { cn, formatPrice } from "@/lib/utils";
 import {
   CATEGORY_META,
   GENDER_EMOJI,
-  PRODUCTS,
   SITE,
   TRUST_BADGES,
-  getProductById,
   getRelatedProducts,
 } from "@/lib/site";
+import { findProduct } from "@/lib/data/products";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema } from "@/lib/seo";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductActions } from "@/components/product/ProductActions";
 import { ProductAccordion } from "@/components/product/ProductAccordion";
+import { ProductDescription } from "@/components/product/ProductDescription";
 import { ProductCard } from "@/components/product/ProductCard";
 import { ReviewSection } from "@/components/product/ReviewSection";
 import { StarRating } from "@/components/product/StarRating";
@@ -28,40 +28,30 @@ interface ProductPageProps {
   params: Promise<{ id: string }>;
 }
 
-/** Pre-render every catalogue page. */
-export function generateStaticParams() {
-  return PRODUCTS.map((product) => ({ id: product.id }));
-}
-
-/**
- * The catalogue is fully known at build time, so an unknown id is a genuine
- * 404 rather than an on-demand render that answers 200 with a "not found"
- * body (a soft 404 crawlers dislike).
- */
-export const dynamicParams = false;
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
   const { id } = await params;
-  const product = getProductById(id);
+  const { product } = await findProduct(id);
 
   if (!product) {
-    return { title: { absolute: "Product not found | Little Luxe" } };
+    return { title: { absolute: "Product not found | Mukra" } };
   }
 
-  const title = `${product.name} — Ages ${product.ageRange.replace("Y", "")} | Little Luxe`;
+  const title = `${product.name} — Ages ${product.ageRange.replace("Y", "")} | Mukra`;
   const description = `${product.name} for ages ${product.ageRange.replace("Y", "")}. ${product.tagline} ${product.material}. ${formatPrice(product.price, product.currency)} with free shipping over $50.`;
 
   return {
     title: { absolute: title },
     description,
-    alternates: { canonical: `/product/${product.id}` },
+    alternates: { canonical: `/product/${product.slug}` },
     openGraph: {
       title,
       description,
       type: "website",
-      url: `${SITE.url}/product/${product.id}`,
+      url: `${SITE.url}/product/${product.slug}`,
       siteName: SITE.kidsBrand,
     },
   };
@@ -69,7 +59,7 @@ export async function generateMetadata({
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { id } = await params;
-  const product = getProductById(id);
+  const { product } = await findProduct(id);
 
   if (!product) notFound();
 
@@ -239,9 +229,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
 
             {/* Description */}
-            <p className="prose-kids max-w-xl text-base text-muted-foreground">
+            <ProductDescription
+              className="max-w-xl text-base text-muted-foreground"
+            >
               {product.description}
-            </p>
+            </ProductDescription>
 
             {isOrganic && (
               <p className="inline-flex w-fit items-center gap-2 rounded-full border border-glass-border bg-emerald-500/10 px-4 py-2 text-xs font-medium text-emerald-400">

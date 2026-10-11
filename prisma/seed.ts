@@ -5,7 +5,7 @@
  *   npm run db:seed        # load this file
  *
  * It loads exactly what the storefront shows in demo mode: the 12 catalogue
- * products from `lib/site.ts`, one admin (`admin@littleluxe.com / admin123`),
+ * products from `lib/site.ts`, one admin (`admin@mukra.com / admin123`),
  * three shoppers (`password123`), the four coupons the console lists and five
  * orders — including two wallet payments waiting for an operator to verify.
  */
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
   const admin = await prisma.user.create({
     data: {
       name: "Riajul Khandokar",
-      email: "admin@littleluxe.com",
+      email: "admin@mukra.com",
       phone: "+880 1712 345678",
       password: adminPassword,
       role: "ADMIN",
@@ -106,6 +106,12 @@ async function main(): Promise<void> {
 
   /* ---------- catalogue ---------- */
   for (const product of PRODUCTS) {
+    const variants = product.colors.flatMap((color) =>
+      product.sizes.map((size) => ({ color, size })),
+    );
+    const stockPerVariant = Math.floor(product.stock / variants.length);
+    const remainingStock = product.stock % variants.length;
+
     await prisma.product.create({
       data: {
         // The catalogue id doubles as the slug, so mock cart lines resolve.
@@ -114,6 +120,7 @@ async function main(): Promise<void> {
         slug: product.slug,
         description: product.description,
         price: product.price,
+        costPrice: 0,
         originalPrice: product.originalPrice ?? null,
         category: product.category,
         gender: product.gender,
@@ -122,8 +129,13 @@ async function main(): Promise<void> {
         colors: [...product.colors],
         sizes: [...product.sizes],
         images: [...product.images],
-        modelColor: product.modelColor,
         stock: product.stock,
+        variants: {
+          create: variants.map((variant, index) => ({
+            ...variant,
+            stock: stockPerVariant + (index < remainingStock ? 1 : 0),
+          })),
+        },
         lowStockThreshold: 10,
         badge: product.badge ?? null,
         featured: product.featured,
@@ -370,7 +382,7 @@ async function main(): Promise<void> {
     admin: admin.email,
   };
 
-  console.warn("[seed] Little Luxe ready 🌟", counts);
+  console.warn("[seed] Mukra ready 🌟", counts);
 }
 
 main()

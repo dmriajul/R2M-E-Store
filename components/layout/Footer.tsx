@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { FOOTER_LINKS, SITE, type NavLink } from "@/lib/site";
 import { Separator } from "@/components/ui/separator";
@@ -62,9 +63,17 @@ export function Footer() {
           <div className="col-span-2 lg:col-span-1">
             <Link
               href="/"
-              className="text-gradient-gold text-2xl font-bold tracking-widest transition-opacity duration-300 hover:opacity-80"
+              aria-label="MUKRA home"
+              className="inline-flex transition-opacity duration-300 hover:opacity-80"
             >
-              {SITE.name}
+              <Image
+                src="/logo.png"
+                alt="MUKRA"
+                width={180}
+                height={50}
+                priority
+                className="h-10 w-auto object-contain md:h-12"
+              />
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
               {SITE.tagline} Curated in small numbers for people who prefer to

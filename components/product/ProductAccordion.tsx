@@ -9,6 +9,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import type { Product } from "@/types";
+import { ProductDescription } from "@/components/product/ProductDescription";
 
 interface ProductAccordionProps {
   product: Product;
@@ -36,7 +37,7 @@ export function ProductAccordion({ product }: ProductAccordionProps) {
           </span>
         </AccordionTrigger>
         <AccordionContent className="text-sm text-muted-foreground">
-          <p className="prose-kids">{product.description}</p>
+          <ProductDescription>{product.description}</ProductDescription>
           <dl className="mt-4 grid gap-2 sm:grid-cols-2">
             <div>
               <dt className="text-[11px] tracking-[0.16em] uppercase">Material</dt>

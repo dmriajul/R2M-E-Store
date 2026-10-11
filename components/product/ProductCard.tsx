@@ -7,7 +7,6 @@ import { Check, Eye, Heart, Plus } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
 import {
   BADGE_STYLES,
-  CATEGORY_META,
   COLOR_HEX,
   DEFAULT_SWATCH,
   GENDER_EMOJI,
@@ -16,7 +15,6 @@ import { useCartStore } from "@/store/useCartStore";
 import { useWishlistStore } from "@/store/useWishlistStore";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { ProductArtwork } from "@/components/product/ProductArtwork";
-import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { QuickViewDialog } from "@/components/product/QuickViewDialog";
 import { StarRating } from "@/components/product/StarRating";
 import { Badge } from "@/components/ui/badge";
@@ -152,16 +150,24 @@ export function ProductCard({
 }: ProductCardProps) {
   const reducedMotion = usePrefersReducedMotion();
   const [quickViewOpen, setQuickViewOpen] = useState(false);
-  const meta = CATEGORY_META[product.category];
   const discount = product.originalPrice
     ? Math.round((1 - product.price / product.originalPrice) * 100)
     : null;
   const isList = variant === "list";
 
   const entrance = {
-    initial: { opacity: 0, y: reducedMotion ? 0 : 24, scale: reducedMotion ? 1 : 0.98 },
-    animate: { opacity: 1, y: 0, scale: 1 },
-    exit: { opacity: 0, scale: reducedMotion ? 1 : 0.97 },
+    initial: {
+      opacity: 0,
+      y: reducedMotion ? 0 : 24,
+      scale: reducedMotion ? 1 : 0.98,
+      filter: reducedMotion ? "blur(0px)" : "blur(8px)",
+    },
+    animate: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" },
+    exit: {
+      opacity: 0,
+      scale: reducedMotion ? 1 : 0.97,
+      filter: reducedMotion ? "blur(0px)" : "blur(6px)",
+    },
     transition: {
       duration: reducedMotion ? 0.3 : 0.5,
       delay: reducedMotion ? 0 : Math.min(index, 8) * 0.045,
@@ -169,7 +175,7 @@ export function ProductCard({
     },
   };
 
-  /* Artwork box: shared by the real photo and the gradient fallback tile. */
+  /* Artwork box: shared by product photos and the branded missing-image fallback. */
   const artworkClass = cn(
     "transition-transform duration-700 ease-[var(--ease-luxe)] group-hover:scale-[1.06]",
     isList ? "h-full min-h-32 w-32 sm:w-44" : "aspect-4/5 w-full",
@@ -195,18 +201,12 @@ export function ProductCard({
             tabIndex={-1}
             aria-hidden
           >
-            <OptimizedImage
-              src={product.images[0]}
-              alt={
-                product.colors[0]
-                  ? `${product.name} in ${product.colors[0]}`
-                  : product.name
-              }
-              preset="card"
-              priority={priority}
+            <ProductArtwork
+              product={product}
+              alt={product.colors[0] ? `${product.name} in ${product.colors[0]}` : product.name}
+              size="card"
               className={artworkClass}
-              /* Placeholder products (no photography yet) keep the gradient tile. */
-              fallback={<ProductArtwork product={product} className={artworkClass} />}
+              priority={priority}
             />
           </Link>
 
@@ -268,15 +268,6 @@ export function ProductCard({
                 </p>
               )}
             </div>
-            {!isList && (
-              <span
-                className="emoji-pop shrink-0 text-lg"
-                aria-label={meta.emoji}
-                title={product.category}
-              >
-                {meta.emoji}
-              </span>
-            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

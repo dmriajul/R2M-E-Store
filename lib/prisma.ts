@@ -20,6 +20,7 @@ export interface PrismaDelegate {
   findFirst(args?: unknown): Promise<unknown | null>;
   create(args: unknown): Promise<unknown>;
   update(args: unknown): Promise<unknown>;
+  upsert(args: unknown): Promise<unknown>;
   delete(args: unknown): Promise<unknown>;
   updateMany(args: unknown): Promise<{ count: number }>;
   deleteMany(args: unknown): Promise<{ count: number }>;
@@ -31,10 +32,14 @@ export interface PrismaLikeClient {
   product: PrismaDelegate;
   order: PrismaDelegate;
   orderItem: PrismaDelegate;
+  returnRequest: PrismaDelegate;
+  productVariant: PrismaDelegate;
   coupon: PrismaDelegate;
   review: PrismaDelegate;
   wishlistItem: PrismaDelegate;
   address: PrismaDelegate;
+  siteSettings: PrismaDelegate;
+  $transaction<T>(operation: (transaction: PrismaLikeClient) => Promise<T>): Promise<T>;
 }
 
 type PrismaGlobal = typeof globalThis & {

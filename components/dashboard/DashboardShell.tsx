@@ -18,8 +18,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, initials } from "@/lib/utils";
-import { DEMO_WISHLIST_IDS } from "@/lib/mock-dashboard";
-import { selectUnreadCount, useDashboardStore } from "@/store/useDashboardStore";
+import { MukraLogo } from "@/components/brand/MukraLogo";
+import { DEMO_USER, DEMO_WISHLIST_IDS } from "@/lib/mock-dashboard";
+import { useDashboardStore } from "@/store/useDashboardStore";
 import { useWishlistStore } from "@/store/useWishlistStore";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -117,7 +118,7 @@ function Breadcrumbs() {
 }
 
 function Avatar({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const name = useDashboardStore((state) => state.profile.name);
+  const name = useDashboardStore((state) => state.profile?.name ?? DEMO_USER.name);
 
   return (
     <span
@@ -212,7 +213,7 @@ function LogoutButton({
  * Sidebar identity block: avatar, name, email.
  */
 function SidebarIdentity() {
-  const profile = useDashboardStore((state) => state.profile);
+  const profile = useDashboardStore((state) => state.profile ?? DEMO_USER);
 
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-glass-border bg-white/4 p-3">
@@ -233,10 +234,12 @@ function SidebarIdentity() {
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const reducedMotion = usePrefersReducedMotion();
-  const unread = useDashboardStore(selectUnreadCount);
+  const unread = useDashboardStore((state) =>
+    state.notifications?.filter((notification) => notification && !notification.read).length ?? 0,
+  );
   const seeded = useDashboardStore((state) => state.wishlistSeeded);
   const markWishlistSeeded = useDashboardStore((state) => state.markWishlistSeeded);
-  const profile = useDashboardStore((state) => state.profile);
+  const profile = useDashboardStore((state) => state.profile ?? DEMO_USER);
   const [moreOpen, setMoreOpen] = useState(false);
 
   // Demo persona: a signed-in shopper arrives with favourites already saved.
@@ -263,13 +266,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     <div className="mx-auto flex w-full max-w-7xl gap-6 px-4 pt-8 pb-28 sm:px-6 md:pb-14 lg:gap-8 lg:px-8">
       {/* ---------- Sidebar (tablet + desktop) ---------- */}
       <aside className="hidden shrink-0 print:hidden md:flex md:w-[88px] lg:w-72">
-        <div className="sticky top-24 flex max-h-[calc(100dvh-8rem)] w-full flex-col gap-4 overflow-y-auto rounded-3xl border border-glass-border bg-[#0C0C0C]/80 p-3 backdrop-blur-xl lg:p-4">
+        <div className="sticky top-24 flex max-h-[calc(100dvh-8rem)] w-full flex-col gap-4 overflow-x-hidden overflow-y-auto rounded-3xl border border-glass-border bg-[#0C0C0C]/80 p-3 [scrollbar-gutter:stable] backdrop-blur-xl lg:p-4">
           <Link
             href="/dashboard"
-            className="rounded-xl px-1 py-2 text-center text-sm font-bold tracking-[0.3em] text-primary transition-colors duration-300 hover:text-gold-strong focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none lg:text-left"
+            aria-label="MUKRA customer dashboard"
+            className="flex min-h-11 items-center justify-center rounded-xl px-1 py-2 transition-opacity duration-300 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
-            LITTLE
-            <span className="block lg:inline"> LUXE</span>
+            <span className="lg:hidden"><MukraLogo variant="monogram" size="md" /></span>
+            <span className="hidden lg:block"><MukraLogo variant="lockup" size="md" /></span>
           </Link>
 
           <SidebarIdentity />

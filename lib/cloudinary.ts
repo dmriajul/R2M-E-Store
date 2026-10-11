@@ -7,7 +7,7 @@
  */
 
 import { isCloudinaryConfigured } from "@/lib/demo-mode";
-import { MODEL_FOLDER, PRODUCT_FOLDER, isCloudinaryUrl, optimizeUrl } from "@/lib/images";
+import { PRODUCT_FOLDER, isCloudinaryUrl, optimizeUrl } from "@/lib/images";
 
 /**
  * The SDK is imported lazily — and only as a *type* up here — because it is
@@ -36,7 +36,7 @@ async function cloudinarySdk(): Promise<CloudinarySdk | null> {
 export { isCloudinaryUrl, optimizeUrl };
 
 /* Folder constants live in `lib/images.ts`; re-exported for server callers. */
-export { MODEL_FOLDER, PRODUCT_FOLDER };
+export { PRODUCT_FOLDER };
 
 export interface UploadedAsset {
   url: string;
@@ -74,11 +74,11 @@ async function configure(): Promise<CloudinarySdk | null> {
 export async function uploadToCloudinary(
   file: { buffer: Buffer; mimetype: string; originalName: string },
   folder: string = PRODUCT_FOLDER,
+  resourceType: "image" | "video" = "image",
 ): Promise<UploadedAsset | null> {
   const client = await configure();
   if (!client) return null;
 
-  const resourceType = folder === MODEL_FOLDER ? "raw" : "image";
   const safeName = file.originalName
     .replace(/\.[^.]+$/, "")
     .replace(/[^a-zA-Z0-9-_]/g, "-")
@@ -90,7 +90,6 @@ export async function uploadToCloudinary(
         folder,
         resource_type: resourceType,
         public_id: `${Date.now()}-${safeName || "asset"}`,
-        // Images are cropped to a friendly product ratio; models pass through.
         ...(resourceType === "image"
           ? { transformation: [{ width: 1400, height: 1400, crop: "limit", quality: "auto:good" }] }
           : {}),
@@ -123,14 +122,13 @@ export async function uploadToCloudinary(
 /** Removes an asset. Silently returns false when Cloudinary is unavailable. */
 export async function deleteFromCloudinary(
   publicId: string,
-  folder: string = PRODUCT_FOLDER,
 ): Promise<boolean> {
   const client = await configure();
   if (!client || !publicId) return false;
 
   try {
     const result = await client.uploader.destroy(publicId, {
-      resource_type: folder === MODEL_FOLDER ? "raw" : "image",
+      resource_type: "image",
       invalidate: true,
     });
     return result.result === "ok" || result.result === "not found";

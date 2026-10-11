@@ -6,7 +6,7 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
 /** HTML pages: a short CDN TTL with background revalidation. */
 const HTML_CACHE = "public, s-maxage=60, stale-while-revalidate=300";
 
-/** Public files that change rarely (photos, 3D models, demo receipts). */
+/** Public files that change rarely (photos, demo receipts). */
 const STATIC_FILE = "public, max-age=86400, stale-while-revalidate=604800";
 
 const nextConfig: NextConfig = {
@@ -28,20 +28,15 @@ const nextConfig: NextConfig = {
     // env keys are set; local uploads are served from /public/uploads.
     remotePatterns: [
       { protocol: "https", hostname: "res.cloudinary.com" },
-      // Kept so any leftovers from earlier steps keep rendering.
       { protocol: "https", hostname: "images.unsplash.com" },
+      { protocol: "https", hostname: "images.pexels.com" },
     ],
     formats: ["image/avif", "image/webp"],
     dangerouslyAllowSVG: true,
     contentDispositionType: "attachment",
   },
-  /**
-   * Barrel-file tree shaking. `three`/`@react-three/fiber` stay in lazy chunks
-   * (both 3D viewers are `next/dynamic({ ssr: false })`), but when they do load
-   * these imports keep the chunk as small as possible.
-   */
   experimental: {
-    optimizePackageImports: ["@react-three/fiber", "@react-three/drei", "lucide-react", "framer-motion"],
+    optimizePackageImports: ["lucide-react", "framer-motion"],
   },
   async headers() {
     return [
@@ -78,10 +73,6 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: STATIC_FILE }],
       },
       {
-        source: "/models/:path*",
-        headers: [{ key: "Cache-Control", value: STATIC_FILE }],
-      },
-      {
         // User uploads served through the app route (local-disk demo mode).
         source: "/uploads/:path*",
         headers: [
@@ -113,6 +104,11 @@ const nextConfig: NextConfig = {
       {
         // Never cache authentication or session-scoped responses.
         source: "/api/auth/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
+      },
+      {
+        // Admin product records include unpublished products and operational data.
+        source: "/api/admin/:path*",
         headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
       },
       {

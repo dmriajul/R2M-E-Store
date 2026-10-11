@@ -17,7 +17,7 @@ export default function ShopError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[little-luxe] storefront error:", error);
+    console.error("[mukra] storefront error:", error);
   }, [error]);
 
   return (
@@ -64,7 +64,7 @@ export default function ShopError({
           </Link>
 
           <a
-            href="mailto:hello@littleluxe.com"
+            href="mailto:hello@mukra.com"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-glass-border bg-glass px-6 text-sm font-semibold text-muted-foreground transition-all duration-400 ease-[var(--ease-luxe)] hover:border-primary/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <MessageCircle aria-hidden className="size-4" />

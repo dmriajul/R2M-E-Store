@@ -1,13 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Copy, ExternalLink, MessageCircle, Printer, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatPrice, formatShortDate } from "@/lib/utils";
-import { returnRequestSchema, RETURN_REASONS, type ReturnRequestValues } from "@/lib/validations";
 import { isTrackable } from "@/lib/mock-dashboard";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { OrderStatusBadge } from "@/components/dashboard/OrderStatusBadge";
@@ -15,16 +11,8 @@ import { OrderThumb } from "@/components/dashboard/OrderCard";
 import { OrderTimeline } from "@/components/dashboard/OrderTimeline";
 import { InvoiceDocument } from "@/components/dashboard/InvoiceDocument";
 import { useReorder } from "@/components/dashboard/useReorder";
+import { ReturnRequestDialog } from "@/components/dashboard/ReturnRequestDialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { checkoutInputClass, Field } from "@/components/checkout/Field";
 import type { DashboardOrder } from "@/types";
 
 const DHL_TRACKING_URL = "https://www.dhl.com/bd-en/home/tracking.html";
@@ -77,17 +65,6 @@ function TotalsLine({
 /** Full order view: tracker, shipping, item table, payment, returns and invoice. */
 export function OrderDetailView({ order }: { order: DashboardOrder }) {
   const reorder = useReorder();
-  const [returnOpen, setReturnOpen] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<ReturnRequestValues>({
-    resolver: zodResolver(returnRequestSchema),
-    defaultValues: { reason: "Wrong size", note: "" },
-  });
 
   const copyTracking = async () => {
     try {
@@ -98,14 +75,6 @@ export function OrderDetailView({ order }: { order: DashboardOrder }) {
     } catch {
       toast.error("Couldn't copy", { description: "Your browser blocked clipboard access." });
     }
-  };
-
-  const onSubmitReturn = (values: ReturnRequestValues) => {
-    reset();
-    setReturnOpen(false);
-    toast.success("Return request sent 📦", {
-      description: `We'll email a label within 24 hours. Reason: ${values.reason}.`,
-    });
   };
 
   return (
@@ -298,15 +267,12 @@ export function OrderDetailView({ order }: { order: DashboardOrder }) {
                   Reorder All
                 </Button>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={order.status === "cancelled"}
-                  onClick={() => setReturnOpen(true)}
-                  className="h-12 w-full rounded-full border-glass-border bg-glass text-xs font-semibold tracking-[0.16em] uppercase transition-colors duration-300 hover:border-rose/40 hover:text-rose disabled:opacity-40"
-                >
-                  Request Return
-                </Button>
+                <ReturnRequestDialog
+                  orderId={order.id}
+                  orderNumber={order.number}
+                  items={order.items}
+                  delivered={order.status === "delivered"}
+                />
 
                 <Button
                   type="button"
@@ -326,68 +292,6 @@ export function OrderDetailView({ order }: { order: DashboardOrder }) {
           </div>
         </div>
 
-        {/* ---------- Return request ---------- */}
-        <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
-          <DialogContent className="glass-strong max-w-md rounded-3xl border-glass-border">
-            <DialogHeader>
-              <DialogTitle className="text-lg">Request a return 📦</DialogTitle>
-              <DialogDescription className="prose-kids">
-                Tell us what happened and we&apos;ll email a prepaid label within 24 hours.
-              </DialogDescription>
-            </DialogHeader>
-
-            <form onSubmit={handleSubmit(onSubmitReturn)} className="flex flex-col gap-4">
-              <Field label="Reason" htmlFor="return-reason" error={errors.reason?.message}>
-                <select
-                  id="return-reason"
-                  className={cn(checkoutInputClass, "w-full px-3")}
-                  aria-invalid={Boolean(errors.reason)}
-                  {...register("reason")}
-                >
-                  {RETURN_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>
-                      {reason}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field
-                label="Anything else? (optional)"
-                htmlFor="return-note"
-                error={errors.note?.message}
-                hint="Sizes, fit, photos — anything that helps us help you."
-              >
-                <textarea
-                  id="return-note"
-                  rows={3}
-                  placeholder="The 4T runs a little small…"
-                  className={cn(checkoutInputClass, "min-h-24 py-3")}
-                  aria-invalid={Boolean(errors.note)}
-                  {...register("note")}
-                />
-              </Field>
-
-              <DialogFooter className="gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setReturnOpen(false)}
-                  className="h-11 rounded-full border-glass-border bg-glass text-xs font-semibold tracking-[0.14em] uppercase"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="h-11 rounded-full bg-primary text-xs font-semibold tracking-[0.14em] text-primary-foreground uppercase transition-all duration-500 hover:shadow-[0_0_28px_-8px_rgba(212,175,55,0.9)]"
-                >
-                  Send Request
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
 
       <InvoiceDocument order={order} />

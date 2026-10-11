@@ -61,7 +61,7 @@ export const LEGAL_UPDATED: Readonly<Record<LegalLang, string>> = {
 };
 
 export const LEGAL_CONTACT = {
-  email: "hello@littleluxe.com",
+  email: "hello@mukra.com",
   phone: "+880 1707 302038",
 } as const;
 
@@ -76,10 +76,10 @@ const terms: LegalContent = {
     sections: [
       {
         id: "welcome",
-        title: "Welcome to Little Luxe!",
+        title: "Welcome to Mukra!",
         icon: "👋",
         paragraphs: [
-          "Thank you for shopping with us. Little Luxe is a small family business that picks comfy, safe and long-lasting clothes for kids — and we treat every order like it is for our own children.",
+          "Thank you for shopping with us. Mukra is a small family business that picks comfy, safe and long-lasting clothes for kids — and we treat every order like it is for our own children.",
           "By placing an order you agree to the handful of simple points on this page. Nothing here is meant to catch you out; if anything is unclear, just message us and a real person will explain it.",
         ],
       },

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AdminShell } from "@/components/admin/AdminShell";
 
 export const metadata: Metadata = {
-  title: { default: "Admin", template: "%s · Admin · Little Luxe" },
+  title: { default: "Admin", template: "%s · Admin · Mukra" },
   description: "LUXE operations console — products, orders and inventory.",
   robots: { index: false, follow: false },
 };

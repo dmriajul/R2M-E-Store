@@ -231,6 +231,43 @@ export function t(key: string, language?: Language): string {
     "nav.cart": { en: "Cart", bn: "কার্ট" },
     "nav.account": { en: "Account", bn: "অ্যাকাউন্ট" },
 
+    // Hero
+    "hero.title": {
+      en: "Where Magic Meets Style",
+      bn: "যেখানে জাদু আর শৈলীর মিলন ঘটে",
+    },
+    "hero.subtitle": {
+      en: "Discover beautifully crafted, comfy & stylish clothing for your little ones. Ages 0–14 Y.",
+      bn: "আপনার স্নিগ্ধ ছোট্টদের জন্য সুন্দরভাবে তৈরি, আরামদায়ক এবং আকর্ষণীয় পোশাক আবিষ্কার করুন। ০-১৪ বছর বয়স।",
+    },
+
+    // Homepage sections
+    "sections.featured": { en: "Featured Products", bn: "বিশেষ পণ্যসমূহ" },
+    "sections.collections": {
+      en: "Shop By Category",
+      bn: "ক্যাটাগরি অনুযায়ী কেনাকাটা করুন",
+    },
+    "sections.newArrivals": { en: "New Arrivals", bn: "নতুন সংগ্রহ" },
+    "sections.bestSellers": { en: "Best Sellers", bn: "জনপ্রিয় পোশাক" },
+    "sections.featuredEyebrow": { en: "Featured", bn: "বিশেষ নির্বাচন" },
+    "sections.newArrivalsEyebrow": { en: "Just Landed", bn: "নতুন এসেছে" },
+    "sections.bestSellersEyebrow": {
+      en: "Loved by Families",
+      bn: "পরিবারের পছন্দ",
+    },
+    "sections.featuredDescription": {
+      en: "A curated selection from the current release — each made in small numbers and finished by hand.",
+      bn: "বর্তমান সংগ্রহ থেকে বাছাই করা বিশেষ পোশাক — প্রতিটি সীমিত সংখ্যায় তৈরি ও যত্নসহকারে সম্পন্ন।",
+    },
+    "sections.newArrivalsDescription": {
+      en: "Discover the latest pieces added to the MUKRA collection.",
+      bn: "MUKRA সংগ্রহে সদ্য যুক্ত হওয়া পোশাকগুলো দেখুন।",
+    },
+    "sections.bestSellersDescription": {
+      en: "Explore the pieces families keep coming back for.",
+      bn: "পরিবারগুলোর বারবার পছন্দের পোশাকগুলো দেখুন।",
+    },
+
     // Cart
     "cart.empty": { en: "Your bag is empty", bn: "আপনার কার্ট খালি" },
     "cart.items": { en: "items", bn: "আইটেম" },
@@ -244,6 +281,32 @@ export function t(key: string, language?: Language): string {
     "product.in_stock": { en: "In Stock", bn: "স্টক আছে" },
     "product.out_of_stock": { en: "Out of Stock", bn: "স্টক নেই" },
     "product.quick_view": { en: "Quick View", bn: "দ্রুত দেখুন" },
+    "category.jackets": { en: "Jackets & Coats", bn: "জ্যাকেট ও কোট" },
+    "category.sweatshirts": {
+      en: "Sweatshirts & Hoodies",
+      bn: "সোয়েটশার্ট ও হুডি",
+    },
+    "category.sweaters": {
+      en: "Sweaters & Cardigans",
+      bn: "সোয়েটার ও কার্ডিগান",
+    },
+    "category.winterBottoms": {
+      en: "Winter Bottoms / Trousers",
+      bn: "শীতের প্যান্ট ও ট্রাউজার",
+    },
+    "category.winterSets": {
+      en: "Winter Sets & Tracksuits",
+      bn: "শীতের সেট ও ট্র্যাকস্যুট",
+    },
+    "category.tops": { en: "Tops & Tees", bn: "টপস ও টি-শার্ট" },
+    "category.innerwear": {
+      en: "Innerwear & Thermals",
+      bn: "অন্তর্বাস ও থার্মাল পোশাক",
+    },
+    "category.accessories": { en: "Accessories", bn: "অনুষঙ্গ" },
+    "category.watches": { en: "Watches", bn: "ঘড়ি" },
+    "category.jewelry": { en: "Jewelry", bn: "গয়না" },
+    "category.all": { en: "All", bn: "সব" },
 
     // Checkout
     "checkout.shipping": { en: "Shipping", bn: "শিপিং" },
@@ -285,6 +348,18 @@ export function t(key: string, language?: Language): string {
     "common.all": { en: "All", bn: "সব" },
     "common.filter": { en: "Filter", bn: "ফিল্টার" },
     "common.sort": { en: "Sort", bn: "সাজান" },
+    "common.shopNow": { en: "Shop Now", bn: "এখনই কিনুন" },
+    "common.explore": { en: "Explore Collection", bn: "অন্বেষণ করুন" },
+    "common.viewAll": { en: "View All", bn: "সব দেখুন" },
+    "common.addToCart": { en: "Add to Cart", bn: "কার্টে যোগ করুন" },
+    "common.added": { en: "Added", bn: "যোগ করা হয়েছে" },
+    "common.inBag": { en: "In bag", bn: "ব্যাগে আছে" },
+    "common.catalogue": { en: "Catalogue", bn: "ক্যাটালগ" },
+    "common.pieces": { en: "pieces", bn: "টি পণ্য" },
+    "common.discoverLook": {
+      en: "Discover the look",
+      bn: "এই স্টাইলটি দেখুন",
+    },
 
     // Shipping
     "shipping.free": { en: "Free Shipping", bn: "ফ্রি শিপিং" },
@@ -326,6 +401,39 @@ export function getTranslations(key: string): Record<Language, string> {
     "nav.search": { en: "Search", bn: "অনুসন্ধান" },
     "nav.cart": { en: "Cart", bn: "কার্ট" },
     "nav.account": { en: "Account", bn: "অ্যাকাউন্ট" },
+    "hero.title": {
+      en: "Where Magic Meets Style",
+      bn: "যেখানে জাদু আর শৈলীর মিলন ঘটে",
+    },
+    "hero.subtitle": {
+      en: "Discover beautifully crafted, comfy & stylish clothing for your little ones. Ages 0–14 Y.",
+      bn: "আপনার স্নিগ্ধ ছোট্টদের জন্য সুন্দরভাবে তৈরি, আরামদায়ক এবং আকর্ষণীয় পোশাক আবিষ্কার করুন। ০-১৪ বছর বয়স।",
+    },
+    "sections.featured": { en: "Featured Products", bn: "বিশেষ পণ্যসমূহ" },
+    "sections.collections": {
+      en: "Shop By Category",
+      bn: "ক্যাটাগরি অনুযায়ী কেনাকাটা করুন",
+    },
+    "sections.newArrivals": { en: "New Arrivals", bn: "নতুন সংগ্রহ" },
+    "sections.bestSellers": { en: "Best Sellers", bn: "জনপ্রিয় পোশাক" },
+    "sections.featuredEyebrow": { en: "Featured", bn: "বিশেষ নির্বাচন" },
+    "sections.newArrivalsEyebrow": { en: "Just Landed", bn: "নতুন এসেছে" },
+    "sections.bestSellersEyebrow": {
+      en: "Loved by Families",
+      bn: "পরিবারের পছন্দ",
+    },
+    "sections.featuredDescription": {
+      en: "A curated selection from the current release — each made in small numbers and finished by hand.",
+      bn: "বর্তমান সংগ্রহ থেকে বাছাই করা বিশেষ পোশাক — প্রতিটি সীমিত সংখ্যায় তৈরি ও যত্নসহকারে সম্পন্ন।",
+    },
+    "sections.newArrivalsDescription": {
+      en: "Discover the latest pieces added to the MUKRA collection.",
+      bn: "MUKRA সংগ্রহে সদ্য যুক্ত হওয়া পোশাকগুলো দেখুন।",
+    },
+    "sections.bestSellersDescription": {
+      en: "Explore the pieces families keep coming back for.",
+      bn: "পরিবারগুলোর বারবার পছন্দের পোশাকগুলো দেখুন।",
+    },
     "cart.empty": { en: "Your bag is empty", bn: "আপনার কার্ট খালি" },
     "cart.items": { en: "items", bn: "আইটেম" },
     "cart.total": { en: "Total", bn: "মোট" },
@@ -336,6 +444,32 @@ export function getTranslations(key: string): Record<Language, string> {
     "product.in_stock": { en: "In Stock", bn: "স্টক আছে" },
     "product.out_of_stock": { en: "Out of Stock", bn: "স্টক নেই" },
     "product.quick_view": { en: "Quick View", bn: "দ্রুত দেখুন" },
+    "category.jackets": { en: "Jackets & Coats", bn: "জ্যাকেট ও কোট" },
+    "category.sweatshirts": {
+      en: "Sweatshirts & Hoodies",
+      bn: "সোয়েটশার্ট ও হুডি",
+    },
+    "category.sweaters": {
+      en: "Sweaters & Cardigans",
+      bn: "সোয়েটার ও কার্ডিগান",
+    },
+    "category.winterBottoms": {
+      en: "Winter Bottoms / Trousers",
+      bn: "শীতের প্যান্ট ও ট্রাউজার",
+    },
+    "category.winterSets": {
+      en: "Winter Sets & Tracksuits",
+      bn: "শীতের সেট ও ট্র্যাকস্যুট",
+    },
+    "category.tops": { en: "Tops & Tees", bn: "টপস ও টি-শার্ট" },
+    "category.innerwear": {
+      en: "Innerwear & Thermals",
+      bn: "অন্তর্বাস ও থার্মাল পোশাক",
+    },
+    "category.accessories": { en: "Accessories", bn: "অনুষঙ্গ" },
+    "category.watches": { en: "Watches", bn: "ঘড়ি" },
+    "category.jewelry": { en: "Jewelry", bn: "গয়না" },
+    "category.all": { en: "All", bn: "সব" },
     "checkout.shipping": { en: "Shipping", bn: "শিপিং" },
     "checkout.payment": { en: "Payment", bn: "পেমেন্ট" },
     "checkout.confirm": { en: "Confirm", bn: "নিশ্চিত করুন" },
@@ -372,6 +506,18 @@ export function getTranslations(key: string): Record<Language, string> {
     "common.all": { en: "All", bn: "সব" },
     "common.filter": { en: "Filter", bn: "ফিল্টার" },
     "common.sort": { en: "Sort", bn: "সাজান" },
+    "common.shopNow": { en: "Shop Now", bn: "এখনই কিনুন" },
+    "common.explore": { en: "Explore Collection", bn: "অন্বেষণ করুন" },
+    "common.viewAll": { en: "View All", bn: "সব দেখুন" },
+    "common.addToCart": { en: "Add to Cart", bn: "কার্টে যোগ করুন" },
+    "common.added": { en: "Added", bn: "যোগ করা হয়েছে" },
+    "common.inBag": { en: "In bag", bn: "ব্যাগে আছে" },
+    "common.catalogue": { en: "Catalogue", bn: "ক্যাটালগ" },
+    "common.pieces": { en: "pieces", bn: "টি পণ্য" },
+    "common.discoverLook": {
+      en: "Discover the look",
+      bn: "এই স্টাইলটি দেখুন",
+    },
     "shipping.free": { en: "Free Shipping", bn: "ফ্রি শিপিং" },
     "shipping.standard": { en: "Standard Shipping", bn: "স্ট্যান্ডার্ড শিপিং" },
     "shipping.express": { en: "Express Shipping", bn: "এক্সপ্রেস শিপিং" },
@@ -393,4 +539,24 @@ export function getTranslations(key: string): Record<Language, string> {
   };
 
   return translations[key] ?? { en: key, bn: key };
+}
+
+const CATEGORY_TRANSLATION_KEYS: Readonly<Record<string, string>> = {
+  "Jackets & Coats": "category.jackets",
+  "Sweatshirts & Hoodies": "category.sweatshirts",
+  "Sweaters & Cardigans": "category.sweaters",
+  "Winter Bottoms / Trousers": "category.winterBottoms",
+  "Winter Sets & Tracksuits": "category.winterSets",
+  "Tops & Tees": "category.tops",
+  "Innerwear & Thermals": "category.innerwear",
+  Accessories: "category.accessories",
+  Watches: "category.watches",
+  Jewelry: "category.jewelry",
+  All: "category.all",
+};
+
+/** Translate a known product or collection category; preserve unknown labels. */
+export function translateCategory(category: string, language?: Language): string {
+  const key = CATEGORY_TRANSLATION_KEYS[category];
+  return key ? t(key, language) : category;
 }

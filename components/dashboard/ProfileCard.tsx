@@ -46,7 +46,7 @@ export function ProfileCard() {
         <p className="mt-1 text-sm text-muted-foreground">
           {profile.kids.length > 0
             ? `Parent to ${profile.kids.map((kid) => kid.name).join(", ")} 🧸`
-            : "Welcome to Little Luxe 🧸"}
+            : "Welcome to Mukra 🧸"}
         </p>
 
         <ul className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">

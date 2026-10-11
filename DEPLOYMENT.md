@@ -1,4 +1,4 @@
-# Deploying Little Luxe 🚀
+# Deploying Mukra 🚀
 
 A complete, copy-pasteable runbook: from an empty GitHub repo to a live store on
 your own domain. Total time on a good connection: **about 40 minutes**, most of
@@ -16,9 +16,9 @@ it waiting for Supabase and Cloudinary accounts.
 ```bash
 git init                          # if this isn't a repo yet
 git add -A
-git commit -m "feat: Little Luxe storefront"
+git commit -m "feat: Mukra storefront"
 git branch -M main
-git remote add origin git@github.com:<you>/little-luxe.git
+git remote add origin git@github.com:<you>/mukra.git
 git push -u origin main
 ```
 
@@ -39,7 +39,7 @@ workflow to configure, Vercel builds on push.
 4. Leave the environment variables empty for now — click **Deploy**.
 
 The first build takes ~2 minutes. When it finishes you get a live URL like
-`https://little-luxe-xyz.vercel.app`. Everything works in demo mode.
+`https://mukra-xyz.vercel.app`. Everything works in demo mode.
 
 > **Region:** `vercel.json` pins `regions: ["sin1"]` (Singapore) — the closest
 > Vercel region to Bangladesh, typically 40–70 ms faster for Dhaka shoppers than
@@ -58,6 +58,7 @@ and redeploy after each group so you can see exactly what changed:
 | 2 | `DATABASE_URL`, `DIRECT_URL` | Real data instead of the mock catalogue |
 | 3 | `CLOUDINARY_*` | Uploads move from local disk to the CDN |
 | 4 | `PAYMENT_*`, `SSLCOMMERZ_*` | Wallet numbers and the card gateway |
+| 5 | `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `MAILJET_SENDER_EMAIL` | Enables authenticated admin receipt emails |
 
 `.env.production.example` in the repo has every key with comments — copy it into
 the Vercel UI field by field.
@@ -98,7 +99,7 @@ when signed out, and `"mode":"demo"` until step 6 is done.
 ## 5. Connect your domain
 
 1. Vercel → **Project → Settings → Domains → Add**.
-2. Enter `littleluxe.com` and `www.littleluxe.com`.
+2. Enter `mukra.com` and `www.mukra.com`.
 3. At your registrar (Namecheap / GoDaddy / Cloudflare DNS):
 
    | Type | Name | Value |
@@ -108,7 +109,7 @@ when signed out, and `"mode":"demo"` until step 6 is done.
 
 4. Wait for the certificate (usually under a minute), then set the primary
    domain in Vercel and make sure `www` redirects to it.
-5. Update `NEXTAUTH_URL` and `NEXT_PUBLIC_SITE_URL` to `https://littleluxe.com`
+5. Update `NEXTAUTH_URL` and `NEXT_PUBLIC_SITE_URL` to `https://mukra.com`
    and redeploy — otherwise canonicals and auth callbacks still point at the
    `.vercel.app` host.
 
@@ -137,22 +138,21 @@ curl -s https://your-domain.com/api/health
 # { "mode": "production", "database": "connected", ... }
 ```
 
-The admin login is `admin@littleluxe.com` / `admin123` — **change it immediately**
+The admin login is `admin@mukra.com` / `admin123` — **change it immediately**
 after your first sign-in (Admin → Settings), and rotate the demo customer
 passwords while you are there.
 
 ---
 
-## 7. Set up Cloudinary (images + 3D models)
+## 7. Set up Cloudinary (product images)
 
 1. Create a free account at <https://cloudinary.com>.
 2. **Dashboard → Product Environment Credentials** → copy the cloud name, API
    key and API secret into `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`,
    `CLOUDINARY_API_SECRET`.
-3. Redeploy. Uploads now go to `little-luxe/products` (images, ≤5 MB,
-   JPEG/PNG/WebP) and `little-luxe/models` (`.glb`, ≤10 MB), and are delivered
-   through `res.cloudinary.com` with `f_auto,q_auto` — the URLs in
-   `lib/image-optimizer.ts` already ask for the right crop per size preset.
+3. Redeploy. Product image uploads now go to `mukra/products` (JPEG/PNG/WebP,
+   ≤5 MB) and are delivered through `res.cloudinary.com` with
+   `f_auto,q_auto` image transformations.
 4. Cloudinary → **Settings → Optimization** → enable *Auto format* and
    *Auto quality* so any legacy asset gets the same treatment.
 
@@ -189,8 +189,8 @@ Final checklist before announcing:
 - [ ] Admin password changed away from `admin123`
 - [ ] Cloudinary keys set; one test upload round-trips through the admin console
 - [ ] Wallet numbers in `PAYMENT_*` match the accounts you actually check
-- [ ] `littleluxe.com` + `www` resolve with a valid certificate
-- [ ] `https://littleluxe.com/sitemap.xml` and `/robots.txt` respond, and the
+- [ ] `mukra.com` + `www` resolve with a valid certificate
+- [ ] `https://mukra.com/sitemap.xml` and `/robots.txt` respond, and the
       sitemap is submitted in Google Search Console
 - [ ] Share a product link in WhatsApp — the OG card should show the gold "LL"
       artwork

@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 
 /* ==========================================================================
-   LITTLE LUXE — Midnight Navy & Royal Gold Design System
+   MUKRA — Midnight Navy & Royal Gold Design System
    Premium kids fashion. Warm, cinematic, high-end luxury, parent-friendly.
    ========================================================================== */
 
@@ -143,7 +143,7 @@
 
   --animate-shimmer: shimmer 2.4s linear infinite;
   --animate-float: float 6s ease-in-out infinite;
-  --animate-marquee: marquee 48s linear infinite;
+  --animate-marquee: marquee 35s linear infinite;
   --animate-glow-pulse: glow-pulse 3s ease-in-out infinite;
 }
 
@@ -176,6 +176,45 @@
   }
 }
 
+@keyframes marquee-left {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes marquee-right {
+  0% {
+    transform: translate3d(-50%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-marquee-left,
+.animate-marquee-right {
+  display: flex;
+  width: max-content;
+  flex-wrap: nowrap;
+  will-change: transform;
+}
+
+.animate-marquee-left {
+  animation: marquee-left 25s linear infinite;
+}
+
+.animate-marquee-right {
+  animation: marquee-right 25s linear infinite;
+}
+
+.animate-marquee-left:hover,
+.animate-marquee-right:hover {
+  animation-play-state: paused;
+}
+
 @keyframes glow-pulse {
   0%,
   100% {
@@ -183,6 +222,25 @@
   }
   50% {
     box-shadow: 0 0 25px rgba(212, 175, 55, 0.4);
+  }
+}
+
+@keyframes gold-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes gold-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 20px -14px rgba(212, 175, 55, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 32px -10px rgba(212, 175, 55, 0.7);
   }
 }
 
@@ -296,12 +354,30 @@
       transition-duration: 0.01ms !important;
     }
 
-    /* Framer Motion opts out via useReducedMotion()/MotionConfig, but halt the
-       CSS marquee too since it loops forever. */
+    /* Keep the requested ticker moving; other site motion still respects this preference. */
     .animate-marquee {
-      animation: none !important;
-      transform: none !important;
+      animation: marquee 35s linear infinite !important;
     }
+
+    .animate-marquee-left {
+      animation: marquee-left 25s linear infinite !important;
+    }
+
+    .animate-marquee-right {
+      animation: marquee-right 25s linear infinite !important;
+    }
+  }
+}
+
+@layer utilities {
+  .font-bengali {
+    font-family:
+      "Noto Sans Bengali",
+      "Hind Siliguri",
+      var(--font-inter),
+      ui-sans-serif,
+      system-ui,
+      sans-serif;
   }
 }
 
@@ -435,6 +511,25 @@
   html,
   body {
     background: #fff !important;
+  }
+
+  body.printing-invoice * {
+    visibility: hidden !important;
+  }
+
+  body.printing-invoice #print-invoice,
+  body.printing-invoice #print-invoice * {
+    visibility: visible !important;
+  }
+
+  body.printing-invoice #print-invoice {
+    display: block !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    color: #000;
+    box-shadow: none !important;
   }
 
   body > header,

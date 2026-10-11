@@ -37,10 +37,10 @@ export default function ForgotPasswordPage() {
 
   return (
     <>
-      <title>Reset Password | LITTLE LUXE</title>
+      <title>Reset Password | MUKRA</title>
       <meta
         name="description"
-        content="Reset your LITTLE LUXE password — we'll email you a secure link."
+        content="Reset your MUKRA password — we'll email you a secure link."
       />
 
       <AuthCard>

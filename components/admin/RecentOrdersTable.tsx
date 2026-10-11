@@ -13,10 +13,12 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 /** Compact "latest activity" table — the row expands instead of navigating. */
 export function RecentOrdersTable({ limit = 5 }: { limit?: number }) {
-  const orders = useAdminStore((state) => state.orders);
+  const orders = useAdminStore((state) =>
+    Array.isArray(state.orders) ? state.orders : [],
+  );
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const rows = orders.slice(0, limit);
+  const rows = orders.filter(Boolean).slice(0, limit);
 
   return (
     <section className="rounded-xl border border-[#242424] bg-[#141414]">

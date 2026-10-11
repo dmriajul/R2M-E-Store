@@ -44,11 +44,18 @@ export function ProductActions({ product }: ProductActionsProps) {
   const [added, setAdded] = useState(false);
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
 
-  const maxQuantity = Math.max(1, Math.min(product.stock, 10));
+  const selectedVariant = product.variants?.find(
+    (variant) => variant.color === color && variant.size === size,
+  );
+  const selectedStock = product.variants
+    ? (selectedVariant?.stock ?? 0)
+    : product.stock;
+  const selectedInStock = product.inStock && selectedStock > 0;
+  const maxQuantity = Math.max(1, Math.min(selectedStock, 10));
   const isOneSize = product.sizes.length === 1 && product.sizes[0] === "One Size";
 
   const handleAdd = () => {
-    addItem(product, quantity, { color, size });
+    addItem(product, quantity, { color, size, stock: selectedStock });
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1800);
   };
@@ -68,7 +75,10 @@ export function ProductActions({ product }: ProductActionsProps) {
             <button
               key={option}
               type="button"
-              onClick={() => setColor(option)}
+              onClick={() => {
+                setColor(option);
+                setQuantity(1);
+              }}
               aria-label={`Colour ${option}`}
               aria-pressed={color === option}
               title={option}
@@ -105,7 +115,10 @@ export function ProductActions({ product }: ProductActionsProps) {
             <button
               key={option}
               type="button"
-              onClick={() => setSize(option)}
+              onClick={() => {
+                setSize(option);
+                setQuantity(1);
+              }}
               aria-pressed={size === option}
               className={cn(
                 "min-w-12 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-300 ease-[var(--ease-luxe)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
@@ -155,19 +168,25 @@ export function ProductActions({ product }: ProductActionsProps) {
             </button>
           </div>
 
-          <span className="text-xs text-muted-foreground">
-            {product.inStock
-              ? product.stock <= 5
-                ? `Only ${product.stock} left`
-                : "In stock"
-              : "Currently unavailable"}
-          </span>
+          {selectedInStock ? (
+            selectedStock <= 3 ? (
+              <span className="rounded-full border border-primary/25 bg-primary/8 px-2.5 py-1 text-xs text-primary">
+                Low Stock - Only {selectedStock} left!
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">In stock</span>
+            )
+          ) : (
+            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-muted-foreground">
+              Out of Stock
+            </span>
+          )}
         </div>
 
         <Button
           type="button"
           onClick={handleAdd}
-          disabled={!product.inStock}
+          disabled={!selectedInStock}
           size="lg"
           className="h-14 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_44px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:scale-[1.02] motion-safe:hover:-translate-y-0.5"
         >
@@ -179,7 +198,7 @@ export function ProductActions({ product }: ProductActionsProps) {
           ) : (
             <>
               <ShoppingBag className="size-4" />
-              {product.inStock ? "Add to Cart" : "Out of stock"}
+              {selectedInStock ? "Add to Cart" : "Out of Stock"}
             </>
           )}
         </Button>

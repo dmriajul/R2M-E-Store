@@ -5,6 +5,7 @@ import { ArrowRight, Gift, ShoppingBag, Sparkles, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { formatPrice } from "@/lib/utils";
 import {
+  DEMO_USER,
   getActiveOrderCount,
   getLastDeliveredOrder,
   getRecentOrders,
@@ -19,22 +20,25 @@ import { useReorder } from "@/components/dashboard/useReorder";
 import { Button } from "@/components/ui/button";
 
 export default function DashboardOverviewPage() {
-  const profile = useDashboardStore((state) => state.profile);
+  const storedProfile = useDashboardStore((state) => state.profile);
+  const profile = storedProfile ?? DEMO_USER;
   const seeded = useDashboardStore((state) => state.wishlistSeeded);
-  const wishlistCount = useWishlistStore((state) => state.ids.length);
+  const wishlistCount = useWishlistStore((state) => state.ids?.length ?? 0);
   const reorder = useReorder();
 
-  const recentOrders = getRecentOrders(3);
-  const recommended = getRecommendedProducts(4);
-  const activeOrders = getActiveOrderCount();
-  const firstName = profile.name.split(" ")[0] ?? profile.name;
+  const recentOrders = getRecentOrders(3) ?? [];
+  const recommended = getRecommendedProducts(4) ?? [];
+  const activeOrders = getActiveOrderCount() ?? 0;
+  const firstName = profile.name?.trim().split(/\s+/)[0] || "there";
+  const rewardPoints = Number.isFinite(profile.rewardPoints) ? profile.rewardPoints : 0;
+  const totalSpent = Number.isFinite(profile.totalSpent) ? profile.totalSpent : 0;
 
   return (
     <>
-      <title>Dashboard | LITTLE LUXE</title>
+      <title>Dashboard | MUKRA</title>
       <meta
         name="description"
-        content="Track orders, saved pieces, addresses and reward points in your Little Luxe account."
+        content="Track orders, saved pieces, addresses and reward points in your Mukra account."
       />
       <meta name="robots" content="noindex" />
 
@@ -59,7 +63,7 @@ export default function DashboardOverviewPage() {
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-glass-border bg-black/25 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm">
                 <Ticket aria-hidden className="size-3.5 text-primary" />
-                {profile.rewardPoints} reward points
+                {rewardPoints} reward points
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-glass-border bg-black/25 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm">
                 <ShoppingBag aria-hidden className="size-3.5 text-primary" />
@@ -97,7 +101,7 @@ export default function DashboardOverviewPage() {
           <StatCard
             icon="🎁"
             label="Reward Points"
-            value={String(profile.rewardPoints)}
+            value={String(rewardPoints)}
             hint="350 points = $10 off"
             action={{
               label: "Redeem",
@@ -111,7 +115,7 @@ export default function DashboardOverviewPage() {
           <StatCard
             icon="💰"
             label="Total Spent"
-            value={formatPrice(profile.totalSpent)}
+            value={formatPrice(totalSpent)}
             hint="Across all orders"
             index={3}
           />

@@ -5,6 +5,8 @@ import { motion, type Variants } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
+import { t, translateCategory } from "@/lib/utils";
+import { useLanguageStore } from "@/store/useLanguageStore";
 
 const EASE_LUXE = [0.22, 1, 0.36, 1] as const;
 
@@ -61,6 +63,7 @@ function buildCardVariants(reducedMotion: boolean): Variants {
 }
 
 export function CollectionsGrid() {
+  const language = useLanguageStore((state) => state.language);
   const reducedMotion = usePrefersReducedMotion();
   const variants = buildCardVariants(reducedMotion);
 
@@ -69,10 +72,10 @@ export function CollectionsGrid() {
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div>
           <p className="text-xs font-semibold tracking-[0.3em] text-primary uppercase">
-            Catalogue
+            {t("common.catalogue", language)}
           </p>
           <h2 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-            Shop by Category
+            {t("sections.collections", language)}
           </h2>
           <span
             aria-hidden
@@ -108,16 +111,17 @@ export function CollectionsGrid() {
                   variant="outline"
                   className="absolute top-5 right-5 border-glass-border bg-black/45 text-[11px] tracking-[0.16em] text-white/85 uppercase backdrop-blur-md"
                 >
-                  {collection.itemCount} pieces
+                  {new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-US").format(collection.itemCount)}{" "}
+                  {t("common.pieces", language)}
                 </Badge>
 
                 {/* Name + CTA */}
                 <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 p-6">
                   <h3 className="text-3xl font-bold tracking-tight text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.75)] sm:text-4xl">
-                    {collection.name}
+                    {translateCategory(collection.name, language)}
                   </h3>
                   <span className="flex items-center gap-2 text-sm font-semibold tracking-[0.18em] text-primary uppercase opacity-0 transition-all duration-500 ease-[var(--ease-luxe)] group-hover:translate-y-0 group-hover:opacity-100 motion-reduce:opacity-100 translate-y-2">
-                    Explore
+                    {t("common.explore", language)}
                     <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
                   </span>
                 </div>

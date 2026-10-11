@@ -2,7 +2,6 @@
 
 import { create } from "zustand";
 import { slugify } from "@/lib/utils";
-import { COLOR_HEX, DEFAULT_SWATCH } from "@/lib/site";
 import {
   ADMIN_CATEGORIES,
   ADMIN_COUPONS,
@@ -31,7 +30,6 @@ function applyProductValues(
   values: AdminProductValues,
   id: string,
 ): AdminProduct {
-  const firstColor = values.colors[0]?.name ?? "Default";
   const badge: ProductBadge | undefined = values.badge === "none" ? undefined : values.badge;
   const compareAt =
     values.compareAtPrice && values.compareAtPrice > values.price
@@ -47,34 +45,41 @@ function applyProductValues(
     price: values.price,
     originalPrice: compareAt,
     compareAtPrice: compareAt,
-    currency: "USD",
+    currency: "BDT",
     images: values.images.length > 0 ? values.images : [`${id}-1`],
     category: values.category,
+    categories: [...values.categories],
     ageRange: `${values.ageMin}-${values.ageMax}Y`,
     gender: values.gender,
     colors: values.colors.map((color) => color.name),
     sizes: values.sizes,
     material: base.material ?? "Organic cotton",
     badge,
-    modelColor: COLOR_HEX[firstColor] ?? DEFAULT_SWATCH,
     tags: base.tags ?? [],
     rating: base.rating ?? 5,
     reviewCount: base.reviewCount ?? 0,
     stock: values.stock,
     inStock: values.stock > 0,
     featured: values.featured,
+    virtualBoutique: values.virtualBoutique,
+    newArrival: values.newArrival,
+    bestSeller: values.bestSeller,
+    featuredOrder: values.featuredOrder,
     status: values.active ? "active" : "draft",
     createdAt: base.createdAt ?? new Date().toISOString(),
 
     sku: values.sku,
-    costPerItem: values.costPerItem ?? 0,
+    costPrice: values.costPrice ?? 0,
+    variants: values.variants.map((variant) => ({
+      ...variant,
+      sku: variant.sku?.trim() || undefined,
+    })),
     lowStockThreshold: values.lowStockThreshold,
     trackInventory: values.trackInventory,
-    metaTitle: values.metaTitle?.trim() ? values.metaTitle : `${values.name} | Little Luxe`,
+    metaTitle: values.metaTitle?.trim() ? values.metaTitle : `${values.name} | Mukra`,
     metaDescription: values.metaDescription?.trim()
       ? values.metaDescription
       : values.description.slice(0, 160),
-    modelUrl: values.modelUrl,
   };
 }
 
@@ -89,6 +94,8 @@ interface AdminState {
   search: string;
 
   setSearch: (value: string) => void;
+  setProducts: (products: AdminProduct[]) => void;
+  upsertProduct: (product: AdminProduct) => void;
 
   saveProduct: (values: AdminProductValues, id?: string) => string;
   deleteProducts: (ids: string[]) => void;
@@ -126,6 +133,13 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   search: "",
 
   setSearch: (value) => set({ search: value }),
+  setProducts: (products) => set({ products }),
+  upsertProduct: (next) =>
+    set((state) => ({
+      products: state.products.some((product) => product.id === next.id)
+        ? state.products.map((product) => (product.id === next.id ? next : product))
+        : [next, ...state.products],
+    })),
 
   saveProduct: (values, id) => {
     const productId = id ?? slugify(values.slug || values.name);
@@ -165,6 +179,10 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       sku: `${source.sku}-C${suffix - 1}`,
       status: "draft",
       featured: false,
+      virtualBoutique: false,
+      newArrival: false,
+      bestSeller: false,
+      featuredOrder: 0,
       createdAt: new Date().toISOString(),
     };
 
@@ -175,15 +193,37 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   setProductsOutOfStock: (ids) =>
     set((state) => ({
       products: state.products.map((product) =>
-        ids.includes(product.id) ? { ...product, stock: 0, inStock: false } : product,
+        ids.includes(product.id)
+          ? {
+              ...product,
+              stock: 0,
+              inStock: false,
+              variants: product.variants.map((variant) => ({ ...variant, stock: 0 })),
+            }
+          : product,
       ),
     })),
 
   restockProduct: (id, units) =>
     set((state) => ({
-      products: state.products.map((product) =>
-        product.id === id ? { ...product, stock: product.stock + units, inStock: true } : product,
-      ),
+      products: state.products.map((product) => {
+        if (product.id !== id) return product;
+        if (product.variants.length === 0) {
+          const stock = product.stock + units;
+          return { ...product, stock, inStock: stock > 0 };
+        }
+
+        const variants = product.variants.map((variant, index) => ({
+          ...variant,
+          stock:
+            variant.stock +
+            Math.floor(units / product.variants.length) +
+            (index < units % product.variants.length ? 1 : 0),
+        }));
+        const stock = variants.reduce((total, variant) => total + variant.stock, 0);
+
+        return { ...product, variants, stock, inStock: stock > 0 };
+      }),
     })),
 
   updateOrderStatus: (id, status) =>

@@ -12,12 +12,12 @@ import { useAdminStore } from "@/store/useAdminStore";
 const RESTOCK_UNITS = 25;
 
 export function LowStockPanel({ className }: { className?: string }) {
-  const products = useAdminStore((state) => state.products);
+  const products = useAdminStore((state) => state.products ?? []);
   const restockProduct = useAdminStore((state) => state.restockProduct);
 
   const low = getLowStockProducts(products);
   const outOfStock = products.filter(
-    (product) => product.status === "active" && product.stock <= 0,
+    (product) => product && product.status === "active" && product.stock <= 0,
   );
   /* Urgent first: empty shelves, then the thinnest stock. */
   const alerts = [...outOfStock, ...low];

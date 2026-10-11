@@ -8,8 +8,8 @@ import { useLanguageStore } from "@/store/useLanguageStore";
 /** Suggested destinations — real routes, so the visitor has somewhere to go. */
 const SUGGESTIONS = [
   { label: { en: "New Arrivals", bn: "নতুন আসন্ন" }, href: "/shop?sort=newest" },
-  { label: { en: "Dresses", bn: "ড্রেস" }, href: "/shop?category=dresses" },
-  { label: { en: "Shoes", bn: "জুতা" }, href: "/shop?category=shoes" },
+  { label: { en: "Jackets & Coats", bn: "জ্যাকেট ও কোট" }, href: "/shop?category=jackets-coats" },
+  { label: { en: "Accessories", bn: "অনুষঙ্গ" }, href: "/shop?category=accessories" },
   { label: { en: "Track an order", bn: "অর্ডার ট্র্যাক করুন" }, href: "/dashboard/orders" },
 ] as const;
 

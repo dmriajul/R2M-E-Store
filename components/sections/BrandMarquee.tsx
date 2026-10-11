@@ -10,12 +10,12 @@ import { MARQUEE_WORDS } from "@/lib/site";
  * plus a gold gradient sheen sweeps across on top.
  */
 export function BrandMarquee() {
-  const row = [...MARQUEE_WORDS, ...MARQUEE_WORDS, ...MARQUEE_WORDS];
+  const row = [...MARQUEE_WORDS, ...MARQUEE_WORDS];
 
   return (
     <section
       aria-label="Brand values"
-      className="relative overflow-hidden border-y border-glass-border bg-[#111] py-16"
+      className="relative overflow-hidden border-y border-glass-border bg-[#111] py-8 md:py-10"
     >
       {/* Edge fades keep the loop seam invisible. */}
       <div
@@ -30,18 +30,18 @@ export function BrandMarquee() {
 
       <div
         aria-hidden
-        className="flex w-max animate-marquee items-center will-change-transform motion-reduce:animate-none"
+        className="flex w-max animate-marquee items-center will-change-transform"
       >
         {[0, 1].map((half) => (
           <div key={half} className="flex shrink-0 items-center">
             {row.map((word, index) => (
               <span key={`${half}-${word}-${index}`} className="flex items-center">
-                <span className="px-6 text-7xl font-bold tracking-tight text-transparent [-webkit-text-stroke:1px_#D4AF37] md:px-10 md:text-9xl md:[-webkit-text-stroke:2px_#D4AF37]">
+                <span className="px-6 text-xl font-light tracking-[0.2em] text-transparent [-webkit-text-stroke:1px_rgba(212,175,55,0.6)] md:px-10 md:text-2xl">
                   {word}
                 </span>
                 <span
                   aria-hidden
-                  className="text-4xl font-bold text-primary md:text-6xl"
+                  className="text-2xl font-light text-primary/60 md:text-3xl"
                 >
                   ·
                 </span>

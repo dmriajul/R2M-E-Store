@@ -11,10 +11,10 @@ export default function DashboardWishlistPage() {
 
   return (
     <>
-      <title>My Wishlist | LITTLE LUXE</title>
+      <title>My Wishlist | MUKRA</title>
       <meta
         name="description"
-        content="Your saved Little Luxe pieces — move them to the bag whenever you're ready."
+        content="Your saved Mukra pieces — move them to the bag whenever you're ready."
       />
       <meta name="robots" content="noindex" />
 

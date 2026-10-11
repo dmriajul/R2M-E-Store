@@ -39,7 +39,7 @@ import type {
 /** Signed-in operator (decorative — there is no auth backend). */
 export const ADMIN_USER = {
   name: "Riajul Khandokar",
-  email: "admin@littleluxe.com",
+  email: "admin@mukra.com",
   role: "Admin",
   initials: "RK",
 } as const;
@@ -199,15 +199,35 @@ function makeSku(product: Product, index: number): string {
 
 /** Catalogue → console records. Extra ops fields get sensible defaults. */
 export function buildAdminProducts(): AdminProduct[] {
-  return PRODUCTS.map((product, index) => ({
-    ...product,
-    sku: makeSku(product, index),
-    costPerItem: Math.round(product.price * 0.45),
-    lowStockThreshold: ADMIN_LOW_STOCK_THRESHOLD,
-    trackInventory: true,
-    metaTitle: `${product.name} | Little Luxe`,
-    metaDescription: product.tagline,
-  }));
+  return PRODUCTS.map((product, index) => {
+    const combinations = product.colors.flatMap((color) =>
+      product.sizes.map((size) => ({ color, size })),
+    );
+    const variantCount = combinations.length;
+
+    return {
+      ...product,
+      categories: product.categories?.length ? [...product.categories] : [product.category],
+      virtualBoutique: product.virtualBoutique ?? false,
+      newArrival: product.newArrival ?? false,
+      bestSeller: product.bestSeller ?? false,
+      featuredOrder: product.featuredOrder ?? 0,
+      sku: makeSku(product, index),
+      costPrice: Math.round(product.price * 0.45),
+      variants:
+        product.variants?.map((variant) => ({ ...variant })) ??
+        combinations.map((variant, variantIndex) => ({
+          ...variant,
+          stock:
+            Math.floor(product.stock / variantCount) +
+            (variantIndex < product.stock % variantCount ? 1 : 0),
+        })),
+      lowStockThreshold: ADMIN_LOW_STOCK_THRESHOLD,
+      trackInventory: true,
+      metaTitle: `${product.name} | Mukra`,
+      metaDescription: product.tagline,
+    };
+  });
 }
 
 /** Products the ops team should restock — lowest stock first. */
@@ -622,7 +642,7 @@ export const ADMIN_COUPONS: readonly AdminCoupon[] = [
     usageLimit: 50,
     startsAt: "2026-06-01",
     endsAt: "2026-11-30",
-    categories: ["Dresses", "Bottoms"],
+    categories: ["Jackets & Coats", "Winter Bottoms / Trousers"],
     active: true,
   },
   {
@@ -682,11 +702,13 @@ export function getCouponStatus(coupon: AdminCoupon, todayIso: string = DEMO_NOW
 
 /** One-line descriptions shown on the category cards. */
 const CATEGORY_BLURB: Readonly<Record<ProductCategory, string>> = {
-  Dresses: "Party frocks, summer dresses and matching sets.",
-  "Tops & Tees": "Everyday tees, shirts and cosy layering pieces.",
-  Bottoms: "Skirts, dungarees and playground-proof trousers.",
-  Shoes: "First walkers, sneakers and party shoes.",
-  Outerwear: "Jackets and hoodies for colder adventures.",
+  "Jackets & Coats": "Warm outer layers for colder adventures.",
+  "Sweatshirts & Hoodies": "Cosy layers for everyday play.",
+  "Sweaters & Cardigans": "Soft knits for comfortable layering.",
+  "Winter Bottoms / Trousers": "Warm trousers made for playground adventures.",
+  "Winter Sets & Tracksuits": "Coordinated sets for comfort and warmth.",
+  "Tops & Tees": "Everyday polos, tees and casual tops.",
+  "Innerwear & Thermals": "Comfortable essentials and warm base layers.",
   Accessories: "Bags, clips and finishing touches.",
 };
 
@@ -733,11 +755,11 @@ export const PRODUCT_BADGE_CHOICES: readonly (ProductBadge | "none")[] = [
 /* -------------------------------------------------------------------------- */
 
 export const ORDERS_BY_CATEGORY: readonly BreakdownRow[] = [
-  { label: "Dresses", value: 35, hint: "Best performing line" },
+  { label: "Jackets & Coats", value: 35, hint: "Best performing line" },
   { label: "Tops & Tees", value: 25 },
-  { label: "Shoes", value: 18 },
-  { label: "Bottoms", value: 12 },
-  { label: "Outerwear", value: 6 },
+  { label: "Winter Sets & Tracksuits", value: 18 },
+  { label: "Winter Bottoms / Trousers", value: 12 },
+  { label: "Sweatshirts & Hoodies", value: 6 },
   { label: "Accessories", value: 4 },
 ] as const;
 
@@ -797,8 +819,8 @@ export const ADMIN_NOTIFICATIONS: readonly AdminNotification[] = [
 
 export const ADMIN_SETTINGS: AdminSettings = {
   general: {
-    storeName: "Little Luxe",
-    storeEmail: "hello@littleluxe.com",
+    storeName: "Mukra",
+    storeEmail: "hello@mukra.com",
     phone: "+880 1712 345678",
     address: "House 24, Road 7, Dhanmondi, Dhaka 1209, Bangladesh",
     currency: "BDT",
@@ -822,7 +844,7 @@ export const ADMIN_SETTINGS: AdminSettings = {
     orderConfirmation: true,
     shippingUpdate: true,
     lowStockAlert: true,
-    adminEmail: "ops@littleluxe.com",
+    adminEmail: "ops@mukra.com",
   },
 };
 

@@ -1,18 +1,20 @@
 /**
- * Shared domain types for the LITTLE LUXE storefront (kids fashion, ages 0–14).
+ * Shared domain types for the MUKRA storefront (kids fashion, ages 0–12).
  * Keep these framework-agnostic — they are consumed by the store, API routes,
- * server components and the 3D viewer alike.
+ * and server components.
  */
 
 export type CurrencyCode = "USD" | "EUR" | "GBP" | "BDT";
 
 /** Merchandising categories. */
 export type ProductCategory =
-  | "Dresses"
+  | "Jackets & Coats"
+  | "Sweatshirts & Hoodies"
+  | "Sweaters & Cardigans"
+  | "Winter Bottoms / Trousers"
+  | "Winter Sets & Tracksuits"
   | "Tops & Tees"
-  | "Bottoms"
-  | "Shoes"
-  | "Outerwear"
+  | "Innerwear & Thermals"
   | "Accessories";
 
 export type ProductGender = "Girls" | "Boys" | "Unisex";
@@ -20,19 +22,19 @@ export type ProductGender = "Girls" | "Boys" | "Unisex";
 export type ProductBadge = "New" | "Sale" | "Bestseller" | "Organic";
 
 /** Age buckets used by the shop filters. */
-export type AgeFilter = "All Ages" | "0-2Y" | "3-5Y" | "6-8Y" | "9-14Y";
+export type AgeFilter = "All Ages" | "0-2Y" | "3-5Y" | "6-8Y" | "9-12Y";
 
 export type ProductStatus = "draft" | "active" | "archived";
 
 export interface Product {
   id: string;
-  /** URL-safe identifier — also used to derive placeholder image tokens. */
+  /** URL-safe identifier used for product routes and demo-photo lookup. */
   slug: string;
   name: string;
   /** Short marketing line shown on cards and in search. */
   tagline: string;
   description: string;
-  /** Current price in dollars (not cents). */
+  /** Current price in Bangladeshi taka. */
   price: number;
   /** Was-price, present only while an item is discounted. */
   originalPrice?: number;
@@ -42,15 +44,13 @@ export interface Product {
    */
   compareAtPrice?: number;
   currency: CurrencyCode;
-  /**
-   * Placeholder image tokens (e.g. `floral-summer-dress-1`). There are no
-   * external images in this build — the UI paints gradients + emoji from
-   * `CATEGORY_META` instead.
-   */
+  /** Product image URLs, including demo photography or uploaded assets. */
   images: string[];
 
   /* ---- Kids-specific attributes ---- */
   category: ProductCategory;
+  /** Additional memberships in the existing storefront category taxonomy. */
+  categories?: ProductCategory[];
   /** Display label, e.g. "3-6Y". Source of truth for age filtering. */
   ageRange: string;
   gender: ProductGender;
@@ -59,17 +59,20 @@ export interface Product {
   sizes: string[];
   material: string;
   badge?: ProductBadge;
-  /** Hex colour driving the 3D viewer material. */
-  modelColor: string;
-
   /* ---- Merchandising ---- */
   tags: string[];
   rating: number;
   reviewCount: number;
   /** Units on hand. `inStock` is derived from this at module load. */
   stock: number;
+  /** Available quantity for each selected size and colour, when tracked by variant. */
+  variants?: ProductInventoryVariant[];
   inStock: boolean;
   featured: boolean;
+  virtualBoutique?: boolean;
+  newArrival?: boolean;
+  bestSeller?: boolean;
+  featuredOrder?: number;
   status: ProductStatus;
   createdAt: string;
   /**
@@ -79,10 +82,21 @@ export interface Product {
   updatedAt?: string;
 }
 
+export interface ProductInventoryVariant {
+  size: string;
+  color: string;
+  stock: number;
+}
+
+export interface AdminProductVariant extends ProductInventoryVariant {
+  sku?: string;
+}
+
 /** Optional choices captured when an item is added to the cart. */
 export interface ProductVariant {
   size?: string;
   color?: string;
+  stock?: number;
 }
 
 /** How a cart line is keyed: same product in two sizes = two lines. */
@@ -103,6 +117,10 @@ export interface CartItem {
   /** Composite key: `${productId}-${color}-${size}`. */
   lineId: string;
   productId: string;
+  /** Database order-line id, present on persisted orders. */
+  orderItemId?: string;
+  availableSizes?: string[];
+  availableColors?: string[];
   /**
    * @deprecated Alias of `productId`, kept so earlier card components that
    * assert `item.id === product.id` keep working. Use `lineId` for updates.
@@ -333,14 +351,18 @@ export type StockState = "in-stock" | "low-stock" | "out-of-stock";
 /** A product as the admin console stores it (extra ops fields on top of `Product`). */
 export interface AdminProduct extends Product {
   sku: string;
+  categories: ProductCategory[];
+  virtualBoutique: boolean;
+  newArrival: boolean;
+  bestSeller: boolean;
+  featuredOrder: number;
   /** What we pay per unit — used for the margin readout. */
-  costPerItem: number;
+  costPrice: number;
+  variants: AdminProductVariant[];
   lowStockThreshold: number;
   trackInventory: boolean;
   metaTitle: string;
   metaDescription: string;
-  /** Optional uploaded 3D asset token (mock — no real files). */
-  modelUrl?: string;
 }
 
 export interface AdminOrder {
@@ -490,6 +512,34 @@ export interface ApiResponse<TData> {
   source?: "database" | "mock";
 }
 
+export type ReturnStatusKey = "PENDING" | "APPROVED" | "REJECTED" | "RECEIVED" | "COMPLETED";
+export type ReturnTypeKey = "REFUND" | "EXCHANGE";
+
+export interface ReturnRequestRecord {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  userId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  orderItemId: string;
+  itemName: string;
+  itemSize: string;
+  itemColor: string;
+  quantity: number;
+  type: ReturnTypeKey;
+  reason: string;
+  details?: string;
+  requestedSize?: string;
+  requestedColor?: string;
+  images: string[];
+  status: ReturnStatusKey;
+  adminNote?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Backend integration (Step 7)                                              */
 /* -------------------------------------------------------------------------- */
@@ -537,12 +587,15 @@ export interface OrderPaymentSnapshot {
 
 /** One line of an order as it arrives at `POST /api/orders`. */
 export interface OrderLineInput {
+  id?: string;
   productId: string;
   name: string;
   color: string;
   size: string;
   quantity: number;
   price: number;
+  availableSizes?: string[];
+  availableColors?: string[];
 }
 
 /** `POST /api/orders` body. */
@@ -602,7 +655,7 @@ export interface UploadResult {
   height?: number;
   bytes?: number;
   format?: string;
-  kind: "image" | "model";
+  kind: "image";
   provider: "cloudinary" | "local";
   storage: string;
 }

@@ -102,17 +102,17 @@ export default function RegisterPage() {
 
   return (
     <>
-      <title>Create Account | LITTLE LUXE</title>
+      <title>Create Account | MUKRA</title>
       <meta
         name="description"
-        content="Join LITTLE LUXE for early access to new kids fashion drops, size help and order tracking."
+        content="Join MUKRA for early access to new kids fashion drops, size help and order tracking."
       />
 
       <AuthCard>
         <header className="text-center">
           <h1 className="text-3xl font-bold tracking-tight">Create Account ✨</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Join the Little Luxe family
+            Join the Mukra family
           </p>
         </header>
 

@@ -6,9 +6,16 @@
  * storefront never sees an error state it can't render.
  */
 
-import { CATEGORY_META, COLOR_HEX, DEFAULT_SWATCH, PRODUCTS, getProductById } from "@/lib/site";
+import { CATEGORY_META, PRODUCT_IMAGES, PRODUCTS, getProductById } from "@/lib/site";
+import { isRenderableImage } from "@/lib/images";
 import { withDatabase } from "@/lib/prisma";
-import type { Product, ProductBadge, ProductCategory, ProductGender } from "@/types";
+import type {
+  Product,
+  ProductBadge,
+  ProductCategory,
+  ProductGender,
+  ProductInventoryVariant,
+} from "@/types";
 
 /** The row shape we read back from Postgres. */
 export interface ProductRow {
@@ -19,16 +26,21 @@ export interface ProductRow {
   price: number;
   originalPrice: number | null;
   category: string;
+  categories?: string[];
   gender: string;
   ageRange: string;
   material: string | null;
   colors: string[];
   sizes: string[];
   images: string[];
-  modelColor: string | null;
   stock: number;
+  variants?: ProductInventoryVariant[];
   badge: string | null;
   featured: boolean;
+  featuredOrder?: number;
+  virtualBoutique?: boolean;
+  newArrival?: boolean;
+  bestSeller?: boolean;
   active: boolean;
   createdAt?: Date | string;
 }
@@ -46,9 +58,15 @@ function toGender(value: string): ProductGender {
 /** Database row → storefront `Product`. */
 export function rowToProduct(row: ProductRow): Product {
   const category = toProductCategory(row.category);
-  const firstColor = row.colors[0] ?? "Pink";
-  const images =
-    row.images.length > 0 ? row.images : [`${row.slug}-1`, `${row.slug}-2`, `${row.slug}-3`];
+  const variants = row.variants?.length
+    ? row.variants.map(({ size, color, stock }) => ({ size, color, stock }))
+    : undefined;
+  const stock = variants
+    ? variants.reduce((total, variant) => total + variant.stock, 0)
+    : row.stock;
+  const images = row.images.some(isRenderableImage)
+    ? row.images
+    : [...(PRODUCT_IMAGES[row.slug] ?? row.images)];
 
   return {
     id: row.id,
@@ -59,22 +77,30 @@ export function rowToProduct(row: ProductRow): Product {
     price: row.price,
     originalPrice: row.originalPrice ?? undefined,
     compareAtPrice: row.originalPrice ?? undefined,
-    currency: "USD",
+    currency: "BDT",
     images,
     category,
+    categories:
+      row.categories?.length
+        ? row.categories.map(toProductCategory)
+        : [category],
     ageRange: row.ageRange,
     gender: toGender(row.gender),
     colors: row.colors,
     sizes: row.sizes,
     material: row.material ?? "Organic cotton",
     badge: (row.badge as ProductBadge | null) ?? undefined,
-    modelColor: row.modelColor ?? COLOR_HEX[firstColor] ?? DEFAULT_SWATCH,
     tags: [],
     rating: 5,
     reviewCount: 0,
-    stock: row.stock,
-    inStock: row.stock > 0 && row.active,
+    stock,
+    ...(variants ? { variants } : {}),
+    inStock: stock > 0 && row.active,
     featured: row.featured,
+    featuredOrder: row.featuredOrder ?? 0,
+    virtualBoutique: row.virtualBoutique ?? false,
+    newArrival: row.newArrival ?? false,
+    bestSeller: row.bestSeller ?? false,
     status: row.active ? "active" : "draft",
     createdAt:
       typeof row.createdAt === "string"
@@ -86,7 +112,9 @@ export function rowToProduct(row: ProductRow): Product {
 export interface ProductQuery {
   category?: string;
   featured?: boolean;
+  placement?: "virtualBoutique" | "newArrival" | "bestSeller";
   activeOnly?: boolean;
+  limit?: number;
 }
 
 /** Catalogue listing. Fallback: the 12 seeded mock products. */
@@ -97,11 +125,29 @@ export async function listProducts(
     async (db) => {
       const rows = (await db.product.findMany({
         where: {
-          ...(query.category ? { category: query.category } : {}),
+          ...(query.category
+            ? {
+                OR: [
+                  { category: query.category },
+                  { categories: { has: query.category } },
+                ],
+              }
+            : {}),
           ...(query.featured ? { featured: true } : {}),
+          ...(query.placement ? { [query.placement]: true } : {}),
           ...(query.activeOnly === false ? {} : { active: true }),
         },
-        orderBy: { createdAt: "asc" },
+        include: {
+          variants: { select: { size: true, color: true, stock: true } },
+        },
+        orderBy: query.featured
+          ? [{ featuredOrder: "asc" }, { createdAt: "desc" }, { id: "asc" }]
+          : query.placement
+            ? [{ createdAt: "desc" }, { id: "asc" }]
+            : [{ createdAt: "asc" }, { id: "asc" }],
+        ...(query.limit
+          ? { take: Math.min(Math.max(Math.trunc(query.limit), 1), 100) }
+          : {}),
       })) as ProductRow[];
 
       return rows.map(rowToProduct);
@@ -109,10 +155,23 @@ export async function listProducts(
     () =>
       PRODUCTS.filter(
         (product) =>
-          (!query.category || product.category === query.category) &&
+          (!query.category ||
+            product.category === query.category ||
+            product.categories?.includes(toProductCategory(query.category))) &&
           (!query.featured || product.featured) &&
+          (!query.placement || product[query.placement]) &&
           (query.activeOnly === false || product.status === "active"),
-      ),
+      )
+        .sort((a, b) =>
+          query.featured
+            ? (a.featuredOrder ?? 0) - (b.featuredOrder ?? 0) ||
+              b.createdAt.localeCompare(a.createdAt) ||
+              a.id.localeCompare(b.id)
+            : query.placement
+              ? b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id)
+              : a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+        )
+        .slice(0, query.limit ? Math.min(Math.max(Math.trunc(query.limit), 1), 100) : undefined),
   );
 
   return { products: data, source };
@@ -126,11 +185,20 @@ export async function findProduct(identifier: string): Promise<{
   const { data, source } = await withDatabase<Product | null>(
     async (db) => {
       const row = (await db.product.findFirst({
-        where: { OR: [{ slug: identifier }, { id: identifier }] },
+        where: {
+          OR: [{ slug: identifier }, { id: identifier }],
+          active: true,
+        },
+        include: {
+          variants: { select: { size: true, color: true, stock: true } },
+        },
       })) as ProductRow | null;
       return row ? rowToProduct(row) : null;
     },
-    () => getProductById(identifier) ?? null,
+    () => {
+      const product = getProductById(identifier);
+      return product?.status === "active" ? product : null;
+    },
   );
 
   return { product: data, source };
@@ -145,7 +213,12 @@ export async function findProductsByIds(ids: readonly string[]): Promise<{
 
   const { data, source } = await withDatabase<Product[]>(
     async (db) => {
-      const rows = (await db.product.findMany({ where: { id: { in: unique } } })) as ProductRow[];
+      const rows = (await db.product.findMany({
+        where: { id: { in: unique } },
+        include: {
+          variants: { select: { size: true, color: true, stock: true } },
+        },
+      })) as ProductRow[];
       return rows.map(rowToProduct);
     },
     () =>

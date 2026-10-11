@@ -2,9 +2,9 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
-import { MODEL_FOLDER, PRODUCT_FOLDER, deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
+import { PRODUCT_FOLDER, deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
 import { isCloudinaryConfigured } from "@/lib/demo-mode";
-import { validateUploadFile } from "@/lib/images";
+import { validateHeroUploadFile, validateUploadFile } from "@/lib/images";
 import { UPLOAD_BUCKETS, UPLOAD_URL_PREFIX, UPLOAD_ROOT } from "@/lib/uploads";
 import type { ApiResponse } from "@/types";
 
@@ -38,9 +38,8 @@ function rateLimit(key: string): { ok: boolean; retryAfter: number } {
 
 async function saveLocally(
   file: File,
-  folder: string,
+  bucket: string = UPLOAD_BUCKETS.products,
 ): Promise<{ url: string; publicId: string; bytes: number }> {
-  const bucket = folder === MODEL_FOLDER ? UPLOAD_BUCKETS.models : UPLOAD_BUCKETS.products;
   const target = path.join(UPLOAD_ROOT, bucket);
   await mkdir(target, { recursive: true });
 
@@ -67,6 +66,14 @@ async function saveLocally(
 
 export async function POST(request: NextRequest): Promise<NextResponse<ApiResponse<unknown>>> {
   const session = await auth();
+  const isHeroUpload = request.nextUrl.searchParams.get("purpose") === "hero";
+  if (isHeroUpload && session?.user?.role !== "ADMIN") {
+    return NextResponse.json(
+      { data: null, error: "Administrator access required", success: false },
+      { status: 403 },
+    );
+  }
+
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const key = session?.user?.email ?? forwarded ?? "anonymous";
 
@@ -89,17 +96,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
   }
 
   const file = form.get("file");
-  const folder = String(form.get("folder") ?? PRODUCT_FOLDER);
-  const kind = folder === MODEL_FOLDER || String(form.get("kind") ?? "") === "model" ? "model" : "image";
-
   if (!(file instanceof File)) {
     return NextResponse.json({ data: null, error: "No file provided", success: false }, { status: 400 });
   }
 
-  const validation = validateUploadFile(
-    { name: file.name, type: file.type, size: file.size },
-    kind,
-  );
+  const validation = (isHeroUpload ? validateHeroUploadFile : validateUploadFile)({
+    name: file.name,
+    type: file.type,
+    size: file.size,
+  });
   if (!validation.ok) {
     return NextResponse.json(
       { data: null, error: validation.error ?? "That file can't be uploaded", success: false },
@@ -108,15 +113,18 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
   }
 
   // Prefer Cloudinary; fall back to the local disk so the demo always works.
+  const bucket = isHeroUpload ? UPLOAD_BUCKETS.hero : UPLOAD_BUCKETS.products;
+  const resourceType = validation.kind === "video" ? "video" : "image";
   const remote = await uploadToCloudinary(
     { buffer: Buffer.from(await file.arrayBuffer()), mimetype: file.type, originalName: file.name },
-    folder,
+    isHeroUpload ? "mukra/hero" : PRODUCT_FOLDER,
+    resourceType,
   );
 
   const asset =
     remote ??
     ({
-      ...(await saveLocally(file, folder)),
+      ...(await saveLocally(file, bucket)),
       provider: "local" as const,
       format: file.name.split(".").pop(),
     });
@@ -142,7 +150,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
 
 export async function DELETE(request: NextRequest): Promise<NextResponse<ApiResponse<unknown>>> {
   const publicId = request.nextUrl.searchParams.get("publicId");
-  const folder = request.nextUrl.searchParams.get("folder") ?? PRODUCT_FOLDER;
 
   if (!publicId) {
     return NextResponse.json({ data: null, error: "publicId is required", success: false }, { status: 400 });
@@ -158,7 +165,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse<ApiResp
     return NextResponse.json({ data: { deleted: true, provider: "local" }, error: null, success: true });
   }
 
-  const deleted = await deleteFromCloudinary(publicId, folder);
+  const deleted = await deleteFromCloudinary(publicId);
   return NextResponse.json(
     {
       data: { deleted, provider: "cloudinary" },

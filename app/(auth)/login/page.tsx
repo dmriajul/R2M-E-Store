@@ -84,10 +84,10 @@ export default function LoginPage() {
 
   return (
     <>
-      <title>Sign In | LITTLE LUXE</title>
+      <title>Sign In | MUKRA</title>
       <meta
         name="description"
-        content="Sign in to LITTLE LUXE to track orders, save favourites and check out faster."
+        content="Sign in to MUKRA to track orders, save favourites and check out faster."
       />
 
       <AuthCard>
@@ -206,7 +206,7 @@ export default function LoginPage() {
         <SocialButtons />
 
         <p className="mt-7 text-center text-sm text-muted-foreground">
-          New to Little Luxe?{" "}
+          New to Mukra?{" "}
           <Link
             href="/register"
             className="font-medium text-primary underline-offset-4 transition-colors duration-300 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"

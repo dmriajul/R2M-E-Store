@@ -1,7 +1,7 @@
 /**
  * Image URL helpers — Cloudinary transformations when the asset lives on
  * Cloudinary, untouched URLs for everything else (Unsplash leftovers, files in
- * `/uploads/…`, gradient placeholder tokens).
+ * `/uploads/…`, or legacy placeholder tokens).
  *
  * Every function here is pure string maths: no network calls, no SDK, safe to
  * import from server components, client components and route handlers alike.

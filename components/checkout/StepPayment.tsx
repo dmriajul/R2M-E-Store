@@ -108,7 +108,7 @@ export function StepPayment() {
     try {
       const body = new FormData();
       body.append("file", file);
-      body.append("folder", "little-luxe/payments");
+      body.append("folder", "mukra/payments");
 
       const response = await fetch("/api/upload", { method: "POST", body });
       const payload = (await response.json()) as { data?: UploadResult; error?: string };

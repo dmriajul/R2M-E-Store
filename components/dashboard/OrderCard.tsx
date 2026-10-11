@@ -11,6 +11,7 @@ import { OrderStatusBadge } from "@/components/dashboard/OrderStatusBadge";
 import { OrderTimeline } from "@/components/dashboard/OrderTimeline";
 import { useReorder } from "@/components/dashboard/useReorder";
 import { Button } from "@/components/ui/button";
+import { ReturnRequestDialog } from "@/components/dashboard/ReturnRequestDialog";
 import type { CartItem, DashboardOrder } from "@/types";
 
 const EASE_LUXE = [0.22, 1, 0.36, 1] as const;
@@ -199,6 +200,12 @@ export function OrderCard({
             Reorder
           </Button>
         )}
+        <ReturnRequestDialog
+          orderId={order.id}
+          orderNumber={order.number}
+          items={order.items}
+          delivered={order.status === "delivered"}
+        />
       </div>
 
       {/* ---------- Expandable detail ---------- */}

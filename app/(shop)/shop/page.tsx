@@ -4,11 +4,15 @@ import { filtersFromSearchParams } from "@/lib/shop";
 import { SITE } from "@/lib/site";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema } from "@/lib/seo";
+import { listProducts } from "@/lib/data/products";
+import { ShopHeader } from "@/components/shop/ShopHeader";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: { absolute: "Kids Fashion Collection | Little Luxe" },
+  title: { absolute: "Kids Fashion Collection | Mukra" },
   description:
-    "Shop the Little Luxe kids collection — organic cotton dresses, tees, bottoms, shoes, outerwear and accessories for ages 0–14. Free shipping over ৳500, cash on delivery and 30-day easy returns.",
+    "Shop the Mukra kids collection — organic cotton dresses, tees, bottoms, shoes, outerwear and accessories for ages 0–14. Free shipping over ৳500, cash on delivery and 30-day easy returns.",
   keywords: [
     "kids fashion",
     "children's clothing",
@@ -19,7 +23,7 @@ export const metadata: Metadata = {
   ],
   alternates: { canonical: "/shop" },
   openGraph: {
-    title: "Kids Fashion Collection | Little Luxe",
+    title: "Kids Fashion Collection | Mukra",
     description:
       "Adorable, hard-wearing kids clothing in organic fabrics — ages 0 to 14.",
     type: "website",
@@ -37,6 +41,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
   const params = await searchParams;
   // Filters are resolved on the server so a shared link paints the right grid.
   const initialFilters = filtersFromSearchParams(params);
+  const { products } = await listProducts();
 
   return (
     <div className="relative">
@@ -55,25 +60,9 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
       />
 
       {/* ---------- Page header ---------- */}
-      <header className="relative mx-auto w-full max-w-7xl px-4 pt-14 pb-8 sm:px-6 lg:px-8 lg:pt-20">
-        <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-700">
-          <p className="text-xs font-semibold tracking-[0.3em] text-lavender uppercase">
-            {SITE.kidsBrand}
-          </p>
-          <h1 className="mt-4 text-5xl font-bold tracking-tight text-white sm:text-6xl">
-            Kids Collection
-          </h1>
-          <span
-            aria-hidden
-            className="mt-5 block h-1 w-24 rounded-full bg-linear-to-r from-primary via-rose to-lavender"
-          />
-          <p className="prose-kids mt-5 max-w-xl text-lg text-muted-foreground">
-            {SITE.kidsTagline}
-          </p>
-        </div>
-      </header>
+      <ShopHeader />
 
-      <ShopCatalog initialFilters={initialFilters} />
+      <ShopCatalog initialFilters={initialFilters} products={products} />
     </div>
   );
 }

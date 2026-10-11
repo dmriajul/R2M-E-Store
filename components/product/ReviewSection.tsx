@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { BadgeCheck, PenLine, Star } from "lucide-react";
+import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
 import { MOCK_REVIEWS } from "@/lib/site";
 import { StarRating } from "@/components/product/StarRating";
 import { Button } from "@/components/ui/button";
@@ -45,15 +46,19 @@ function buildBreakdown(rating: number, reviewCount: number): Array<{ stars: num
 export function ReviewSection({ product }: ReviewSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const isCaptchaEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
   const breakdown = buildBreakdown(product.rating, product.reviewCount);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isCaptchaEnabled && !captchaToken) return;
     // Reviews post to the backend in a later step.
     setSubmitted(true);
     window.setTimeout(() => {
       setSubmitted(false);
       setDialogOpen(false);
+      setCaptchaToken("");
     }, 1400);
   };
 
@@ -218,18 +223,32 @@ export function ReviewSection({ product }: ReviewSectionProps) {
               />
             </div>
 
+            {isCaptchaEnabled && (
+              <div className="mt-1">
+                <TurnstileCaptcha
+                  onVerify={setCaptchaToken}
+                  onError={() => setCaptchaToken("")}
+                  theme="dark"
+                />
+              </div>
+            )}
+
             <DialogFooter className="gap-2 sm:gap-3">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setDialogOpen(false)}
+                onClick={() => {
+                  setDialogOpen(false);
+                  setCaptchaToken("");
+                }}
                 className="h-11 rounded-full border-glass-border bg-glass text-xs tracking-[0.16em] uppercase"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="h-11 rounded-full bg-primary px-6 text-xs font-semibold tracking-[0.16em] text-primary-foreground uppercase"
+                disabled={isCaptchaEnabled && !captchaToken}
+                className="h-11 rounded-full bg-primary px-6 text-xs font-semibold tracking-[0.16em] text-primary-foreground uppercase disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitted ? "Thank you!" : "Submit review"}
               </Button>

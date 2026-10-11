@@ -168,7 +168,7 @@ export default function AdminOrdersPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `little-luxe-orders-${DEMO_NOW.slice(0, 10)}.csv`;
+    link.download = `mukra-orders-${DEMO_NOW.slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     toast.success(

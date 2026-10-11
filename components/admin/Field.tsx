@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils";
  */
 
 export const adminInputClass =
-  "h-10 w-full rounded-lg border border-[#2A2A2A] bg-[#151515] text-sm text-foreground transition-colors duration-200 placeholder:text-muted-foreground/80 focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:outline-none aria-invalid:border-rose/60 aria-invalid:focus-visible:ring-rose/20";
+  "h-10 w-full rounded-lg border border-[#2A2A2A] bg-[#151515] px-4 py-2.5 text-sm text-foreground transition-colors duration-200 placeholder:text-muted-foreground/80 focus-visible:border-blue-500/60 focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:outline-none aria-invalid:border-rose/60 aria-invalid:focus-visible:ring-rose/20";
 
-export const adminSelectClass = cn(adminInputClass, "px-2.5");
+export const adminSelectClass = cn(adminInputClass, "px-4");
 
 export const adminCardClass =
   "rounded-xl border border-[#242424] bg-[#141414] transition-colors duration-200";
@@ -40,7 +40,7 @@ export function AdminField({
   children,
 }: AdminFieldProps) {
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
+    <div suppressHydrationWarning className={cn("flex flex-col gap-1.5", className)}>
       <label
         htmlFor={htmlFor}
         className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase"
@@ -107,7 +107,7 @@ export function FormSection({
   className?: string;
 }) {
   return (
-    <fieldset className={cn("border-t border-[#242424] pt-5 first:border-t-0 first:pt-0", className)}>
+    <fieldset suppressHydrationWarning className={cn("border-t border-[#242424] pt-5 first:border-t-0 first:pt-0", className)}>
       <legend className="sr-only">{title}</legend>
       <p className="text-[11px] font-semibold tracking-[0.16em] text-blue-400 uppercase">
         {title}

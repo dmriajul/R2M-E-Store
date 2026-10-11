@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { CheckoutFlow } from "@/components/checkout/CheckoutFlow";
 
 export const metadata: Metadata = {
-  title: { absolute: "Checkout | LITTLE LUXE" },
+  title: { absolute: "Checkout | MUKRA" },
   description:
-    "Secure checkout for LITTLE LUXE kids fashion — card, bKash, Nagad or SSLCommerz. Free shipping over $50.",
+    "Secure checkout for MUKRA kids fashion — card, bKash, Nagad or SSLCommerz. Free shipping over $50.",
   // Transactional screen: keep it out of search results.
   robots: { index: false, follow: false },
 };

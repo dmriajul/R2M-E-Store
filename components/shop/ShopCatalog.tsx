@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,22 +15,26 @@ import {
 import { ProductCard } from "@/components/product/ProductCard";
 import { FilterBar } from "@/components/shop/FilterBar";
 import { Button } from "@/components/ui/button";
+import type { Product } from "@/types";
 
 interface ShopCatalogProps {
   /** Filters parsed from the URL on the server, so shared links render filtered. */
   initialFilters: ShopFilterState;
+  products: Product[];
 }
 
 /**
  * Shop grid + filtering.
  *
- * All filtering happens client-side against the mock catalogue. The URL is kept
+ * All filtering happens client-side against the server-provided catalogue. The URL is kept
  * in sync with `history.replaceState` (no router navigation, so typing on a
  * pill stays instant) — which keeps filter combinations shareable.
  */
-export function ShopCatalog({ initialFilters }: ShopCatalogProps) {
+export function ShopCatalog({ initialFilters, products: catalogue }: ShopCatalogProps) {
   const [filters, setFilters] = useState<ShopFilterState>(initialFilters);
   const [visibleCount, setVisibleCount] = useState(SHOP_PAGE_SIZE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadMoreTimer = useRef<number | undefined>(undefined);
 
   const products = useMemo(
     () =>
@@ -39,12 +43,21 @@ export function ShopCatalog({ initialFilters }: ShopCatalogProps) {
         age: filters.age,
         gender: filters.gender,
         sort: filters.sort,
-      }),
-    [filters.category, filters.age, filters.gender, filters.sort],
+      }, catalogue),
+    [catalogue, filters.category, filters.age, filters.gender, filters.sort],
   );
 
   const visible = products.slice(0, visibleCount);
   const hasMore = products.length > visible.length;
+
+  useEffect(
+    () => () => {
+      if (loadMoreTimer.current !== undefined) {
+        window.clearTimeout(loadMoreTimer.current);
+      }
+    },
+    [],
+  );
 
   // Mirror filters into the address bar and rewind the paging.
   useEffect(() => {
@@ -54,11 +67,21 @@ export function ShopCatalog({ initialFilters }: ShopCatalogProps) {
   }, [filters]);
 
   const updateFilters = (patch: Partial<ShopFilterState>) => {
+    setIsLoadingMore(false);
+    if (loadMoreTimer.current !== undefined) {
+      window.clearTimeout(loadMoreTimer.current);
+      loadMoreTimer.current = undefined;
+    }
     setFilters((current) => ({ ...current, ...patch }));
     setVisibleCount(SHOP_PAGE_SIZE);
   };
 
   const clearFilters = () => {
+    setIsLoadingMore(false);
+    if (loadMoreTimer.current !== undefined) {
+      window.clearTimeout(loadMoreTimer.current);
+      loadMoreTimer.current = undefined;
+    }
     setFilters((current) => ({
       ...DEFAULT_SHOP_FILTERS,
       view: current.view,
@@ -67,6 +90,16 @@ export function ShopCatalog({ initialFilters }: ShopCatalogProps) {
   };
 
   const isList = filters.view === "list";
+
+  const loadMore = () => {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+    loadMoreTimer.current = window.setTimeout(() => {
+      setVisibleCount((count) => count + SHOP_PAGE_SIZE);
+      setIsLoadingMore(false);
+      loadMoreTimer.current = undefined;
+    }, 450);
+  };
 
   return (
     <>
@@ -135,18 +168,50 @@ export function ShopCatalog({ initialFilters }: ShopCatalogProps) {
                     priority={index < 4}
                   />
                 ))}
+                {isLoadingMore &&
+                  Array.from(
+                    { length: Math.min(SHOP_PAGE_SIZE, products.length - visible.length) },
+                    (_, index) => (
+                      <div
+                        key={`loading-skeleton-${index}`}
+                        aria-hidden="true"
+                        className={cn(
+                          "relative overflow-hidden rounded-3xl border border-primary/10 bg-white/[0.025]",
+                          isList ? "h-44" : "aspect-[4/5]",
+                        )}
+                      >
+                        <span className="absolute inset-0 motion-safe:animate-[gold-shimmer_1.6s_ease-in-out_infinite] bg-[linear-gradient(110deg,transparent_25%,rgba(212,175,55,0.11)_48%,transparent_70%)] [background-size:200%_100%]" />
+                        <span className="absolute inset-x-4 bottom-5 h-3 rounded-full bg-white/5" />
+                        <span className="absolute inset-x-4 bottom-11 h-3 w-2/3 rounded-full bg-white/5" />
+                      </div>
+                    ),
+                  )}
               </AnimatePresence>
             </motion.div>
 
             {hasMore && (
               <div className="mt-12 flex flex-col items-center gap-3">
                 <Button
-                  onClick={() => setVisibleCount((count) => count + SHOP_PAGE_SIZE)}
+                  onClick={loadMore}
+                  disabled={isLoadingMore}
+                  aria-busy={isLoadingMore}
                   variant="outline"
-                  className="group h-12 gap-2 rounded-full border-glass-border bg-glass px-8 text-xs font-semibold tracking-[0.18em] uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:border-primary/50 hover:text-primary"
+                  className={cn(
+                    "group relative isolate h-12 gap-2 overflow-hidden rounded-full border border-primary/30 bg-[#100e08]/80 px-8 text-xs font-semibold tracking-[0.14em] text-primary uppercase shadow-[0_0_28px_-18px_rgba(212,175,55,0.8)] transition-all duration-500 ease-[var(--ease-luxe)] before:absolute before:inset-0 before:-z-10 before:bg-[radial-gradient(ellipse_at_center,rgba(212,175,55,0.17),transparent_72%)] before:opacity-70 before:transition-opacity before:duration-500 hover:border-primary/60 hover:text-[#f6e7ad] hover:shadow-[0_0_34px_-12px_rgba(212,175,55,0.65)] hover:before:opacity-100 active:scale-[0.98] motion-safe:hover:animate-[gold-breathe_2.4s_ease-in-out_infinite] disabled:cursor-wait disabled:opacity-90",
+                    isLoadingMore && "motion-safe:animate-[gold-breathe_1.6s_ease-in-out_infinite]",
+                  )}
                 >
-                  <Sparkles className="size-4 transition-transform duration-300 group-hover:rotate-12" />
-                  Load more
+                  {isLoadingMore ? (
+                    <span className="relative inline-flex size-5 items-center justify-center">
+                      <span className="absolute inset-0 rounded-full border border-primary/25" />
+                      <span className="absolute inset-0 animate-spin rounded-full border border-transparent border-t-primary border-r-primary/50" />
+                      <Sparkles aria-hidden className="size-3 text-[#f6e7ad]" />
+                    </span>
+                  ) : (
+                    <Sparkles className="size-4 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+                  )}
+                  {isLoadingMore ? "Unveiling treasures…" : "Unveil More Treasures"}
+                  {!isLoadingMore && <span aria-hidden className="text-sm">💛</span>}
                 </Button>
                 <p className="text-xs text-muted-foreground">
                   Showing {visible.length} of {products.length}

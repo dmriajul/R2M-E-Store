@@ -12,13 +12,13 @@ export default function GlobalLoading() {
       className="flex min-h-[70vh] flex-col items-center justify-center gap-6 px-4"
     >
       <span className="text-gradient-gold animate-pulse text-2xl font-bold tracking-[0.32em] uppercase sm:text-3xl">
-        Little Luxe
+        Mukra
       </span>
       <span
         aria-hidden
         className="shimmer-gold h-px w-40 rounded-full sm:w-56"
       />
-      <span className="sr-only">Loading Little Luxe…</span>
+      <span className="sr-only">Loading Mukra…</span>
     </div>
   );
 }

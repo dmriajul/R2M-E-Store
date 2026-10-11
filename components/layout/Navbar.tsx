@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
@@ -120,12 +121,17 @@ export function Navbar() {
         {/* ---------- Logo ---------- */}
         <Link
           href="/"
-          className="group shrink-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="group notranslate shrink-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           aria-label={`${SITE.name} — home`}
         >
-          <span className="text-gradient-gold text-2xl font-bold tracking-widest transition-opacity duration-300 group-hover:opacity-80 lg:text-[1.75rem]">
-            {SITE.name}
-          </span>
+          <Image
+            src="/logo.png"
+            alt="MUKRA"
+            width={180}
+            height={50}
+            priority
+            className="notranslate h-10 w-auto object-contain opacity-95 transition-opacity duration-300 group-hover:opacity-100 md:h-12"
+          />
         </Link>
 
         {/* ---------- Desktop nav ---------- */}
@@ -174,6 +180,7 @@ export function Navbar() {
             type="button"
             onClick={toggleLanguage}
             aria-label={`Switch language: ${language === "en" ? "বাংলা" : "English"}`}
+            title="Switch between English and Bengali"
             className="group relative inline-flex items-center gap-1 rounded-full border border-glass-border bg-glass px-2 py-1 text-xs font-medium transition-all duration-300 hover:border-primary/40 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <Type className="size-3 opacity-60" />
@@ -269,6 +276,7 @@ export function Navbar() {
                   type="button"
                   onClick={toggleLanguage}
                   aria-label={`Switch language: ${language === "en" ? "বাংলা" : "English"}`}
+                  title="Switch between English and Bengali"
                   className="w-full flex items-center justify-between rounded-xl border border-glass-border bg-glass px-4 py-3 text-sm font-medium transition-colors hover:border-primary/40 hover:text-primary"
                 >
                   <span className="flex items-center gap-2">

@@ -51,7 +51,8 @@ export default function AdminProductsPage() {
   const deleteProducts = useAdminStore((state) => state.deleteProducts);
   const duplicateProduct = useAdminStore((state) => state.duplicateProduct);
   const setProductsOutOfStock = useAdminStore((state) => state.setProductsOutOfStock);
-  /* Handoff from the top-bar search and the category cards (e.g. "Dresses"). */
+  const replaceProducts = useAdminStore((state) => state.setProducts);
+  /* Handoff from the top-bar search and the category cards. */
   const seed = useAdminStore((state) => state.search);
   const clearSeed = useAdminStore((state) => state.setSearch);
 
@@ -72,7 +73,8 @@ export default function AdminProductsPage() {
         term.length === 0 ||
         product.name.toLowerCase().includes(term) ||
         product.sku.toLowerCase().includes(term);
-      const matchesCategory = category === "all" || product.category === category;
+      const matchesCategory =
+        category === "all" || product.categories.includes(category);
       const matchesStatus =
         status === "all" || getStockState(product.stock, product.lowStockThreshold) === status;
       return matchesTerm && matchesCategory && matchesStatus;
@@ -99,6 +101,34 @@ export default function AdminProductsPage() {
   useEffect(() => {
     setSelected((current) => current.filter((id) => products.some((product) => product.id === id)));
   }, [products]);
+
+  useEffect(() => {
+    let mounted = true;
+    void fetch("/api/admin/products", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = (await response.json()) as {
+          data?: AdminProduct[] | null;
+          error?: string | null;
+          source?: "database" | "mock";
+        };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Could not load saved products");
+        }
+        if (mounted && payload.source === "database" && payload.data) {
+          replaceProducts(payload.data);
+        }
+      })
+      .catch((error: unknown) => {
+        if (mounted) {
+          toast.error("Saved products couldn't be loaded", {
+            description: error instanceof Error ? error.message : undefined,
+          });
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [replaceProducts]);
 
   /* Apply the one-shot handoff, then clear it so other pages start fresh. */
   useEffect(() => {

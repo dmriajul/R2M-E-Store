@@ -7,6 +7,7 @@ import { BADGE_STYLES, CATEGORY_META, GENDER_EMOJI } from "@/lib/site";
 import { useCartStore } from "@/store/useCartStore";
 import { useState } from "react";
 import { ProductArtwork } from "@/components/product/ProductArtwork";
+import { ProductDescription } from "@/components/product/ProductDescription";
 import { StarRating } from "@/components/product/StarRating";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -75,6 +76,9 @@ export function QuickViewDialog({
                 {product.tagline}
               </p>
             </div>
+            <ProductDescription className="max-h-36 overflow-y-auto pr-1 text-xs text-muted-foreground">
+              {product.description}
+            </ProductDescription>
 
             <div className="flex items-center gap-3">
               <StarRating rating={product.rating} reviewCount={product.reviewCount} />

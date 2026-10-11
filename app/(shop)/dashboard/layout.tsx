@@ -3,7 +3,7 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell";
 
 /** The account area is private: never index it (belt-and-braces with robots.ts). */
 export const metadata: Metadata = {
-  title: { default: "Your Account", template: "%s · Your Account · Little Luxe" },
+  title: { default: "Your Account", template: "%s · Your Account · Mukra" },
   robots: { index: false, follow: false },
 };
 

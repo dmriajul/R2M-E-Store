@@ -153,7 +153,7 @@ export function StepConfirmation() {
           transition={{ delay: 0.25, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="mt-2 max-w-md text-sm text-muted-foreground"
         >
-          Thank you for shopping at Little Luxe!
+          Thank you for shopping at Mukra!
           {order.email && (
             <>
               {" "}

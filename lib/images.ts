@@ -1,10 +1,9 @@
 /**
  * Image helpers.
  *
- * The catalogue ships with **placeholder tokens** (`"floral-summer-dress-1"`)
- * because there is no photography in the repo. When a real URL arrives — from
- * Cloudinary or the local `/uploads/…` route — the artwork component switches to
- * `next/image`; anything else keeps rendering the gradient tile.
+ * Demo catalogue products use Unsplash photography. Admin-managed photos can
+ * come from Cloudinary or the local `/uploads/…` route; legacy non-URL tokens
+ * remain supported by the branded artwork fallback.
  */
 
 /**
@@ -42,9 +41,8 @@ export function publicIdFromUrl(url: string): string | null {
 /**
  * True for anything the browser can load as an image.
  *
- * Placeholder tokens (`"floral-summer-dress-1"`) are the only thing that fails
- * this test, which is exactly how `ProductArtwork` decides between a real photo
- * and the gradient tile.
+ * Legacy placeholder tokens (`"floral-summer-dress-1"`) fail this test, which
+ * lets `ProductArtwork` choose its branded fallback.
  */
 export function isRenderableImage(src: string | undefined): boolean {
   if (!src) return false;
@@ -70,8 +68,7 @@ export function firstRenderableImage(images: readonly string[] | undefined): str
 /*  Cloudinary folders (also used by the admin uploader, so keep them here)     */
 /* -------------------------------------------------------------------------- */
 
-export const PRODUCT_FOLDER = "little-luxe/products";
-export const MODEL_FOLDER = "little-luxe/models";
+export const PRODUCT_FOLDER = "mukra/products";
 
 /** Recommended `sizes` attribute per artwork context. */
 export const IMAGE_SIZES = {
@@ -88,33 +85,20 @@ export type ImageSizeContext = keyof typeof IMAGE_SIZES;
 /* -------------------------------------------------------------------------- */
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
-export const MAX_MODEL_BYTES = 10 * 1024 * 1024; // 10MB
 export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-export const ALLOWED_MODEL_TYPES = ["model/gltf-binary", "application/octet-stream"] as const;
 
 export interface FileValidation {
   ok: boolean;
   error?: string;
-  kind: "image" | "model";
+  kind: "image" | "video";
 }
 
 /** Client- and server-side guard for the upload endpoint. */
-export function validateUploadFile(
-  file: { name: string; type: string; size: number },
-  kind: "image" | "model" = "image",
-): FileValidation {
-  const isModel = kind === "model" || file.name.toLowerCase().endsWith(".glb");
-
-  if (isModel) {
-    if (!file.name.toLowerCase().endsWith(".glb")) {
-      return { ok: false, error: "Only .glb files are supported", kind: "model" };
-    }
-    if (file.size > MAX_MODEL_BYTES) {
-      return { ok: false, error: "3D models must be 10MB or smaller", kind: "model" };
-    }
-    return { ok: true, kind: "model" };
-  }
-
+export function validateUploadFile(file: {
+  name: string;
+  type: string;
+  size: number;
+}): FileValidation {
   if (!ALLOWED_IMAGE_TYPES.includes(file.type as (typeof ALLOWED_IMAGE_TYPES)[number])) {
     return { ok: false, error: "Use a JPEG, PNG or WebP image", kind: "image" };
   }
@@ -122,6 +106,46 @@ export function validateUploadFile(
     return { ok: false, error: "Images must be 5MB or smaller", kind: "image" };
   }
   return { ok: true, kind: "image" };
+}
+
+export const MAX_HERO_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_HERO_VIDEO_BYTES = 100 * 1024 * 1024;
+
+const HERO_MEDIA_TYPES: Readonly<Record<string, { type: string; kind: "image" | "video" }>> = {
+  jpg: { type: "image/jpeg", kind: "image" },
+  jpeg: { type: "image/jpeg", kind: "image" },
+  png: { type: "image/png", kind: "image" },
+  webp: { type: "image/webp", kind: "image" },
+  gif: { type: "image/gif", kind: "image" },
+  mp4: { type: "video/mp4", kind: "video" },
+  webm: { type: "video/webm", kind: "video" },
+};
+
+export function validateHeroUploadFile(file: {
+  name: string;
+  type: string;
+  size: number;
+}): FileValidation & { kind: "image" | "video" } {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const allowed = HERO_MEDIA_TYPES[extension];
+  if (!allowed || file.type !== allowed.type) {
+    return {
+      ok: false,
+      error: "Use a JPG, PNG, WebP or GIF image, or an MP4 or WebM video",
+      kind: allowed?.kind ?? "image",
+    };
+  }
+
+  const maxBytes = allowed.kind === "video" ? MAX_HERO_VIDEO_BYTES : MAX_HERO_IMAGE_BYTES;
+  if (file.size > maxBytes) {
+    return {
+      ok: false,
+      error: allowed.kind === "video" ? "Videos must be 100MB or smaller" : "Images must be 10MB or smaller",
+      kind: allowed.kind,
+    };
+  }
+
+  return { ok: true, kind: allowed.kind };
 }
 
 /** "2.4 MB" — used in upload progress copy. */

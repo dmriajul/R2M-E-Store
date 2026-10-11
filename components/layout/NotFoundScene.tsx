@@ -1,27 +1,15 @@
-"use client";
-
-import dynamic from "next/dynamic";
-import { SceneLoadingFallback } from "@/components/three/SceneLoadingFallback";
-
-/**
- * The hero WebGL backdrop, reused at a smaller size on the 404 page.
- *
- * Same lazy, client-only loading pattern as the hero: three/fiber stays out of
- * the initial bundle and the CSS fallback paints instantly if WebGL (or the
- * network) is unavailable.
- */
-const HeroScene = dynamic(() => import("@/components/three/HeroScene"), {
-  ssr: false,
-  loading: () => <SceneLoadingFallback />,
-});
-
 export function NotFoundScene() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none relative mx-auto h-48 w-full max-w-md overflow-hidden sm:h-56"
+      className="pointer-events-none relative mx-auto flex h-48 w-full max-w-md items-center justify-center overflow-hidden sm:h-56"
     >
-      <HeroScene className="absolute inset-0" />
+      <span className="absolute size-40 rounded-full bg-primary/10 blur-3xl" />
+      <span className="absolute size-32 rotate-12 rounded-[2rem] border border-primary/30 bg-gradient-to-br from-primary/15 via-lavender/10 to-transparent shadow-[0_0_80px_-28px_rgba(212,175,55,0.65)]" />
+      <span className="absolute size-24 -rotate-12 rounded-[1.5rem] border border-white/10 bg-white/[0.03] backdrop-blur-sm" />
+      <span className="relative text-7xl drop-shadow-[0_12px_32px_rgba(212,175,55,0.28)] sm:text-8xl">
+        🧸
+      </span>
     </div>
   );
 }

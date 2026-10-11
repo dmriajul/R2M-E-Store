@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatRelative } from "@/lib/utils";
+import { MukraLogo } from "@/components/brand/MukraLogo";
 import {
   ADMIN_NAV,
   adminPageMeta,
@@ -44,25 +45,17 @@ import {
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-/** Gold wordmark block shared by the desktop rail and the mobile drawer. */
+/** Signature logo shared by the desktop rail and the mobile drawer. */
 function AdminLogo({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <Link
       href="/admin"
-      aria-label="Little Luxe admin dashboard"
+      aria-label="Mukra admin dashboard"
       className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors duration-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
     >
-      <span
-        aria-hidden
-        className="grid size-9 shrink-0 place-items-center rounded-lg border border-primary/40 bg-gold-soft text-base"
-      >
-        👑
-      </span>
+      <MukraLogo variant={collapsed ? "monogram" : "lockup"} size="sm" priority />
       {!collapsed && (
         <span className="min-w-0">
-          <span className="block truncate text-[13px] font-semibold tracking-[0.18em] text-primary uppercase">
-            Little Luxe
-          </span>
           <span className="mt-0.5 inline-flex rounded border border-[#2A2A2A] bg-white/5 px-1.5 py-px text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Admin
           </span>
@@ -76,11 +69,13 @@ function NavLink({
   item,
   pathname,
   collapsed,
+  pendingReturns,
   onNavigate,
 }: {
   item: AdminNavItem;
   pathname: string;
   collapsed: boolean;
+  pendingReturns: number;
   onNavigate?: () => void;
 }) {
   const active = isActiveRoute(item.href, pathname);
@@ -97,11 +92,19 @@ function NavLink({
         active
           ? "bg-primary font-medium text-primary-foreground"
           : "text-muted-foreground hover:bg-white/6 hover:text-foreground",
-        collapsed && "lg:justify-center lg:px-0",
+        collapsed && "relative lg:justify-center lg:px-0",
       )}
     >
       <Icon aria-hidden className="size-4 shrink-0" />
       {!collapsed && <span className="truncate">{item.label}</span>}
+      {item.pendingBadge && pendingReturns > 0 && (
+        <span className={cn(
+          "ml-auto min-w-5 rounded-full bg-primary px-1.5 py-0.5 text-center text-[10px] font-bold text-primary-foreground tabular-nums",
+          collapsed && "absolute top-0 right-0 min-w-4 px-1 py-0 text-[9px]",
+        )}>
+          {pendingReturns > 99 ? "99+" : pendingReturns}
+        </span>
+      )}
       {!collapsed && active && (
         <ChevronRight aria-hidden className="ml-auto size-3.5 opacity-70" />
       )}
@@ -112,10 +115,12 @@ function NavLink({
 function SidebarNav({
   pathname,
   collapsed = false,
+  pendingReturns,
   onNavigate,
 }: {
   pathname: string;
   collapsed?: boolean;
+  pendingReturns: number;
   onNavigate?: () => void;
 }) {
   return (
@@ -134,6 +139,7 @@ function SidebarNav({
               item={item}
               pathname={pathname}
               collapsed={collapsed}
+              pendingReturns={pendingReturns}
               onNavigate={onNavigate}
             />
           ))}
@@ -183,13 +189,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [pendingReturns, setPendingReturns] = useState(0);
 
   const setSearch = useAdminStore((state) => state.setSearch);
   const lowStockCount = useAdminStore(
     (state) =>
-      state.products.filter(
+      (state.products ?? []).filter(
         (product) =>
-          product.trackInventory &&
+        product &&
+        product.trackInventory &&
           getStockState(product.stock, product.lowStockThreshold) === "low-stock",
       ).length,
   );
@@ -200,9 +208,30 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setDrawerOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    let active = true;
+    const refreshPendingReturns = () => {
+      fetch("/api/admin/returns?countOnly=true", { cache: "no-store" })
+        .then(async (response) => {
+          const result = (await response.json()) as { data?: number | null; error?: string | null };
+          if (!response.ok) throw new Error(result.error ?? "Could not load return count");
+          if (active && typeof result.data === "number") setPendingReturns(result.data);
+        })
+        .catch((error: unknown) => {
+          console.error("[admin] Could not load pending returns count", error);
+        });
+    };
+    refreshPendingReturns();
+    window.addEventListener("mukra:returns-updated", refreshPendingReturns);
+    return () => {
+      active = false;
+      window.removeEventListener("mukra:returns-updated", refreshPendingReturns);
+    };
+  }, [pathname]);
+
   // Client pages can't export metadata, so the console titles itself.
   useEffect(() => {
-    document.title = `${meta.title} · Admin · Little Luxe`;
+    document.title = `${meta.title} · Admin · Mukra`;
   }, [meta.title]);
 
   // Keep the shells independent of the storefront scroll behaviour.
@@ -235,7 +264,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <AdminLogo collapsed={collapsed} />
         </div>
 
-        <SidebarNav pathname={pathname} collapsed={collapsed} />
+        <SidebarNav pathname={pathname} collapsed={collapsed} pendingReturns={pendingReturns} />
 
         <button
           type="button"
@@ -450,12 +479,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
 
-              <SidebarNav pathname={pathname} onNavigate={() => setDrawerOpen(false)} />
+              <SidebarNav pathname={pathname} pendingReturns={pendingReturns} onNavigate={() => setDrawerOpen(false)} />
               <AdminIdentity />
 
               <p className="border-t border-[#1F1F1F] px-4 py-3 text-[11px] text-muted-foreground">
                 <Sparkles aria-hidden className="mr-1 inline size-3 text-primary" />
-                Demo console — every action is mocked locally.
+                Returns and exchanges are managed here.
               </p>
             </motion.aside>
           </>

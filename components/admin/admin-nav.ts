@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   LineChart,
   Package,
+  RotateCcw,
   Settings,
   ShoppingCart,
   Tag,
@@ -16,6 +17,7 @@ export interface AdminNavItem {
   icon: LucideIcon;
   /** Emoji shown in the collapsed rail so sections stay readable. */
   emoji: string;
+  pendingBadge?: boolean;
 }
 
 export interface AdminNavSection {
@@ -31,6 +33,7 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard, emoji: "📊" },
       { href: "/admin/products", label: "Products", icon: Package, emoji: "📦" },
       { href: "/admin/orders", label: "Orders", icon: ShoppingCart, emoji: "🛒" },
+      { href: "/admin/returns", label: "Returns", icon: RotateCcw, emoji: "↩️", pendingBadge: true },
     ],
   },
   {
@@ -55,10 +58,11 @@ export const ADMIN_PAGE_META: Readonly<Record<string, { title: string; subtitle:
   "/admin": { title: "Dashboard", subtitle: "Store performance at a glance" },
   "/admin/products": { title: "Products", subtitle: "Catalogue, stock and pricing" },
   "/admin/orders": { title: "Orders", subtitle: "Fulfilment queue and history" },
+  "/admin/returns": { title: "Returns", subtitle: "Review refunds and exchanges" },
   "/admin/customers": { title: "Customers", subtitle: "Shoppers and their order history" },
   "/admin/coupons": { title: "Coupons", subtitle: "Discount codes and campaigns" },
   "/admin/categories": { title: "Categories", subtitle: "How the catalogue is grouped" },
-  "/admin/settings": { title: "Settings", subtitle: "Store, shipping, payments and alerts" },
+  "/admin/settings": { title: "Settings", subtitle: "Store, homepage, shipping, payments and alerts" },
   "/admin/analytics": { title: "Analytics", subtitle: "Revenue, demand and traffic" },
 };
 

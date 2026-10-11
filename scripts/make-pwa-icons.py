@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the Little Luxe PWA icons as real PNGs (no image libraries).
+"""Generate the Mukra PWA icons as real PNGs (no image libraries).
 
 Design: dark rounded square (#0A0A0A) with a hairline gold border, a soft gold
 glow and a gold "LL" monogram. Rendered with 1px analytic antialiasing via

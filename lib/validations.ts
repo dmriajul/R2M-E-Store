@@ -327,45 +327,66 @@ export const passwordChangeSchema = z
 
 export type PasswordChangeValues = z.infer<typeof passwordChangeSchema>;
 
-/** Return request raised from an order (mock — nothing is sent anywhere). */
+/** Reasons offered when a customer requests a return or exchange. */
 export const RETURN_REASONS = [
-  "Wrong size",
-  "Not as described",
-  "Changed my mind",
-  "Arrived damaged",
+  "Size Too Small",
+  "Size Too Big",
+  "Wrong Item Sent",
+  "Damaged/Defective",
   "Other",
 ] as const;
 
-export const returnRequestSchema = z
-  .object({
-    reason: z.enum(RETURN_REASONS, {
-      errorMap: () => ({ message: "Pick a reason" }),
-    }),
-    note: z.string().trim().max(300, "Keep it under 300 characters").optional(),
-  })
-  .refine((values) => values.reason !== "Other" || (values.note ?? "").length >= 10, {
-    path: ["note"],
-    message: "Tell us a little more (10+ characters)",
-  });
+export const returnRequestSchema = z.object({
+  orderId: z.string().min(1),
+  orderItemIds: z.array(z.string().min(1)).min(1).max(20),
+  type: z.enum(["REFUND", "EXCHANGE"]),
+  reason: z.enum(RETURN_REASONS),
+  details: z.string().trim().max(1000).optional(),
+  requestedSize: z.string().trim().max(40).optional(),
+  requestedColor: z.string().trim().max(60).optional(),
+  images: z.array(z.string().refine(
+    (value) =>
+      (value.startsWith("https://res.cloudinary.com/")) ||
+      (value.startsWith("/uploads/") && !value.includes("..")),
+    "Use an uploaded proof image",
+  )).max(5),
+}).superRefine((values, ctx) => {
+  if (values.reason === "Other" && (values.details ?? "").length < 10) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["details"], message: "Tell us a little more (10+ characters)" });
+  }
+  if (values.type === "EXCHANGE" && !values.requestedSize && !values.requestedColor) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["requestedSize"], message: "Select a requested size or color" });
+  }
+});
 
 export type ReturnRequestValues = z.infer<typeof returnRequestSchema>;
+
+export const returnAdminActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("approve"), restock: z.boolean().default(false) }),
+  z.object({ action: z.literal("reject"), adminNote: z.string().trim().min(5).max(1000) }),
+  z.object({ action: z.literal("complete") }),
+]);
+
+export type ReturnAdminActionValues = z.infer<typeof returnAdminActionSchema>;
 
 /* -------------------------------------------------------------------------- */
 /*  Admin console                                                             */
 /* -------------------------------------------------------------------------- */
 
 export const PRODUCT_CATEGORY_NAMES = [
-  "Dresses",
+  "Jackets & Coats",
+  "Sweatshirts & Hoodies",
+  "Sweaters & Cardigans",
+  "Winter Bottoms / Trousers",
+  "Winter Sets & Tracksuits",
   "Tops & Tees",
-  "Bottoms",
-  "Shoes",
-  "Outerwear",
+  "Innerwear & Thermals",
   "Accessories",
 ] as const;
 
 export const PRODUCT_GENDERS = ["Girls", "Boys", "Unisex"] as const;
 
-/** Age dropdowns run 0 → 14; stored with a trailing "Y" on the product. */
+/** Age dropdowns run 0 → 12; stored with a trailing "Y" on the product. */
 export const AGE_OPTIONS = [
   "0",
   "1",
@@ -380,8 +401,6 @@ export const AGE_OPTIONS = [
   "10",
   "11",
   "12",
-  "13",
-  "14",
 ] as const;
 
 /** Size grid offered by the product form. */
@@ -396,6 +415,7 @@ export const PRODUCT_SIZE_OPTIONS = [
   "10",
   "12",
   "14",
+  "One Size",
 ] as const;
 
 const optionalNumber = (message: string) =>
@@ -412,6 +432,13 @@ const colourSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/, "Use a hex value like #F472B6"),
 });
 
+const adminProductVariantSchema = z.object({
+  size: z.enum(PRODUCT_SIZE_OPTIONS),
+  color: z.string().trim().min(1, "Name the colour"),
+  stock: z.coerce.number().int("Whole units only").min(0, "Stock can't be negative"),
+  sku: z.string().trim().optional(),
+});
+
 export const adminProductSchema = z
   .object({
     /* Basic info */
@@ -420,10 +447,17 @@ export const adminProductSchema = z
       .string()
       .trim()
       .min(10, "Add a description of at least 10 characters")
-      .max(600, "Keep the description under 600 characters"),
-    category: z.enum(PRODUCT_CATEGORY_NAMES, {
-      errorMap: () => ({ message: "Pick a category" }),
-    }),
+      .max(4000, "Keep the description under 4,000 characters"),
+    category: z
+      .union([z.enum(PRODUCT_CATEGORY_NAMES), z.literal("")])
+      .refine(
+        (value): value is (typeof PRODUCT_CATEGORY_NAMES)[number] =>
+          PRODUCT_CATEGORY_NAMES.includes(
+            value as (typeof PRODUCT_CATEGORY_NAMES)[number],
+          ),
+        "Pick a category",
+      ),
+    categories: z.array(z.enum(PRODUCT_CATEGORY_NAMES)).min(1, "Assign at least one category"),
     gender: z.enum(PRODUCT_GENDERS, {
       errorMap: () => ({ message: "Pick who it's for" }),
     }),
@@ -433,7 +467,7 @@ export const adminProductSchema = z
     /* Pricing */
     price: z.coerce.number().positive("Price must be greater than 0"),
     compareAtPrice: optionalNumber("Enter a valid compare-at price"),
-    costPerItem: optionalNumber("Enter a valid cost"),
+    costPrice: optionalNumber("Enter a valid cost"),
 
     /* Inventory */
     sku: z
@@ -453,10 +487,10 @@ export const adminProductSchema = z
     sizes: z
       .array(z.enum(PRODUCT_SIZE_OPTIONS))
       .min(1, "Pick at least one size"),
+    variants: z.array(adminProductVariantSchema),
 
     /* Media (mock uploads keep gradient tokens) */
     images: z.array(z.string()),
-    modelUrl: z.string().trim().optional(),
 
     /* SEO */
     metaTitle: z.string().trim().max(70, "Keep the meta title under 70 characters").optional(),
@@ -474,7 +508,15 @@ export const adminProductSchema = z
     /* Status */
     active: z.boolean(),
     featured: z.boolean(),
+    virtualBoutique: z.boolean(),
+    newArrival: z.boolean(),
+    bestSeller: z.boolean(),
+    featuredOrder: z.coerce.number().int().min(0).max(9999),
     badge: z.enum(["none", "New", "Sale", "Bestseller", "Organic"]),
+  })
+  .refine((values) => values.categories.includes(values.category), {
+    path: ["categories"],
+    message: "The primary category must be assigned",
   })
   .refine((values) => Number(values.ageMax) >= Number(values.ageMin), {
     path: ["ageMax"],
@@ -593,3 +635,50 @@ export const settingsNotificationsSchema = z.object({
 });
 
 export type SettingsNotificationsValues = z.infer<typeof settingsNotificationsSchema>;
+
+const isSafeLocalPath = (value: string) =>
+  value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") && !/\s/.test(value);
+
+const isHttpUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && !/\s/.test(value);
+  } catch {
+    return false;
+  }
+};
+
+const safeHeroMediaUrl = (value: string) =>
+  value === "" || isSafeLocalPath(value) || isHttpUrl(value);
+
+const safeHeroLink = (value: string) =>
+  value === "" ||
+  value.startsWith("#") ||
+  isSafeLocalPath(value) ||
+  isHttpUrl(value);
+
+export const settingsHeroSchema = z.object({
+  heroTitle: z.string().trim().max(160, "Keep the title under 160 characters"),
+  heroSubtitle: z.string().trim().max(500, "Keep the subtitle under 500 characters"),
+  heroBadgeText: z.string().trim().max(100, "Keep the badge under 100 characters"),
+  heroMediaUrl: z
+    .string()
+    .trim()
+    .max(2048, "Media URL is too long")
+    .refine(safeHeroMediaUrl, "Use an http(s) URL or a local path"),
+  heroMediaType: z.enum(["video", "image"]),
+  primaryCtaText: z.string().trim().max(80, "Keep the button label under 80 characters"),
+  primaryCtaLink: z
+    .string()
+    .trim()
+    .max(2048, "Link is too long")
+    .refine(safeHeroLink, "Use an http(s) URL, local path, or anchor"),
+  secondaryCtaText: z.string().trim().max(80, "Keep the button label under 80 characters"),
+  secondaryCtaLink: z
+    .string()
+    .trim()
+    .max(2048, "Link is too long")
+    .refine(safeHeroLink, "Use an http(s) URL, local path, or anchor"),
+});
+
+export type SettingsHeroValues = z.infer<typeof settingsHeroSchema>;

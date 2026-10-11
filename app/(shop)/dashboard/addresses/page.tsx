@@ -6,10 +6,10 @@ import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader"
 export default function DashboardAddressesPage() {
   return (
     <>
-      <title>My Addresses | LITTLE LUXE</title>
+      <title>My Addresses | MUKRA</title>
       <meta
         name="description"
-        content="Saved delivery addresses for your Little Luxe orders — add, edit or set a default."
+        content="Saved delivery addresses for your Mukra orders — add, edit or set a default."
       />
       <meta name="robots" content="noindex" />
 

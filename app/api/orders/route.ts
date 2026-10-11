@@ -67,12 +67,35 @@ export async function POST(
     name: products.find((product) => product.id === line.productId)?.name ?? line.name,
   }));
 
-  const stockShortages = items
-    .filter((line) => {
-      const product = products.find((entry) => entry.id === line.productId);
-      return product ? product.stock < line.quantity : false;
-    })
-    .map((line) => line.name);
+  const productById = new Map(products.map((product) => [product.id, product]));
+  const requestedVariants = new Map<
+    string,
+    { name: string; quantity: number; available: number }
+  >();
+
+  for (const line of items) {
+    const product = productById.get(line.productId);
+    if (!product) continue;
+
+    const key = `${line.productId}\u0000${line.color}\u0000${line.size}`;
+    const variant = product.variants
+      ? product.variants.find(
+          (entry) => entry.color === line.color && entry.size === line.size,
+        )
+      : undefined;
+    const available = product.variants ? (variant?.stock ?? 0) : product.stock;
+    const requested = requestedVariants.get(key);
+
+    requestedVariants.set(key, {
+      name: product.name,
+      quantity: (requested?.quantity ?? 0) + line.quantity,
+      available,
+    });
+  }
+
+  const stockShortages = Array.from(requestedVariants.values())
+    .filter((variant) => variant.quantity > variant.available)
+    .map((variant) => variant.name);
 
   if (stockShortages.length > 0) {
     return NextResponse.json(

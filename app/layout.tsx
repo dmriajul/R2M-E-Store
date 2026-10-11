@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import localFont from "next/font/local";
 import { SITE } from "@/lib/site";
+import { CookieConsent } from "@/components/CookieConsent";
 import { AppToaster } from "@/components/providers/AppToaster";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { CartHydration } from "@/components/providers/CartHydration";
@@ -32,11 +34,11 @@ const inter = localFont({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
   title: {
-    default: "LITTLE LUXE — Premium Kids Fashion Bangladesh",
-    template: "%s | LITTLE LUXE — Premium Kids Fashion BD",
+    default: "MUKRA — Premium Kids Fashion Bangladesh",
+    template: "%s | MUKRA — Premium Kids Fashion BD",
   },
   description: SITE.description,
-  applicationName: "LITTLE LUXE",
+  applicationName: "MUKRA",
   keywords: [
     "kids fashion Bangladesh",
     "children's clothing BD",
@@ -44,14 +46,14 @@ export const metadata: Metadata = {
     "toddler outfits Bangladesh",
     "kids shoes BD",
     "baby clothes",
-    "little luxe",
+    "mukra",
     "premium kids fashion",
     "kids wear Dhaka",
     "children fashion Bangladesh",
   ],
-  authors: [{ name: "LITTLE LUXE", url: SITE.url }],
-  creator: "LITTLE LUXE",
-  publisher: "LITTLE LUXE",
+  authors: [{ name: "MUKRA", url: SITE.url }],
+  creator: "MUKRA",
+  publisher: "MUKRA",
   category: "shopping",
   // Every route canonicalises to itself; pages may override with an absolute URL.
   alternates: { canonical: "./" },
@@ -59,25 +61,29 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/favicon.ico" },
-      { url: "/icons/icon.svg", type: "image/svg+xml" },
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon.ico", type: "image/x-icon", sizes: "16x16 32x32 48x48" },
+      { url: "/icons/favicon-16x16.png", type: "image/png", sizes: "16x16" },
+      { url: "/icons/favicon-32x32.png", type: "image/png", sizes: "32x32" },
+      { url: "/icons/favico.png", type: "image/png", sizes: "512x512" },
     ],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
-    shortcut: ["/icons/icon-192.png"],
+    shortcut: [
+      { url: "/icons/favicon-32x32.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", type: "image/png", sizes: "180x180" },
+    ],
   },
   appleWebApp: {
     capable: true,
-    title: "LITTLE LUXE",
+    title: "MUKRA",
     statusBarStyle: "black-translucent",
   },
   formatDetection: { telephone: false, address: false, email: false },
   // ---------- Social ----------
   openGraph: {
     type: "website",
-    siteName: "LITTLE LUXE",
-    title: "LITTLE LUXE — Premium Kids Fashion Bangladesh",
+    siteName: "MUKRA",
+    title: "MUKRA — Premium Kids Fashion Bangladesh",
     description: SITE.description,
     url: SITE.url,
     locale: "en_BD",
@@ -85,10 +91,10 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "LITTLE LUXE — Premium Kids Fashion Bangladesh",
+    title: "MUKRA — Premium Kids Fashion Bangladesh",
     description: SITE.description,
-    site: "@littleluxe",
-    creator: "@littleluxe",
+    site: "@mukra",
+    creator: "@mukra",
   },
   // ---------- Crawling ----------
   robots: {
@@ -105,7 +111,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#D4AF37",
+  themeColor: "#0A3622",
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
@@ -115,10 +121,10 @@ export const viewport: Viewport = {
 const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  name: "LITTLE LUXE",
+  name: "MUKRA",
   url: SITE.url,
-  logo: `${SITE.url}/icons/icon-192.png`,
-  description: "Premium kids fashion for ages 0-14. Where Magic Meets Style.",
+  logo: `${SITE.url}/logo.png`,
+  description: "Premium kids fashion for ages 0-12. Where Magic Meets Style.",
   contactPoint: {
     "@type": "ContactPoint",
     telephone: "+8801712345678",
@@ -126,9 +132,9 @@ const organizationSchema = {
     availableLanguage: ["English", "Bengali"],
   },
   sameAs: [
-    "https://www.facebook.com/littleluxe",
-    "https://www.instagram.com/littleluxe",
-    "https://www.twitter.com/littleluxe",
+    "https://www.facebook.com/mukra",
+    "https://www.instagram.com/mukra",
+    "https://www.twitter.com/mukra",
   ],
 };
 
@@ -142,16 +148,27 @@ const organizationSchema = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const gaId = process.env.NEXT_PUBLIC_GA_ID || "";
+
   return (
-    <html lang="en" className={`${inter.variable} dark`} suppressHydrationWarning>
+    <html
+      lang="en"
+      translate="no"
+      className={`${inter.variable} dark notranslate`}
+      suppressHydrationWarning
+    >
       <head>
+        <meta name="google" content="notranslate" />
         {/* JSON-LD Structured Data */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
         />
       </head>
-      <body className="flex min-h-dvh flex-col bg-background text-foreground">
+      <body
+        className="flex min-h-dvh flex-col bg-background text-foreground"
+        suppressHydrationWarning={true}
+      >
         {/* First Tab stop on every page. */}
         <SkipToContent />
         {/* Desktop-only pointer flourish — inert on touch devices. */}
@@ -163,42 +180,10 @@ export default function RootLayout({
           {/* Restores the persisted bag after hydration (skipHydration). */}
           <CartHydration />
         </AuthProvider>
+        <CookieConsent />
         <AppToaster />
+        {gaId && <GoogleAnalytics gaId={gaId} />}
       </body>
     </html>
   );
-}
-
-/**
- * Helper for product pages to add Product JSON-LD schema.
- */
-export function getProductJsonLd(product: {
-  name: string;
-  description: string;
-  image: string;
-  price: number;
-  currency: string;
-  brand: string;
-  sku?: string;
-}): string {
-  const schema = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: product.name,
-    description: product.description,
-    image: product.image,
-    brand: {
-      "@type": "Brand",
-      name: product.brand || "LITTLE LUXE",
-    },
-    offers: {
-      "@type": "Offer",
-      url: `${SITE.url}/product/${product.sku || product.name.toLowerCase().replace(/\s+/g, "-")}`,
-      priceCurrency: product.currency || "BDT",
-      price: product.price,
-      priceValidUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      availability: product.price > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-    },
-  };
-  return JSON.stringify(schema);
 }
