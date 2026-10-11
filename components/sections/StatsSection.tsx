@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { animate, useInView } from "framer-motion";
-import { ArrowRight, Mail, ShieldCheck, Sparkles, Truck } from "lucide-react";
+import { ArrowRight, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
@@ -19,14 +19,12 @@ const STATS: readonly Stat[] = [
   { value: 50, suffix: "+", label: "Countries" },
 ] as const;
 
-const PERKS = [
-  { icon: Truck, label: "Free worldwide shipping" },
-  { icon: ShieldCheck, label: "Authenticity guaranteed" },
-  { icon: Sparkles, label: "Concierge support" },
-] as const;
-
 /** Counts from 0 to `to` once the section enters the viewport. */
-function useCountUp(to: number, active: boolean, reducedMotion: boolean): number {
+function useCountUp(
+  to: number,
+  active: boolean,
+  reducedMotion: boolean,
+): number {
   const [value, setValue] = useState(0);
 
   useEffect(() => {
@@ -128,24 +126,13 @@ export function StatsSection() {
                 Newsletter
               </p>
               <h2 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-                Join the <span className="text-gradient-gold">Inner Circle</span>
+                Join the{" "}
+                <span className="text-gradient-gold">Inner Circle</span>
               </h2>
               <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
-                Private previews, archive access and one considered note a month.
-                No noise, ever.
+                Private previews, archive access and one considered note a
+                month. No noise, ever.
               </p>
-
-              <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-3">
-                {PERKS.map(({ icon: Icon, label }) => (
-                  <li
-                    key={label}
-                    className="flex items-center gap-2 text-xs tracking-wide text-muted-foreground"
-                  >
-                    <Icon className="size-3.5 text-primary" />
-                    {label}
-                  </li>
-                ))}
-              </ul>
             </div>
 
             <form onSubmit={handleSubscribe} className="lg:justify-self-end">
@@ -182,9 +169,7 @@ export function StatsSection() {
                 aria-live="polite"
                 className="mt-3 min-h-4 text-xs text-muted-foreground"
               >
-                {subscribed
-                  ? "You're in. Welcome to the Inner Circle."
-                  : "Unsubscribe in one click, any time."}
+                {subscribed ? "You're in. Welcome to the Inner Circle." : null}
               </p>
             </form>
           </div>

@@ -596,7 +596,7 @@ const shipping: LegalContent = {
         icon: "✈️",
         paragraphs: [
           "We do not ship outside Bangladesh yet, but it is next on our list — many of our customers order for family back home.",
-          "Join the newsletter at the bottom of this page and you will be the first to know when international shipping opens.",
+          "Join the newsletter on our homepage and you will be the first to know when international shipping opens.",
         ],
       },
     ],
@@ -661,7 +661,7 @@ const shipping: LegalContent = {
         icon: "✈️",
         paragraphs: [
           "এখনো বাংলাদেশের বাইরে পাঠাই না, তবে পরের তালিকায় এটাই আছে — অনেক গ্রাহক পরিবারের জন্য দেশে অর্ডার করেন।",
-          "পেজের নিচে নিউজলেটারে সাবস্ক্রাইব করুন, আন্তর্জাতিক শিপিং চালু হলে সবার আগে জানতে পারবেন।",
+          "আমাদের হোমপেজে নিউজলেটারে সাবস্ক্রাইব করুন, আন্তর্জাতিক শিপিং চালু হলে সবার আগে জানতে পারবেন।",
         ],
       },
     ],
