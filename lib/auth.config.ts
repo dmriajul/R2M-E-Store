@@ -38,6 +38,7 @@ export const authConfig = {
         token.id = user.id;
         token.role = user.role ?? "CUSTOMER";
         token.name = user.name ?? token.name;
+        token.phone = user.phone;
       }
       return token;
     },
@@ -45,6 +46,7 @@ export const authConfig = {
       if (session.user) {
         session.user.id = typeof token.id === "string" ? token.id : (token.sub ?? "");
         session.user.role = token.role === "ADMIN" ? "ADMIN" : "CUSTOMER";
+        session.user.phone = typeof token.phone === "string" ? token.phone : undefined;
       }
       return session;
     },

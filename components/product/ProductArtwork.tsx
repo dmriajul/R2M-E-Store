@@ -12,6 +12,8 @@ interface ProductArtworkProps {
   index?: number;
   alt?: string;
   className?: string;
+  /** Optional image-only classes (e.g. a card-specific hover zoom). */
+  imageClassName?: string;
   priority?: boolean;
   /** Artwork size for card, detail, and thumbnail contexts. */
   size?: "card" | "detail" | "thumb";
@@ -26,6 +28,7 @@ export function ProductArtwork({
   index = 0,
   alt,
   className,
+  imageClassName,
   priority = false,
   size = "card",
 }: ProductArtworkProps) {
@@ -49,7 +52,10 @@ export function ProductArtwork({
           // Local uploads are served directly; external CDNs serve their own
           // optimized image variants.
           unoptimized={photo.startsWith("/uploads/")}
-          className="object-cover transition-transform duration-700 ease-[var(--ease-luxe)] group-hover:scale-[1.04]"
+          className={cn(
+            "object-cover transition-transform duration-700 ease-[var(--ease-luxe)] group-hover:scale-[1.04]",
+            imageClassName,
+          )}
           onError={() => setFailedPhoto(photo)}
         />
       </div>

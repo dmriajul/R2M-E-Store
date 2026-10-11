@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Plus } from "lucide-react";
@@ -22,7 +22,13 @@ interface ProductCardProps {
   duplicate: boolean;
 }
 
-function AddToCartButton({ product }: { product: Product }) {
+function AddToCartButton({
+  product,
+  duplicate,
+}: {
+  product: Product;
+  duplicate: boolean;
+}) {
   const language = useLanguageStore((state) => state.language);
   const addItem = useCartStore((state) => state.addItem);
   const inCart = useCartStore((state) =>
@@ -30,7 +36,9 @@ function AddToCartButton({ product }: { product: Product }) {
   );
   const [justAdded, setJustAdded] = useState(false);
 
-  const handleAdd = () => {
+  const handleAdd = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
     addItem(product, 1);
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1600);
@@ -41,6 +49,7 @@ function AddToCartButton({ product }: { product: Product }) {
       type="button"
       onClick={handleAdd}
       disabled={product.stock === 0}
+      tabIndex={duplicate ? -1 : undefined}
       className="h-9 w-full gap-2 bg-primary text-xs font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_28px_-6px_rgba(212,175,55,0.9)]"
     >
       {justAdded ? (
@@ -72,7 +81,6 @@ function ProductCard({
   return (
     <motion.article
       aria-hidden={duplicate || undefined}
-      inert={duplicate}
       initial={{ opacity: 0, y: reducedMotion ? 0 : 32 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.15 }}
@@ -81,73 +89,78 @@ function ProductCard({
         delay: reducedMotion ? 0 : index * 0.09,
         ease: EASE_LUXE,
       }}
-      whileHover={reducedMotion ? undefined : { y: -8 }}
-      className="group glass relative flex w-[280px] shrink-0 flex-col overflow-hidden rounded-2xl p-3 transition-[box-shadow,border-color] duration-500 ease-[var(--ease-luxe)] hover:border-primary/45 hover:shadow-[0_0_46px_-14px_rgba(212,175,55,0.75)] sm:w-[320px]"
+      whileHover={
+        reducedMotion
+          ? undefined
+          : {
+              y: -8,
+              scale: 1.02,
+              transition: { duration: 0.3, ease: EASE_LUXE },
+            }
+      }
+      className="group glass pointer-events-auto relative flex w-[280px] shrink-0 flex-col overflow-hidden rounded-2xl p-3 will-change-transform transition-[box-shadow,border-color] duration-500 ease-[var(--ease-luxe)] hover:border-primary/45 hover:shadow-[0_0_46px_-14px_rgba(212,175,55,0.75)] sm:w-[320px]"
     >
       <Link
-        href={`/product/${product.id}`}
-        aria-label={product.name}
+        href={`/product/${product.slug || product.id}`}
+        aria-label={`View ${product.name}`}
         tabIndex={duplicate ? -1 : undefined}
-        className="relative block aspect-4/5 overflow-hidden rounded-xl bg-[#101010] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="group pointer-events-auto flex flex-1 cursor-pointer flex-col rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
-        <ProductArtwork
-          product={product}
-          size="card"
-          className="absolute inset-0 h-full w-full rounded-xl"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_60%_at_70%_15%,rgba(0,240,255,0.12)_0%,transparent_60%)]"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/35 to-transparent"
-        />
-        <span
-          aria-hidden
-          className="absolute inset-x-6 bottom-6 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"
-        />
-        {discount !== null && (
-          <Badge className="absolute top-3 left-3 border-0 bg-primary text-[10px] font-bold tracking-wider text-primary-foreground">
-            −{discount}%
+        <div className="relative block aspect-4/5 overflow-hidden rounded-xl bg-[#101010]">
+          <ProductArtwork
+            product={product}
+            size="card"
+            imageClassName="transition-transform duration-500 ease-out group-hover:scale-[1.08]"
+            className="absolute inset-0 h-full w-full rounded-xl"
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_60%_at_70%_15%,rgba(0,240,255,0.12)_0%,transparent_60%)]"
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/35 to-transparent"
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-6 bottom-6 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"
+          />
+          {discount !== null && (
+            <Badge className="absolute top-3 left-3 border-0 bg-primary text-[10px] font-bold tracking-wider text-primary-foreground">
+              −{discount}%
+            </Badge>
+          )}
+          <Badge
+            variant="outline"
+            className="absolute top-3 right-3 border-glass-border bg-black/40 text-[10px] tracking-[0.18em] text-white/80 uppercase backdrop-blur-md"
+          >
+            {translateCategory(product.category, language)}
           </Badge>
-        )}
-        <Badge
-          variant="outline"
-          className="absolute top-3 right-3 border-glass-border bg-black/40 text-[10px] tracking-[0.18em] text-white/80 uppercase backdrop-blur-md"
-        >
-          {translateCategory(product.category, language)}
-        </Badge>
+        </div>
+
+        <div className="flex flex-1 flex-col p-4">
+          <h3 className="text-base font-semibold tracking-tight text-foreground">
+            {product.name}
+          </h3>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+            {product.tagline}
+          </p>
+
+          <div className="mt-4 flex items-baseline gap-2">
+            <span className="text-lg font-bold text-primary">
+              {formatPrice(product.price, product.currency)}
+            </span>
+            {product.compareAtPrice && (
+              <span className="text-xs text-muted-foreground line-through">
+                {formatPrice(product.compareAtPrice, product.currency)}
+              </span>
+            )}
+          </div>
+        </div>
       </Link>
 
-      <div className="flex flex-1 flex-col p-4">
-        <h3 className="text-base font-semibold tracking-tight text-foreground">
-          <Link
-            href={`/product/${product.id}`}
-            tabIndex={duplicate ? -1 : undefined}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {product.name}
-          </Link>
-        </h3>
-        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-          {product.tagline}
-        </p>
-
-        <div className="mt-4 flex items-baseline gap-2">
-          <span className="text-lg font-bold text-primary">
-            {formatPrice(product.price, product.currency)}
-          </span>
-          {product.compareAtPrice && (
-            <span className="text-xs text-muted-foreground line-through">
-              {formatPrice(product.compareAtPrice, product.currency)}
-            </span>
-          )}
-        </div>
-
-        <div className="mt-4">
-          <AddToCartButton product={product} />
-        </div>
+      <div className="pointer-events-auto mt-4">
+        <AddToCartButton product={product} duplicate={duplicate} />
       </div>
     </motion.article>
   );
@@ -169,19 +182,18 @@ function ProductMarquee({
     (_, index) => products[index % products.length]!,
   );
   return (
-    <div className="overflow-hidden pb-3">
+    <div className="marquee-viewport overflow-hidden py-4">
       <div
         className={
           reverse
-            ? "animate-marquee-right flex w-max flex-nowrap"
-            : "animate-marquee-left flex w-max flex-nowrap"
+            ? "animate-marquee-right flex w-max flex-nowrap will-change-transform hover:[animation-play-state:paused]"
+            : "animate-marquee-left flex w-max flex-nowrap will-change-transform hover:[animation-play-state:paused]"
         }
       >
         {[0, 1].map((copy) => (
           <div
             key={copy}
             aria-hidden={copy === 1 || undefined}
-            inert={copy === 1}
             className="flex shrink-0 flex-nowrap gap-6 pr-6"
           >
             {repeatedProducts.map((product, index) => (

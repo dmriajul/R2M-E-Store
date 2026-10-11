@@ -1,9 +1,16 @@
 "use client";
 
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, Gift, MapPin } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
+import {
+  BANGLADESH_DIVISIONS,
+  getBangladeshDistrict,
+  getBangladeshDivision,
+} from "@/lib/bangladesh-locations";
 import {
   COUNTRIES,
   shippingSchema,
@@ -21,8 +28,16 @@ import { CheckboxRow, Field, checkoutInputClass } from "@/components/checkout/Fi
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+const checkoutSelectClass = cn(
+  checkoutInputClass,
+  "w-full appearance-none px-3.5 text-foreground",
+  "bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23a1a1aa%22 stroke-width=%222%22><path d=%22m6 9 6 6 6-6%22/></svg>')] bg-[length:16px_16px] bg-[position:right_14px_center] bg-no-repeat pr-10",
+);
+
 /** Step 2 — delivery address, shipping method and the gift-wrap add-on. */
 export function StepShipping() {
+  const { data: session, status } = useSession();
+  const profileName = session?.user?.name?.trim() ?? "";
   const shipping = useCheckoutStore((state) => state.shipping);
   const setShipping = useCheckoutStore((state) => state.setShipping);
   const goNext = useCheckoutStore((state) => state.goNext);
@@ -37,6 +52,8 @@ export function StepShipping() {
     register,
     handleSubmit,
     watch,
+    getValues,
+    setValue,
     formState: { errors, isValid },
   } = useForm<ShippingValues>({
     resolver: zodResolver(shippingSchema),
@@ -55,8 +72,33 @@ export function StepShipping() {
     },
   });
 
+  const country = watch("country");
+  const division = watch("state") ?? "";
+  const city = watch("city") ?? "";
   const method = watch("method");
   const giftWrap = watch("giftWrap");
+  const countryField = register("country");
+  const divisionField = register("state");
+  const cityField = register("city");
+  const districtOptions = getBangladeshDivision(division)?.districts ?? [];
+  const postalSuggestion =
+    country === "Bangladesh" ? getBangladeshDistrict(division, city) : undefined;
+
+  useEffect(() => {
+    if (status !== "authenticated" || !profileName || getValues("fullName").trim()) return;
+    setValue("fullName", profileName, { shouldValidate: true });
+  }, [getValues, profileName, setValue, status]);
+
+  useEffect(() => {
+    if (
+      country !== "Bangladesh" ||
+      !postalSuggestion ||
+      getValues("postalCode").trim()
+    ) {
+      return;
+    }
+    setValue("postalCode", postalSuggestion.postalCode, { shouldValidate: true });
+  }, [country, getValues, postalSuggestion, setValue]);
 
   const onSubmit = (values: ShippingValues) => {
     setShipping(values);
@@ -115,38 +157,115 @@ export function StepShipping() {
       </Field>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="City" htmlFor="ship-city" error={errors.city?.message}>
-          <Input
-            id="ship-city"
-            autoComplete="address-level2"
-            placeholder="Dhaka"
-            aria-invalid={Boolean(errors.city)}
-            className={checkoutInputClass}
-            {...register("city")}
-          />
-        </Field>
+        {country === "Bangladesh" ? (
+          <>
+            <Field
+              label="Division"
+              htmlFor="ship-state"
+              error={errors.state?.message}
+              hint="Choose a division to see its districts."
+            >
+              <select
+                id="ship-state"
+                autoComplete="address-level1"
+                aria-invalid={Boolean(errors.state)}
+                className={checkoutSelectClass}
+                {...divisionField}
+                onChange={(event) => {
+                  void divisionField.onChange(event);
+                  setValue("city", "", { shouldDirty: true, shouldValidate: true });
+                  setValue("postalCode", "", { shouldDirty: true, shouldValidate: true });
+                }}
+              >
+                <option value="" className="bg-[#1A1A1A]">
+                  Select a division
+                </option>
+                {BANGLADESH_DIVISIONS.map((option) => (
+                  <option key={option.name} value={option.name} className="bg-[#1A1A1A]">
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-        <Field
-          label="State / Province"
-          htmlFor="ship-state"
-          error={errors.state?.message}
-        >
-          <Input
-            id="ship-state"
-            autoComplete="address-level1"
-            placeholder="Dhaka Division"
-            className={checkoutInputClass}
-            {...register("state")}
-          />
-        </Field>
+            <Field label="City / District" htmlFor="ship-city" error={errors.city?.message}>
+              <select
+                id="ship-city"
+                autoComplete="address-level2"
+                aria-invalid={Boolean(errors.city)}
+                className={cn(checkoutSelectClass, "disabled:cursor-not-allowed disabled:opacity-50")}
+                disabled={!districtOptions.length}
+                {...cityField}
+                onChange={(event) => {
+                  const selectedDistrict = getBangladeshDistrict(
+                    division,
+                    event.currentTarget.value,
+                  );
+                  void cityField.onChange(event);
+                  setValue("postalCode", selectedDistrict?.postalCode ?? "", {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                }}
+              >
+                <option value="" className="bg-[#1A1A1A]">
+                  {districtOptions.length ? "Select a city or district" : "Select a division first"}
+                </option>
+                {districtOptions.map((district) => (
+                  <option key={district.name} value={district.name} className="bg-[#1A1A1A]">
+                    {district.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </>
+        ) : (
+          <>
+            <Field label="City" htmlFor="ship-city" error={errors.city?.message}>
+              <Input
+                id="ship-city"
+                autoComplete="address-level2"
+                placeholder="City"
+                aria-invalid={Boolean(errors.city)}
+                className={checkoutInputClass}
+                {...cityField}
+              />
+            </Field>
+
+            <Field
+              label="State / Province"
+              htmlFor="ship-state"
+              error={errors.state?.message}
+            >
+              <Input
+                id="ship-state"
+                autoComplete="address-level1"
+                placeholder="State or province"
+                className={checkoutInputClass}
+                {...divisionField}
+              />
+            </Field>
+          </>
+        )}
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="ZIP / Postal code" htmlFor="ship-zip" error={errors.postalCode?.message}>
+        <Field
+          label="ZIP / Postal code"
+          htmlFor="ship-zip"
+          error={errors.postalCode?.message}
+          hint={
+            country === "Bangladesh"
+              ? postalSuggestion
+                ? `Suggested ${postalSuggestion.postalCode} (${postalSuggestion.postalArea}); update it if your local post office uses a different code.`
+                : "Choose a city or district to get a postal-code suggestion."
+              : undefined
+          }
+        >
           <Input
             id="ship-zip"
             autoComplete="postal-code"
-            placeholder="1213"
+            placeholder={postalSuggestion?.postalCode ?? (country === "Bangladesh" ? "4-digit code" : "Postal code")}
             aria-invalid={Boolean(errors.postalCode)}
             className={checkoutInputClass}
             {...register("postalCode")}
@@ -158,17 +277,21 @@ export function StepShipping() {
             id="ship-country"
             autoComplete="country-name"
             aria-invalid={Boolean(errors.country)}
-            className={cn(
-              checkoutInputClass,
-              "w-full appearance-none px-3.5 text-foreground",
-              /* Chevron drawn inline so the control stays native and accessible. */
-              "bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23a1a1aa%22 stroke-width=%222%22><path d=%22m6 9 6 6 6-6%22/></svg>')] bg-[length:16px_16px] bg-[position:right_14px_center] bg-no-repeat pr-10",
-            )}
-            {...register("country")}
+            className={checkoutSelectClass}
+            {...countryField}
+            onChange={(event) => {
+              const nextCountry = event.currentTarget.value;
+              void countryField.onChange(event);
+              if (nextCountry !== country) {
+                setValue("state", "", { shouldDirty: true, shouldValidate: true });
+                setValue("city", "", { shouldDirty: true, shouldValidate: true });
+                setValue("postalCode", "", { shouldDirty: true, shouldValidate: true });
+              }
+            }}
           >
-            {COUNTRIES.map((country) => (
-              <option key={country} value={country} className="bg-[#1A1A1A]">
-                {country}
+            {COUNTRIES.map((countryOption) => (
+              <option key={countryOption} value={countryOption} className="bg-[#1A1A1A]">
+                {countryOption}
               </option>
             ))}
           </select>
