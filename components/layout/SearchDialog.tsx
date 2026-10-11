@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { MOCK_PRODUCTS } from "@/lib/site";
+import type { ApiResponse, Product } from "@/types";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -19,28 +20,64 @@ interface SearchDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/** Offline fallback: the bundled demo catalogue, drafts excluded. */
+const FALLBACK_CATALOGUE = MOCK_PRODUCTS.filter(
+  (product) => product.status === "active",
+);
+
 /**
- * Command-palette style search. Filters the mock catalogue client-side; the
- * query will move to an API route once the backend exists.
+ * Command-palette style search. The live catalogue (database or demo, via
+ * `/api/products`) is fetched once on first open and filtered client-side, so
+ * admin-added products are searchable and results never point at products
+ * that do not exist.
  */
 export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   const [query, setQuery] = useState("");
+  const [catalogue, setCatalogue] = useState<Product[] | null>(null);
 
   useEffect(() => {
     if (!open) setQuery("");
   }, [open]);
 
-  const results = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return MOCK_PRODUCTS.slice(0, 3);
+  useEffect(() => {
+    if (!open || catalogue) return;
+    let active = true;
+    fetch("/api/products", { cache: "no-store" })
+      .then((response) => response.json() as Promise<ApiResponse<Product[]>>)
+      .then((result) => {
+        if (active) {
+          setCatalogue(
+            result.success && result.data ? result.data : FALLBACK_CATALOGUE,
+          );
+        }
+      })
+      .catch(() => {
+        if (active) setCatalogue(FALLBACK_CATALOGUE);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, catalogue]);
 
-    return MOCK_PRODUCTS.filter((product) =>
-      [product.name, product.tagline, product.category, ...product.tags]
-        .join(" ")
-        .toLowerCase()
-        .includes(term),
-    ).slice(0, 5);
-  }, [query]);
+  const results = useMemo(() => {
+    if (!catalogue) return [];
+    const term = query.trim().toLowerCase();
+    if (!term) return catalogue.slice(0, 3);
+
+    return catalogue
+      .filter((product) =>
+        [
+          product.name,
+          product.tagline,
+          product.category,
+          ...(product.tags ?? []),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(term),
+      )
+      .slice(0, 5);
+  }, [catalogue, query]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -48,7 +85,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         <DialogHeader className="sr-only">
           <DialogTitle>Search products</DialogTitle>
           <DialogDescription>
-            Find pieces in the LUXE catalogue by name, category or tag.
+            Find pieces in the MUKRA catalogue by name, category or tag.
           </DialogDescription>
         </DialogHeader>
 
@@ -58,7 +95,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search timepieces, fragrance, audio…"
+            placeholder="Search dresses, hoodies, accessories…"
             aria-label="Search products"
             className="h-14 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
@@ -68,7 +105,14 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         </div>
 
         <div className="max-h-80 overflow-y-auto p-2">
-          {results.length === 0 ? (
+          {!catalogue ? (
+            <p
+              role="status"
+              className="px-3 py-8 text-center text-sm text-muted-foreground"
+            >
+              Loading products…
+            </p>
+          ) : results.length === 0 ? (
             <p className="px-3 py-8 text-center text-sm text-muted-foreground">
               No pieces match “{query}”.
             </p>
@@ -77,7 +121,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
               {results.map((product) => (
                 <li key={product.id}>
                   <Link
-                    href={`/product/${product.id}`}
+                    href={`/product/${product.slug || product.id}`}
                     onClick={() => onOpenChange(false)}
                     className="flex items-center justify-between gap-4 rounded-lg px-3 py-3 transition-colors duration-300 hover:bg-glass"
                   >

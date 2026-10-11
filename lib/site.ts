@@ -53,10 +53,10 @@ export const FOOTER_LINKS: Readonly<Record<string, readonly NavLink[]>> = {
     { label: "Gift Cards", href: "/shop?category=accessories" },
   ],
   Support: [
-    { label: "Contact", href: "/#contact" },
-    { label: "Shipping & Returns", href: "/#shipping" },
-    { label: "Order Tracking", href: "/#tracking" },
-    { label: "FAQ", href: "/#faq" },
+    { label: "Contact", href: "/faq#support" },
+    { label: "Shipping & Returns", href: "/shipping" },
+    { label: "Order Tracking", href: "/dashboard/orders" },
+    { label: "FAQ", href: "/faq" },
   ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },
@@ -78,11 +78,102 @@ export const categories = [
   "Winter Bottoms / Trousers",
   "Winter Sets & Tracksuits",
   "Tops & Tees",
+  "Frocks & Dresses",
   "Innerwear & Thermals",
   "Accessories",
 ] as const satisfies readonly (ProductCategory | "All")[];
 
-export type CategoryFilter = (typeof categories)[number];
+/**
+ * Storefront groupings used by "Shop by Category". A group spans one or more
+ * product categories, so `/shop?category=winter-jackets-hoodies` lists jackets
+ * and hoodies together without changing how products are stored.
+ */
+export const CATEGORY_GROUPS = {
+  "Winter Jackets & Hoodies": {
+    slug: "winter-jackets-hoodies",
+    categories: ["Jackets & Coats", "Sweatshirts & Hoodies"],
+  },
+  "Pants & Bottoms": {
+    slug: "pants-bottoms",
+    categories: ["Winter Bottoms / Trousers"],
+  },
+} as const satisfies Record<
+  string,
+  { slug: string; categories: readonly ProductCategory[] }
+>;
+
+export type CategoryGroup = keyof typeof CATEGORY_GROUPS;
+
+export type CategoryFilter = (typeof categories)[number] | CategoryGroup;
+
+export function isCategoryGroup(value: string): value is CategoryGroup {
+  return Object.prototype.hasOwnProperty.call(CATEGORY_GROUPS, value);
+}
+
+/** True when a product belongs to a category filter (a category or a group). */
+export function productMatchesCategory(
+  product: Pick<Product, "category" | "categories">,
+  filter: string,
+): boolean {
+  if (!filter || filter === "All") return true;
+  const wanted: readonly string[] = isCategoryGroup(filter)
+    ? CATEGORY_GROUPS[filter].categories
+    : [filter];
+  return (
+    wanted.includes(product.category) ||
+    (product.categories ?? []).some((assigned) => wanted.includes(assigned))
+  );
+}
+
+/**
+ * Category pills for the shop filter bar. A group (reached from "Shop by
+ * Category") is shown, selected, right after "All" so shoppers can see and
+ * clear it; otherwise the plain category list is used.
+ */
+export function categoryFilterOptions(
+  active: CategoryFilter,
+): readonly CategoryFilter[] {
+  return isCategoryGroup(active)
+    ? ["All", active, ...categories.slice(1)]
+    : categories;
+}
+
+/**
+ * Homepage "Shop by Category" cards, in display order. Each links to
+ * `/shop?category=<categoryToSlug(filter)>`; `emoji` is the fallback artwork
+ * if the photo cannot load.
+ */
+export const SHOP_BY_CATEGORY: readonly {
+  filter: CategoryFilter;
+  image: string;
+  emoji: string;
+}[] = [
+  {
+    filter: "Winter Jackets & Hoodies",
+    image: "/images/categories/winter-jackets-hoodies.webp",
+    emoji: "🧥",
+  },
+  {
+    filter: "Tops & Tees",
+    image: "/images/categories/tops-tees.webp",
+    emoji: "👕",
+  },
+  {
+    filter: "Pants & Bottoms",
+    image: "/images/categories/pants-bottoms.webp",
+    emoji: "👖",
+  },
+  {
+    filter: "Frocks & Dresses",
+    image: "/images/categories/frocks-dresses.webp",
+    emoji: "👗",
+  },
+  {
+    filter: "Accessories",
+    image: "/images/categories/accessories.webp",
+    emoji: "🎒",
+  },
+];
 
 export const ageFilters = [
   "All Ages",
@@ -162,6 +253,12 @@ export const CATEGORY_META: Readonly<Record<ProductCategory, CategoryMeta>> = {
     gradient: "from-sky-400 to-blue-600",
     glow: "#38BDF8",
   },
+  "Frocks & Dresses": {
+    slug: "frocks-dresses",
+    emoji: "👗",
+    gradient: "from-rose-300 to-pink-500",
+    glow: "#FDA4AF",
+  },
   "Innerwear & Thermals": {
     slug: "innerwear-thermals",
     emoji: "🧦",
@@ -232,7 +329,7 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "A breezy A-line dress in breathable organic cotton that keeps little ones cool on warm days. The hidden back buttons make dressing quick, and the full skirt is made for spinning.",
     price: 3499,
     currency: "BDT",
-    category: "Tops & Tees",
+    category: "Frocks & Dresses",
     ageRange: "3-6Y",
     gender: "Girls",
     colors: ["Pink", "Lavender", "White"],
@@ -378,7 +475,7 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     price: 5999,
     originalPrice: 7999,
     currency: "BDT",
-    category: "Winter Sets & Tracksuits",
+    category: "Frocks & Dresses",
     ageRange: "4-8Y",
     gender: "Girls",
     colors: ["Lavender", "White", "Rose"],
@@ -634,10 +731,8 @@ export function getProducts(query: ProductQuery = {}, catalogue: readonly Produc
   let products = catalogue.filter((product) => product.status === "active");
 
   if (category && category !== "All") {
-    products = products.filter(
-      (product) =>
-        product.category === category ||
-        product.categories?.some((assignedCategory) => assignedCategory === category),
+    products = products.filter((product) =>
+      productMatchesCategory(product, category),
     );
   }
 
@@ -714,12 +809,18 @@ export function getRelatedProducts(product: Product, limit = 4): Product[] {
 /** Category slug ⇄ label helpers for URL state. */
 export function categoryToSlug(label: string): string {
   if (label === "All") return "all";
+  if (isCategoryGroup(label)) return CATEGORY_GROUPS[label].slug;
   const match = Object.entries(CATEGORY_META).find(([key]) => key === label);
   return match ? match[1].slug : "all";
 }
 
 export function categoryFromSlug(slug: string): CategoryFilter {
   if (!slug || slug === "all") return "All";
+
+  const group = (Object.keys(CATEGORY_GROUPS) as CategoryGroup[]).find(
+    (name) => CATEGORY_GROUPS[name].slug === slug,
+  );
+  if (group) return group;
 
   const match = Object.entries(CATEGORY_META).find(([, meta]) => meta.slug === slug);
   return match ? (match[0] as ProductCategory) : "All";

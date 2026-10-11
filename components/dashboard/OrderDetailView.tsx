@@ -21,13 +21,17 @@ function Panel({
   title,
   children,
   className,
+  id,
 }: {
   title: string;
   children: React.ReactNode;
   className?: string;
+  /** Optional anchor target (e.g. the order card's "Track" deep link). */
+  id?: string;
 }) {
   return (
     <section
+      id={id}
       className={cn(
         "glass-soft flex flex-col gap-4 rounded-3xl border border-glass-border p-5",
         className,
@@ -110,7 +114,7 @@ export function OrderDetailView({ order }: { order: DashboardOrder }) {
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
           {/* ---------- Left: tracker + items ---------- */}
           <div className="flex flex-col gap-6">
-            <Panel title="Tracking">
+            <Panel id="tracking" title="Tracking">
               {isTrackable(order.status) && (
                 <p className="text-xs text-muted-foreground">
                   {order.shipping.carrier} · on the way to {order.shipping.address.city} 🚚

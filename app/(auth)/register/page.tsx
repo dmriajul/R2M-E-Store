@@ -242,11 +242,11 @@ export default function RegisterPage() {
               />
               <span>
                 I agree to the{" "}
-                <Link href="/#terms" className="text-primary underline-offset-4 hover:underline">
+                <Link href="/terms" className="text-primary underline-offset-4 hover:underline">
                   Terms
                 </Link>{" "}
                 &amp;{" "}
-                <Link href="/#privacy" className="text-primary underline-offset-4 hover:underline">
+                <Link href="/privacy" className="text-primary underline-offset-4 hover:underline">
                   Privacy Policy
                 </Link>
               </span>

@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { FOOTER_LINKS, SITE, type NavLink } from "@/lib/site";
 import { Separator } from "@/components/ui/separator";
-import { NewsletterForm } from "@/components/layout/NewsletterForm";
 import {
   InstagramIcon,
   LinkedInIcon,
@@ -18,8 +17,8 @@ import {
  * those questions instead of jumping to a section heading.
  */
 const SUPPORT_LINKS: readonly NavLink[] = [
-  { label: "Contact", href: "/#contact" },
-  { label: "Order Tracking", href: "/#tracking" },
+  { label: "Contact", href: "/faq#support" },
+  { label: "Order Tracking", href: "/dashboard/orders" },
   { label: "Shipping Info", href: "/shipping" },
   { label: "Return Policy", href: "/returns" },
   { label: "FAQ", href: "/faq" },
@@ -28,12 +27,13 @@ const SUPPORT_LINKS: readonly NavLink[] = [
 ];
 
 /** Legal column: point the two documents that now have pages at the real URLs. */
-const LEGAL_LINKS: readonly NavLink[] = (FOOTER_LINKS.Legal ?? []).map((link) =>
-  link.label === "Privacy Policy"
-    ? { label: link.label, href: "/privacy" }
-    : link.label === "Terms of Service"
-      ? { label: link.label, href: "/terms" }
-      : link,
+const LEGAL_LINKS: readonly NavLink[] = (FOOTER_LINKS.Legal ?? []).map(
+  (link) =>
+    link.label === "Privacy Policy"
+      ? { label: link.label, href: "/privacy" }
+      : link.label === "Terms of Service"
+        ? { label: link.label, href: "/terms" }
+        : link,
 );
 
 /** Resolved columns — Support and Legal are overridden, Shop comes from site.ts. */
@@ -71,7 +71,6 @@ export function Footer() {
                 alt="MUKRA"
                 width={180}
                 height={50}
-                priority
                 className="h-10 w-auto object-contain md:h-12"
               />
             </Link>
@@ -124,29 +123,9 @@ export function Footer() {
 
         <Separator className="my-12 bg-glass-border" />
 
-        {/* ---------- Newsletter ---------- */}
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h3 className="text-lg font-semibold tracking-wide">
-              Join the <span className="text-gradient-gold">private list</span>
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              First access to limited drops and archive pieces.
-            </p>
-          </div>
-          <NewsletterForm />
-        </div>
-
-        <Separator className="my-12 bg-glass-border" />
-
-        <div className="flex flex-col items-center justify-between gap-4 text-xs text-muted-foreground sm:flex-row">
-          <p>
-            © {year} {SITE.name}. All rights reserved.
-          </p>
-          <p className="tracking-[0.2em] uppercase">
-            Designed for the few · Built with Next.js
-          </p>
-        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          © {year} {SITE.name}. All rights reserved.
+        </p>
       </div>
     </footer>
   );

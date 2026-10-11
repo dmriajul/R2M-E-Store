@@ -5,6 +5,7 @@ import {
   categoryFromSlug,
   categoryToSlug,
   genderFilters,
+  isCategoryGroup,
   sortOptions,
   type CategoryFilter,
   type GenderFilterValue,
@@ -32,7 +33,7 @@ export const DEFAULT_SHOP_FILTERS: ShopFilterState = {
 export const SHOP_PAGE_SIZE = 8;
 
 function isCategory(value: string): value is CategoryFilter {
-  return (categories as readonly string[]).includes(value);
+  return (categories as readonly string[]).includes(value) || isCategoryGroup(value);
 }
 
 function isAge(value: string): value is AgeFilter {

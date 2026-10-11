@@ -299,13 +299,17 @@ export function t(key: string, language?: Language): string {
       bn: "শীতের সেট ও ট্র্যাকস্যুট",
     },
     "category.tops": { en: "Tops & Tees", bn: "টপস ও টি-শার্ট" },
+    "category.frocks": { en: "Frocks & Dresses", bn: "ফ্রক ও ড্রেস" },
+    "category.winterJacketsHoodies": {
+      en: "Winter Jackets & Hoodies",
+      bn: "শীতের জ্যাকেট ও হুডি",
+    },
+    "category.pantsBottoms": { en: "Pants & Bottoms", bn: "প্যান্ট ও বটমস" },
     "category.innerwear": {
       en: "Innerwear & Thermals",
       bn: "অন্তর্বাস ও থার্মাল পোশাক",
     },
     "category.accessories": { en: "Accessories", bn: "অনুষঙ্গ" },
-    "category.watches": { en: "Watches", bn: "ঘড়ি" },
-    "category.jewelry": { en: "Jewelry", bn: "গয়না" },
     "category.all": { en: "All", bn: "সব" },
 
     // Checkout
@@ -462,13 +466,17 @@ export function getTranslations(key: string): Record<Language, string> {
       bn: "শীতের সেট ও ট্র্যাকস্যুট",
     },
     "category.tops": { en: "Tops & Tees", bn: "টপস ও টি-শার্ট" },
+    "category.frocks": { en: "Frocks & Dresses", bn: "ফ্রক ও ড্রেস" },
+    "category.winterJacketsHoodies": {
+      en: "Winter Jackets & Hoodies",
+      bn: "শীতের জ্যাকেট ও হুডি",
+    },
+    "category.pantsBottoms": { en: "Pants & Bottoms", bn: "প্যান্ট ও বটমস" },
     "category.innerwear": {
       en: "Innerwear & Thermals",
       bn: "অন্তর্বাস ও থার্মাল পোশাক",
     },
     "category.accessories": { en: "Accessories", bn: "অনুষঙ্গ" },
-    "category.watches": { en: "Watches", bn: "ঘড়ি" },
-    "category.jewelry": { en: "Jewelry", bn: "গয়না" },
     "category.all": { en: "All", bn: "সব" },
     "checkout.shipping": { en: "Shipping", bn: "শিপিং" },
     "checkout.payment": { en: "Payment", bn: "পেমেন্ট" },
@@ -549,9 +557,10 @@ const CATEGORY_TRANSLATION_KEYS: Readonly<Record<string, string>> = {
   "Winter Sets & Tracksuits": "category.winterSets",
   "Tops & Tees": "category.tops",
   "Innerwear & Thermals": "category.innerwear",
+  "Frocks & Dresses": "category.frocks",
   Accessories: "category.accessories",
-  Watches: "category.watches",
-  Jewelry: "category.jewelry",
+  "Winter Jackets & Hoodies": "category.winterJacketsHoodies",
+  "Pants & Bottoms": "category.pantsBottoms",
   All: "category.all",
 };
 

@@ -17,6 +17,8 @@ interface ProductArtworkProps {
   priority?: boolean;
   /** Artwork size for card, detail, and thumbnail contexts. */
   size?: "card" | "detail" | "thumb";
+  /** Optional `sizes` override for the responsive `<Image>` (defaults per `size`). */
+  sizes?: string;
 }
 
 /**
@@ -31,6 +33,7 @@ export function ProductArtwork({
   imageClassName,
   priority = false,
   size = "card",
+  sizes,
 }: ProductArtworkProps) {
   const candidate = product.images[index] ?? product.images[0];
   const [failedPhoto, setFailedPhoto] = useState<string | undefined>();
@@ -46,7 +49,7 @@ export function ProductArtwork({
           src={imageSrc(photo, size === "thumb" ? 200 : 900)}
           alt={alt ?? product.name}
           fill
-          sizes={IMAGE_SIZES[size]}
+          sizes={sizes ?? IMAGE_SIZES[size]}
           priority={priority}
           loading={priority ? "eager" : "lazy"}
           // Local uploads are served directly; external CDNs serve their own

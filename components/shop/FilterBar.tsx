@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   ageFilters,
-  categories,
+  categoryFilterOptions,
   genderFilters,
   sortOptions,
 } from "@/lib/site";
@@ -97,7 +97,7 @@ function FilterControls({ filters, onChange, idPrefix }: FilterControlsProps) {
     <>
       <ControlGroup label="Category" id={`${idPrefix}-category`}>
         <div className="flex flex-wrap gap-2">
-          {categories.map((category) => (
+          {categoryFilterOptions(filters.category).map((category) => (
             <Pill
               key={category}
               active={filters.category === category}
@@ -335,7 +335,7 @@ export function FilterBar({ filters, onChange, resultCount }: FilterBarProps) {
         <div className="hidden flex-col gap-4 lg:flex">
           <div className="flex items-center gap-4">
             <div className="flex flex-wrap items-center gap-2">
-              {categories.map((category) => (
+              {categoryFilterOptions(filters.category).map((category) => (
                 <Pill
                   key={category}
                   active={filters.category === category}

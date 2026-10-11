@@ -49,7 +49,7 @@ export default function AuthLayout({
         <p>
           Need a hand?{" "}
           <Link
-            href="/#contact"
+            href="/faq#support"
             className="text-primary underline-offset-4 transition-colors duration-300 hover:underline"
           >
             Contact our concierge

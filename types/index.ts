@@ -14,6 +14,7 @@ export type ProductCategory =
   | "Winter Bottoms / Trousers"
   | "Winter Sets & Tracksuits"
   | "Tops & Tees"
+  | "Frocks & Dresses"
   | "Innerwear & Thermals"
   | "Accessories";
 
