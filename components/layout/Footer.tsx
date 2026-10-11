@@ -17,8 +17,8 @@ import {
  * those questions instead of jumping to a section heading.
  */
 const SUPPORT_LINKS: readonly NavLink[] = [
-  { label: "Contact", href: "/#contact" },
-  { label: "Order Tracking", href: "/#tracking" },
+  { label: "Contact", href: "/faq#support" },
+  { label: "Order Tracking", href: "/dashboard/orders" },
   { label: "Shipping Info", href: "/shipping" },
   { label: "Return Policy", href: "/returns" },
   { label: "FAQ", href: "/faq" },
@@ -71,7 +71,6 @@ export function Footer() {
                 alt="MUKRA"
                 width={180}
                 height={50}
-                priority
                 className="h-10 w-auto object-contain md:h-12"
               />
             </Link>

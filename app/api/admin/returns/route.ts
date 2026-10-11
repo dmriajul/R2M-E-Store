@@ -15,7 +15,12 @@ export async function GET(
   }
   const db = await getPrisma();
   if (!db) {
-    return NextResponse.json({ data: null, error: "Return management requires a configured database", success: false }, { status: 503 });
+    // Demo mode: customers can only file returns when a database is configured
+    // (see /api/returns), so there are genuinely none to report. Answering with
+    // an empty result keeps the admin badge and Returns page quiet instead of
+    // surfacing a 503 on every admin screen.
+    const empty = request.nextUrl.searchParams.get("countOnly") === "true" ? 0 : [];
+    return NextResponse.json({ data: empty, error: null, success: true, source: "mock" });
   }
 
   const status = request.nextUrl.searchParams.get("status");

@@ -272,8 +272,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             aria-label="MUKRA customer dashboard"
             className="flex min-h-11 items-center justify-center rounded-xl px-1 py-2 transition-opacity duration-300 hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
-            <span className="lg:hidden"><MukraLogo variant="monogram" size="md" /></span>
-            <span className="hidden lg:block"><MukraLogo variant="lockup" size="md" /></span>
+            <span className="lg:hidden"><MukraLogo variant="monogram" size="md" priority /></span>
+            <span className="hidden lg:block"><MukraLogo variant="lockup" size="md" priority /></span>
           </Link>
 
           <SidebarIdentity />

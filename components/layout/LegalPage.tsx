@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft, ChevronDown, Languages, Printer } from "lucide-react";
@@ -67,6 +67,21 @@ export function LegalPage({ content, title, lastUpdated }: LegalPageProps) {
     setOpen((current) =>
       current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id],
     );
+
+  /* Deep links (e.g. the footer's "/faq#support") open and reveal their section. */
+  useEffect(() => {
+    const openFromHash = () => {
+      const id = decodeURIComponent(window.location.hash.slice(1));
+      if (!id || !content.en.sections.some((section) => section.id === id)) return;
+      setOpen((current) => (current.includes(id) ? current : [...current, id]));
+      requestAnimationFrame(() =>
+        document.getElementById(id)?.scrollIntoView({ block: "start" }),
+      );
+    };
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
+  }, [content]);
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 print:py-0">
@@ -149,6 +164,7 @@ export function LegalPage({ content, title, lastUpdated }: LegalPageProps) {
           return (
             <section
               key={section.id}
+              id={section.id}
               className={cn(
                 "overflow-hidden rounded-2xl border bg-glass backdrop-blur-md transition-colors duration-400 ease-[var(--ease-luxe)] print:bg-white print:break-inside-avoid",
                 isOpen ? "border-primary/40" : "border-glass-border hover:border-primary/25",

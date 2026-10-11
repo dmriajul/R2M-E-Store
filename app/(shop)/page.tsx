@@ -2,14 +2,18 @@ import type { Metadata } from "next";
 import { MotionConfig } from "framer-motion";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { organizationSchema } from "@/lib/seo";
-import { SITE } from "@/lib/site";
+import { CATEGORY_META, SITE } from "@/lib/site";
+import type { Product, ProductCategory } from "@/types";
 import { listProducts } from "@/lib/data/products";
 import { getHeroSettings } from "@/lib/data/hero-settings";
 import { HeroSection } from "@/components/sections/HeroSection";
 import { VirtualBoutique } from "@/components/sections/VirtualBoutique";
 import { BrandMarquee } from "@/components/sections/BrandMarquee";
 import { FeaturedProducts } from "@/components/sections/FeaturedProducts";
-import { CollectionsGrid } from "@/components/sections/CollectionsGrid";
+import {
+  CollectionsGrid,
+  type CollectionSummary,
+} from "@/components/sections/CollectionsGrid";
 import { StatsSection } from "@/components/sections/StatsSection";
 import { Reveal } from "@/components/sections/Reveal";
 import { WelcomeOverlay } from "@/components/ui/WelcomeOverlay";
@@ -29,18 +33,39 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 /**
+ * The three fullest real categories, counted the same way the shop filters
+ * them (main category or any extra assigned category), so each card's number
+ * matches what `/shop?category=…` actually lists.
+ */
+function topCollections(products: readonly Product[]): CollectionSummary[] {
+  return (Object.keys(CATEGORY_META) as ProductCategory[])
+    .map((category) => ({
+      category,
+      count: products.filter(
+        (product) =>
+          product.category === category ||
+          product.categories?.includes(category),
+      ).length,
+    }))
+    .filter((collection) => collection.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+}
+
+/**
  * Home page. The hero owns the viewport; every section below is staged into
  * view by <Reveal />. Section ids double as in-page scroll anchors
  * (`#featured`, `#collections`, `#stats`), and `scroll-padding-top` in
  * globals.css keeps the sticky navbar from covering them on jump.
  */
 export default async function HomePage() {
-  const [heroSettings, virtualBoutique, featured, newArrivals, bestSellers] = await Promise.all([
+  const [heroSettings, virtualBoutique, featured, newArrivals, bestSellers, catalogue] = await Promise.all([
     getHeroSettings(),
     listProducts({ placement: "virtualBoutique", limit: 3 }),
     listProducts({ featured: true, limit: 4 }),
     listProducts({ placement: "newArrival", limit: 4 }),
     listProducts({ placement: "bestSeller", limit: 4 }),
+    listProducts(),
   ]);
   return (
     /* reducedMotion="user" makes framer-motion honour prefers-reduced-motion
@@ -81,7 +106,7 @@ export default async function HomePage() {
         </Reveal>
 
         <Reveal>
-          <CollectionsGrid />
+          <CollectionsGrid collections={topCollections(catalogue.products)} />
         </Reveal>
 
         <Reveal>

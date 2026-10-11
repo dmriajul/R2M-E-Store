@@ -155,6 +155,7 @@ export default function RootLayout({
       lang="en"
       translate="no"
       className={`${inter.variable} dark notranslate`}
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <head>

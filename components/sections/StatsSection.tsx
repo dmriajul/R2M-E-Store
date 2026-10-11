@@ -96,6 +96,7 @@ export function StatsSection() {
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* ---------- Stats ---------- */}
         <div
+          id="about"
           ref={statsRef}
           className="glass grid grid-cols-1 divide-y divide-glass-border rounded-3xl sm:grid-cols-3 sm:divide-x sm:divide-y-0"
         >

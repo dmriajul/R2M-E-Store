@@ -53,10 +53,10 @@ export const FOOTER_LINKS: Readonly<Record<string, readonly NavLink[]>> = {
     { label: "Gift Cards", href: "/shop?category=accessories" },
   ],
   Support: [
-    { label: "Contact", href: "/#contact" },
-    { label: "Shipping & Returns", href: "/#shipping" },
-    { label: "Order Tracking", href: "/#tracking" },
-    { label: "FAQ", href: "/#faq" },
+    { label: "Contact", href: "/faq#support" },
+    { label: "Shipping & Returns", href: "/shipping" },
+    { label: "Order Tracking", href: "/dashboard/orders" },
+    { label: "FAQ", href: "/faq" },
   ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },
