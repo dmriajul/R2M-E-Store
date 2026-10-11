@@ -79,7 +79,9 @@ function ProductCard({
     : null;
 
   return (
-    <motion.article
+    // Entrance animation lives on the wrapper (Framer writes inline transforms),
+    // while the hover lift is pure CSS on the article so the two never fight.
+    <motion.div
       aria-hidden={duplicate || undefined}
       initial={{ opacity: 0, y: reducedMotion ? 0 : 32 }}
       whileInView={{ opacity: 1, y: 0 }}
@@ -89,80 +91,74 @@ function ProductCard({
         delay: reducedMotion ? 0 : index * 0.09,
         ease: EASE_LUXE,
       }}
-      whileHover={
-        reducedMotion
-          ? undefined
-          : {
-              y: -8,
-              scale: 1.02,
-              transition: { duration: 0.3, ease: EASE_LUXE },
-            }
-      }
-      className="group glass pointer-events-auto relative flex w-[280px] shrink-0 flex-col overflow-hidden rounded-2xl p-3 will-change-transform transition-[box-shadow,border-color] duration-500 ease-[var(--ease-luxe)] hover:border-primary/45 hover:shadow-[0_0_46px_-14px_rgba(212,175,55,0.75)] sm:w-[320px]"
+      className="pointer-events-auto flex w-[280px] shrink-0 sm:w-[320px]"
     >
-      <Link
-        href={`/product/${product.slug || product.id}`}
-        aria-label={`View ${product.name}`}
-        tabIndex={duplicate ? -1 : undefined}
-        className="group pointer-events-auto flex flex-1 cursor-pointer flex-col rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-      >
-        <div className="relative block aspect-4/5 overflow-hidden rounded-xl bg-[#101010]">
-          <ProductArtwork
-            product={product}
-            size="card"
-            imageClassName="transition-transform duration-500 ease-out group-hover:scale-[1.08]"
-            className="absolute inset-0 h-full w-full rounded-xl"
-          />
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_60%_at_70%_15%,rgba(0,240,255,0.12)_0%,transparent_60%)]"
-          />
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/35 to-transparent"
-          />
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-6 bottom-6 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"
-          />
-          {discount !== null && (
-            <Badge className="absolute top-3 left-3 border-0 bg-primary text-[10px] font-bold tracking-wider text-primary-foreground">
-              −{discount}%
-            </Badge>
-          )}
-          <Badge
-            variant="outline"
-            className="absolute top-3 right-3 border-glass-border bg-black/40 text-[10px] tracking-[0.18em] text-white/80 uppercase backdrop-blur-md"
-          >
-            {translateCategory(product.category, language)}
-          </Badge>
-        </div>
-
-        <div className="flex flex-1 flex-col p-4">
-          <h3 className="text-base font-semibold tracking-tight text-foreground">
-            {product.name}
-          </h3>
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-            {product.tagline}
-          </p>
-
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-lg font-bold text-primary">
-              {formatPrice(product.price, product.currency)}
-            </span>
-            {product.compareAtPrice && (
-              <span className="text-xs text-muted-foreground line-through">
-                {formatPrice(product.compareAtPrice, product.currency)}
-              </span>
+      <article className="group glass pointer-events-auto relative flex w-full flex-col overflow-hidden rounded-2xl p-3 transition-all duration-300 ease-out will-change-transform hover:-translate-y-2 hover:border-primary/45 hover:shadow-[0_0_46px_-14px_rgba(212,175,55,0.75)] focus-within:-translate-y-2 motion-reduce:hover:translate-y-0 motion-reduce:focus-within:translate-y-0">
+        <Link
+          href={`/product/${product.slug || product.id}`}
+          aria-label={`View ${product.name}`}
+          tabIndex={duplicate ? -1 : undefined}
+          className="pointer-events-auto flex flex-1 cursor-pointer flex-col rounded-2xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <div className="relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-[#101010]">
+            <ProductArtwork
+              product={product}
+              size="card"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              imageClassName="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+              className="absolute inset-0 h-full w-full rounded-2xl"
+            />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_60%_at_70%_15%,rgba(0,240,255,0.12)_0%,transparent_60%)]"
+            />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/35 to-transparent"
+            />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-6 bottom-6 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"
+            />
+            {discount !== null && (
+              <Badge className="absolute top-3 left-3 border-0 bg-primary text-[10px] font-bold tracking-wider text-primary-foreground">
+                −{discount}%
+              </Badge>
             )}
+            <Badge
+              variant="outline"
+              className="absolute top-3 right-3 border-glass-border bg-black/40 text-[10px] tracking-[0.18em] text-white/80 uppercase backdrop-blur-md"
+            >
+              {translateCategory(product.category, language)}
+            </Badge>
           </div>
-        </div>
-      </Link>
 
-      <div className="pointer-events-auto mt-4">
-        <AddToCartButton product={product} duplicate={duplicate} />
-      </div>
-    </motion.article>
+          <div className="flex flex-1 flex-col p-4">
+            <h3 className="text-base font-semibold tracking-tight text-foreground">
+              {product.name}
+            </h3>
+            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+              {product.tagline}
+            </p>
+
+            <div className="mt-4 flex items-baseline gap-2">
+              <span className="text-lg font-bold text-primary">
+                {formatPrice(product.price, product.currency)}
+              </span>
+              {product.compareAtPrice && (
+                <span className="text-xs text-muted-foreground line-through">
+                  {formatPrice(product.compareAtPrice, product.currency)}
+                </span>
+              )}
+            </div>
+          </div>
+        </Link>
+
+        <div className="pointer-events-auto mt-4">
+          <AddToCartButton product={product} duplicate={duplicate} />
+        </div>
+      </article>
+    </motion.div>
   );
 }
 
@@ -182,7 +178,7 @@ function ProductMarquee({
     (_, index) => products[index % products.length]!,
   );
   return (
-    <div className="marquee-viewport overflow-hidden py-4">
+    <div className="marquee-viewport overflow-x-clip overflow-y-visible py-4">
       <div
         className={
           reverse
@@ -259,7 +255,7 @@ export function FeaturedProducts({
   if (products.length === 0) return null;
 
   return (
-    <section id={id} className="relative w-full overflow-hidden py-24 lg:py-32">
+    <section id={id} className="relative w-full overflow-x-clip py-24 lg:py-32">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <header className="flex flex-wrap items-end justify-between gap-6">
           <div>
@@ -282,11 +278,18 @@ export function FeaturedProducts({
 
       <div
         role="region"
-        aria-label={language === "bn" ? `${sectionTitle} ক্যারোসেল` : `${sectionTitle} carousel`}
-        className="mt-14 space-y-5 overflow-hidden px-4 pb-6 sm:px-6 lg:px-8"
+        aria-label={
+          language === "bn"
+            ? `${sectionTitle} ক্যারোসেল`
+            : `${sectionTitle} carousel`
+        }
+        className="mt-14 space-y-5 overflow-x-clip overflow-y-visible px-4 pb-6 sm:px-6 lg:px-8"
       >
         {row1Products.length > 0 && (
-          <ProductMarquee products={row1Products} reducedMotion={reducedMotion} />
+          <ProductMarquee
+            products={row1Products}
+            reducedMotion={reducedMotion}
+          />
         )}
         {row2Products.length > 0 && (
           <ProductMarquee
