@@ -9,7 +9,7 @@ import { HeroSection } from "@/components/sections/HeroSection";
 import { VirtualBoutique } from "@/components/sections/VirtualBoutique";
 import { BrandMarquee } from "@/components/sections/BrandMarquee";
 import { FeaturedProducts } from "@/components/sections/FeaturedProducts";
-import { CollectionsGrid } from "@/components/sections/CollectionsGrid";
+import { ShopByCategory } from "@/components/sections/ShopByCategory";
 import { StatsSection } from "@/components/sections/StatsSection";
 import { Reveal } from "@/components/sections/Reveal";
 import { WelcomeOverlay } from "@/components/ui/WelcomeOverlay";
@@ -81,7 +81,7 @@ export default async function HomePage() {
         </Reveal>
 
         <Reveal>
-          <CollectionsGrid />
+          <ShopByCategory />
         </Reveal>
 
         <Reveal>
