@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { FOOTER_LINKS, SITE, type NavLink } from "@/lib/site";
 import { Separator } from "@/components/ui/separator";
-import { NewsletterForm } from "@/components/layout/NewsletterForm";
 import {
   InstagramIcon,
   LinkedInIcon,
@@ -122,21 +121,11 @@ export function Footer() {
           })}
         </div>
 
-        <Separator className="my-12 bg-glass-border" />
-
         {/* ---------- Newsletter ---------- */}
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h3 className="text-lg font-semibold tracking-wide">
-              Join the <span className="text-gradient-gold">private list</span>
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              First access to limited drops and archive pieces.
-            </p>
-          </div>
-          <NewsletterForm />
-        </div>
-
+        {/* The signup form now lives on the home page (app/(shop)/page.tsx),
+            between <StatsSection /> and <Footer />, so it is not rendered here
+            any more. Rendering it in both places would duplicate the
+            `newsletter-email` input id and the form's label association. */}
         <Separator className="my-12 bg-glass-border" />
 
         <div className="flex flex-col items-center justify-between gap-4 text-xs text-muted-foreground sm:flex-row">
