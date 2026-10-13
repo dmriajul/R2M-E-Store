@@ -104,9 +104,7 @@ export default async function HomePage() {
 
         <BrandMarquee />
 
-        <Reveal>
-          <ShopByCategory />
-        </Reveal>
+        <ShopByCategory />
 
         {/* New Arrivals — server-rendered grid. It owns its own <Reveal>s so
             the cards can stagger; an outer wrapper here would double-animate. */}

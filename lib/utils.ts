@@ -310,6 +310,7 @@ export function t(key: string, language?: Language): string {
     "category.watches": { en: "Watches", bn: "ঘড়ি" },
     "category.jewelry": { en: "Jewelry", bn: "গয়না" },
     "category.all": { en: "All", bn: "সব" },
+    "category.stylesCount": { en: "{count} styles", bn: "{count}টি স্টাইল" },
     "carousel.goToSlide": { en: "Go to slide", bn: "স্লাইডে যান" },
 
     // Checkout
@@ -481,6 +482,7 @@ export function getTranslations(key: string): Record<Language, string> {
     "category.watches": { en: "Watches", bn: "ঘড়ি" },
     "category.jewelry": { en: "Jewelry", bn: "গয়না" },
     "category.all": { en: "All", bn: "সব" },
+    "category.stylesCount": { en: "{count} styles", bn: "{count}টি স্টাইল" },
     "carousel.goToSlide": { en: "Go to slide", bn: "স্লাইডে যান" },
     "checkout.shipping": { en: "Shipping", bn: "শিপিং" },
     "checkout.payment": { en: "Payment", bn: "পেমেন্ট" },
