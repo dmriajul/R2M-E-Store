@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
-import { WheelGesturesPlugin } from "embla-carousel-wheel-gestures";
 import { t, translateCategory } from "@/lib/utils";
 import { useLanguageStore } from "@/store/useLanguageStore";
 
@@ -56,47 +55,39 @@ const CATEGORY_TILES: readonly CategoryTile[] = [
 
 const EASE_LUXE = "ease-[var(--ease-luxe)]";
 
+/** Cool-down after a wheel step so a single gesture advances exactly one card. */
+const WHEEL_STEP_LOCK_MS = 600;
+
 /**
- * Horizontal "Shop By Category" carousel.
+ * Horizontal "Shop By Category" carousel with Sungrow-style wheel control.
  *
- * Mouse-wheel / trackpad scrolling is wired through Embla's
- * `embla-carousel-wheel-gestures` plugin so the strip slides left/right
- * without the page having to scroll first. The plugin listens on a single
- * wheel axis per instance, so two instances are mounted:
+ * A native `wheel` listener on the Embla viewport maps wheel input straight to
+ * slide navigation:
  *
- * - `forceWheelAxis: "y"` — a vertical mouse wheel (or vertical trackpad
- *   scroll) drives the horizontal carousel, exactly like a wheel-driven
- *   scroller; once the carousel hits either end, gesture releases and the
- *   page scroll resumes.
- * - `forceWheelAxis: "x"` — horizontal wheel / trackpad swipes slide the
- *   same strip natively.
+ * - Scroll down (`deltaY > 0`) → `emblaApi.scrollNext()` (carousel moves right)
+ * - Scroll up (`deltaY < 0`) → `emblaApi.scrollPrev()` (carousel moves left)
+ *
+ * The handler calls `preventDefault()` while the pointer is over the carousel
+ * so the page never scrolls underneath it. A short lock after each step keeps
+ * momentum bursts from skipping past cards. Touch/pointer drag stays with
+ * Embla's native drag engine, so mobile keeps natural drag-to-scroll.
  */
 export function ShopByCategory() {
   const language = useLanguageStore((state) => state.language);
-  const [emblaRef, emblaApi] = useEmblaCarousel(
-    {
-      align: "start",
-      containScroll: "trimSnaps",
-      loop: false,
-      dragFree: false,
-      skipSnaps: false,
-    },
-    [
-      WheelGesturesPlugin({ forceWheelAxis: "y", wheelDraggingClass: "is-wheel-dragging" }),
-      WheelGesturesPlugin({ forceWheelAxis: "x", wheelDraggingClass: "is-wheel-dragging" }),
-    ],
-  );
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    align: "start",
+    containScroll: "trimSnaps",
+    loop: false,
+    dragFree: false,
+    skipSnaps: false,
+  });
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollSnaps, setScrollSnaps] = useState<number[]>([]);
-  const [canScrollPrev, setCanScrollPrev] = useState(false);
-  const [canScrollNext, setCanScrollNext] = useState(false);
 
   const syncSelection = useCallback(() => {
     if (!emblaApi) return;
     setSelectedIndex(emblaApi.selectedScrollSnap());
-    setCanScrollPrev(emblaApi.canScrollPrev());
-    setCanScrollNext(emblaApi.canScrollNext());
   }, [emblaApi]);
 
   useEffect(() => {
@@ -109,49 +100,74 @@ export function ShopByCategory() {
     };
   }, [emblaApi, syncSelection]);
 
+  /**
+   * Wheel → slide mapping. A native listener is required because React's
+   * synthetic `onWheel` is passive and cannot `preventDefault()` the page
+   * scroll — and pinning the page while hovering the carousel is exactly the
+   * behaviour we want.
+   */
+  useEffect(() => {
+    if (!emblaApi) return;
+    const viewport = emblaApi.rootNode();
+    let locked = false;
+    let unlockTimer: number | undefined;
+
+    const handleWheel = (event: WheelEvent) => {
+      // Pinch-zoom (ctrl + wheel) belongs to the browser.
+      if (event.ctrlKey) return;
+
+      // Pin the page while the pointer is over the carousel.
+      event.preventDefault();
+
+      // Vertical mouse wheel is the primary axis; horizontal wheel deltas
+      // (trackpad side-swipes, shift + wheel) map the same direction.
+      const delta =
+        Math.abs(event.deltaY) >= Math.abs(event.deltaX)
+          ? event.deltaY
+          : event.deltaX;
+      if (delta === 0 || locked) return;
+
+      // One gesture → one card. Wheel momentum events during the cool-down
+      // are swallowed (and prevented) instead of queueing extra slides.
+      locked = true;
+      unlockTimer = window.setTimeout(() => {
+        locked = false;
+      }, WHEEL_STEP_LOCK_MS);
+
+      if (delta > 0) {
+        emblaApi.scrollNext();
+      } else {
+        emblaApi.scrollPrev();
+      }
+    };
+
+    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      viewport.removeEventListener("wheel", handleWheel);
+      window.clearTimeout(unlockTimer);
+    };
+  }, [emblaApi]);
+
   return (
     <section id="collections" className="relative py-24 lg:py-32">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* ---------- Header + controls ---------- */}
-        <div className="flex flex-wrap items-end justify-between gap-6">
-          <div>
-            <p className="text-xs font-semibold tracking-[0.3em] text-primary uppercase">
-              {t("common.catalogue", language)}
-            </p>
-            <h2 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-              {t("sections.collections", language)}
-            </h2>
-            <span
-              aria-hidden
-              className="mt-5 block h-px w-24 bg-gradient-to-r from-primary via-primary/50 to-transparent"
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => emblaApi?.scrollPrev()}
-              disabled={!canScrollPrev}
-              aria-label={t("common.back", language)}
-              className="glass flex size-11 cursor-pointer items-center justify-center rounded-full text-white/85 transition-all duration-500 hover:border-primary/50 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-35"
-            >
-              <ChevronLeft className="size-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => emblaApi?.scrollNext()}
-              disabled={!canScrollNext}
-              aria-label={t("common.next", language)}
-              className="glass flex size-11 cursor-pointer items-center justify-center rounded-full text-white/85 transition-all duration-500 hover:border-primary/50 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-35"
-            >
-              <ChevronRight className="size-5" />
-            </button>
-          </div>
+        {/* ---------- Header ---------- */}
+        <div>
+          <p className="text-xs font-semibold tracking-[0.3em] text-primary uppercase">
+            {t("common.catalogue", language)}
+          </p>
+          <h2 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
+            {t("sections.collections", language)}
+          </h2>
+          <span
+            aria-hidden
+            className="mt-5 block h-px w-24 bg-gradient-to-r from-primary via-primary/50 to-transparent"
+          />
         </div>
 
         {/* ---------- Carousel ---------- */}
-        {/* The viewport is the wheel-gesture target; `touch-pan-y` keeps the
-            page scrollable with one finger while Embla owns horizontal drags. */}
+        {/* `touch-action: pan-y pinch-zoom` keeps one-finger page scrolling on
+            mobile while Embla owns horizontal drag gestures. */}
         <div
           ref={emblaRef}
           className="mt-12 overflow-hidden [touch-action:pan-y_pinch-zoom]"
@@ -208,7 +224,7 @@ export function ShopByCategory() {
           </ul>
         </div>
 
-        {/* ---------- Snap indicators ---------- */}
+        {/* ---------- Snap indicators (no arrow buttons — wheel + drag only) ---------- */}
         <div className="mt-8 flex items-center justify-center gap-2.5">
           {scrollSnaps.map((_, index) => (
             <button
