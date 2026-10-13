@@ -109,6 +109,26 @@ export const FEATURES = {
   sslcommerz: SSLCOMMERZ.enabled,
   /** Auth always works — NextAuth with the demo credential fallback. */
   auth: true,
+
+  /* ---------------------------------------------------------------------- */
+  /*  Storefront surfaces currently switched off                             */
+  /* ---------------------------------------------------------------------- */
+  /*  Both components still exist and still compile — they are simply not
+      rendered. Flip either flag back to `true` to restore the surface; no
+      other change is needed.
+
+        • welcomeOverlay  → components/ui/WelcomeOverlay.tsx
+                            full-screen "Welcome to MUKRA" intro, once per
+                            browser session.
+
+        • virtualBoutique → components/sections/VirtualBoutique.tsx
+                            scroll-driven showcase section on the home page,
+                            fed by products flagged `virtualBoutique`.       */
+
+  /** Session intro overlay. Currently hidden. */
+  welcomeOverlay: false,
+  /** Scroll-driven Virtual Boutique section. Currently hidden. */
+  virtualBoutique: false,
 } as const;
 
 /** Auth.js needs a secret; the demo fallback keeps local/dev builds signed-in-able. */

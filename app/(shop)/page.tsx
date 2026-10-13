@@ -3,6 +3,7 @@ import { MotionConfig } from "framer-motion";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { organizationSchema } from "@/lib/seo";
 import { SITE } from "@/lib/site";
+import { FEATURES } from "@/lib/config";
 import { listProducts } from "@/lib/data/products";
 import { getHeroSettings } from "@/lib/data/hero-settings";
 import { HeroSection } from "@/components/sections/HeroSection";
@@ -13,6 +14,7 @@ import { ShopByCategory } from "@/components/sections/ShopByCategory";
 import { StatsSection } from "@/components/sections/StatsSection";
 import { Reveal } from "@/components/sections/Reveal";
 import { WelcomeOverlay } from "@/components/ui/WelcomeOverlay";
+import type { Product } from "@/types";
 
 export const metadata: Metadata = {
   title: { absolute: "Mukra — Premium Kids Fashion" },
@@ -33,11 +35,25 @@ export const dynamic = "force-dynamic";
  * view by <Reveal />. Section ids double as in-page scroll anchors
  * (`#featured`, `#collections`, `#stats`), and `scroll-padding-top` in
  * globals.css keeps the sticky navbar from covering them on jump.
+ *
+ * Two surfaces are parked behind flags in `FEATURES` (lib/config.ts) and are
+ * therefore not rendered right now:
+ *   • <WelcomeOverlay />  — the session intro overlay
+ *   • <VirtualBoutique /> — the scroll-driven showcase that used to sit
+ *                           between the hero and the featured grid
+ * Their component files are untouched; set the flags to `true` to bring them
+ * back. Nothing else on the page depends on them, so removing them leaves no
+ * gap: the overlay was `position: fixed` (out of flow) and the boutique was a
+ * self-contained <section> whose height went with it.
  */
 export default async function HomePage() {
   const [heroSettings, virtualBoutique, featured, newArrivals, bestSellers] = await Promise.all([
     getHeroSettings(),
-    listProducts({ placement: "virtualBoutique", limit: 3 }),
+    // Skip the query entirely while the Virtual Boutique is hidden — there is
+    // no point paying for a round-trip whose results nothing renders.
+    FEATURES.virtualBoutique
+      ? listProducts({ placement: "virtualBoutique", limit: 3 })
+      : Promise.resolve({ products: [] as Product[], source: "mock" as const }),
     listProducts({ featured: true, limit: 4 }),
     listProducts({ placement: "newArrival", limit: 4 }),
     listProducts({ placement: "bestSeller", limit: 4 }),
@@ -49,12 +65,17 @@ export default async function HomePage() {
     <MotionConfig reducedMotion="user">
       {/* Organization schema — one per site, rendered on the home page. */}
       <JsonLd id="organization-schema" data={organizationSchema()} />
-      <WelcomeOverlay />
+
+      {/* Welcome intro overlay — hidden, see FEATURES.welcomeOverlay. */}
+      {FEATURES.welcomeOverlay ? <WelcomeOverlay /> : null}
 
       <main className="w-full overflow-x-clip">
         <HeroSection settings={heroSettings} />
 
-        <VirtualBoutique products={virtualBoutique.products} />
+        {/* Virtual Boutique showcase — hidden, see FEATURES.virtualBoutique. */}
+        {FEATURES.virtualBoutique ? (
+          <VirtualBoutique products={virtualBoutique.products} />
+        ) : null}
 
         <Reveal>
           <FeaturedProducts products={featured.products} />
