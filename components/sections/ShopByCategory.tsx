@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import useEmblaCarousel from "embla-carousel-react";
 import { t, translateCategory } from "@/lib/utils";
 import { useLanguageStore } from "@/store/useLanguageStore";
 
@@ -55,98 +54,82 @@ const CATEGORY_TILES: readonly CategoryTile[] = [
 
 const EASE_LUXE = "ease-[var(--ease-luxe)]";
 
-/** Cool-down after a wheel step so a single gesture advances exactly one card. */
-const WHEEL_STEP_LOCK_MS = 600;
+/** Approximate pixel height of one `deltaMode === 1` (line) wheel step. */
+const LINE_HEIGHT_PX = 16;
 
 /**
- * Horizontal "Shop By Category" carousel with Sungrow-style wheel control.
+ * Horizontal "Shop By Category" rail with fluid wheel mapping.
  *
- * A native `wheel` listener on the Embla viewport maps wheel input straight to
- * slide navigation:
+ * The rail is a plain native horizontal scroller — no carousel engine, no
+ * scroll snapping, no looping, and no step/lock logic — so movement is
+ * continuous and 1:1 proportional to the input instead of advancing one
+ * card at a time:
  *
- * - Scroll down (`deltaY > 0`) → `emblaApi.scrollNext()` (carousel moves right)
- * - Scroll up (`deltaY < 0`) → `emblaApi.scrollPrev()` (carousel moves left)
+ * - Scroll down (`deltaY > 0`) → cards glide right (`scrollLeft += deltaY`)
+ * - Scroll up (`deltaY < 0`) → cards glide left (`scrollLeft += deltaY`)
  *
- * The handler calls `preventDefault()` while the pointer is over the carousel
- * so the page never scrolls underneath it. A short lock after each step keeps
- * momentum bursts from skipping past cards. Touch/pointer drag stays with
- * Embla's native drag engine, so mobile keeps natural drag-to-scroll.
+ * A native non-passive `wheel` listener performs the vertical-to-horizontal
+ * mapping (React's synthetic `onWheel` is passive and cannot
+ * `preventDefault()`). The page scroll is only captured while the rail can
+ * still move in the requested direction; at either edge the event is left
+ * alone so vertical page scrolling resumes instead of trapping the user.
+ * Horizontal trackpad swipes (`deltaX`-dominant) are already horizontal, so
+ * they are left to the browser's native horizontal scrolling. Touch users
+ * get the same native horizontal scroll, and pinch-zoom is untouched.
+ *
+ * There are deliberately no arrow buttons and no pagination dots/dashes —
+ * wheel, trackpad, and touch are the only navigation.
  */
 export function ShopByCategory() {
   const language = useLanguageStore((state) => state.language);
-  const [emblaRef, emblaApi] = useEmblaCarousel({
-    align: "start",
-    containScroll: "trimSnaps",
-    loop: false,
-    dragFree: false,
-    skipSnaps: false,
-  });
-
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [scrollSnaps, setScrollSnaps] = useState<number[]>([]);
-
-  const syncSelection = useCallback(() => {
-    if (!emblaApi) return;
-    setSelectedIndex(emblaApi.selectedScrollSnap());
-  }, [emblaApi]);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!emblaApi) return;
-    setScrollSnaps(emblaApi.scrollSnapList());
-    syncSelection();
-    emblaApi.on("select", syncSelection).on("reInit", syncSelection);
-    return () => {
-      emblaApi.off("select", syncSelection).off("reInit", syncSelection);
-    };
-  }, [emblaApi, syncSelection]);
-
-  /**
-   * Wheel → slide mapping. A native listener is required because React's
-   * synthetic `onWheel` is passive and cannot `preventDefault()` the page
-   * scroll — and pinning the page while hovering the carousel is exactly the
-   * behaviour we want.
-   */
-  useEffect(() => {
-    if (!emblaApi) return;
-    const viewport = emblaApi.rootNode();
-    let locked = false;
-    let unlockTimer: number | undefined;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
 
     const handleWheel = (event: WheelEvent) => {
       // Pinch-zoom (ctrl + wheel) belongs to the browser.
       if (event.ctrlKey) return;
 
-      // Pin the page while the pointer is over the carousel.
+      // Horizontal-dominant input (trackpad side-swipe, shift + wheel) is
+      // already horizontal — let native horizontal scrolling handle it.
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+
+      // Normalise wheel units to pixels so line/page-based wheels move at
+      // the same proportional rate as pixel-based trackpads:
+      // deltaMode 0 = pixels, 1 = lines, 2 = pages.
+      const unit =
+        event.deltaMode === 1
+          ? LINE_HEIGHT_PX
+          : event.deltaMode === 2
+            ? viewport.clientWidth
+            : 1;
+      const deltaY = event.deltaY * unit;
+      if (deltaY === 0) return;
+
+      const maxScrollLeft = viewport.scrollWidth - viewport.clientWidth;
+      if (maxScrollLeft <= 0) return;
+
+      // At either edge, release the gesture to the page — never trap the
+      // user's vertical scroll inside an exhausted rail. The 1px tolerance
+      // absorbs sub-pixel rounding at the far edge.
+      const atStart = viewport.scrollLeft <= 0;
+      const atEnd = viewport.scrollLeft >= maxScrollLeft - 1;
+      if ((deltaY > 0 && atEnd) || (deltaY < 0 && atStart)) return;
+
+      // Capture the gesture and map it 1:1 onto the horizontal axis.
+      // Direct assignment (no snapping, no lock, no animated stepping)
+      // keeps the glide fluid and proportional to scroll speed.
       event.preventDefault();
-
-      // Vertical mouse wheel is the primary axis; horizontal wheel deltas
-      // (trackpad side-swipes, shift + wheel) map the same direction.
-      const delta =
-        Math.abs(event.deltaY) >= Math.abs(event.deltaX)
-          ? event.deltaY
-          : event.deltaX;
-      if (delta === 0 || locked) return;
-
-      // One gesture → one card. Wheel momentum events during the cool-down
-      // are swallowed (and prevented) instead of queueing extra slides.
-      locked = true;
-      unlockTimer = window.setTimeout(() => {
-        locked = false;
-      }, WHEEL_STEP_LOCK_MS);
-
-      if (delta > 0) {
-        emblaApi.scrollNext();
-      } else {
-        emblaApi.scrollPrev();
-      }
+      viewport.scrollLeft += deltaY;
     };
 
     viewport.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
       viewport.removeEventListener("wheel", handleWheel);
-      window.clearTimeout(unlockTimer);
     };
-  }, [emblaApi]);
+  }, []);
 
   return (
     <section id="collections" className="relative py-24 lg:py-32">
@@ -165,12 +148,10 @@ export function ShopByCategory() {
           />
         </div>
 
-        {/* ---------- Carousel ---------- */}
-        {/* `touch-action: pan-y pinch-zoom` keeps one-finger page scrolling on
-            mobile while Embla owns horizontal drag gestures. */}
+        {/* ---------- Rail (wheel / trackpad / touch only — no arrows, no dots) ---------- */}
         <div
-          ref={emblaRef}
-          className="mt-12 overflow-hidden [touch-action:pan-y_pinch-zoom]"
+          ref={viewportRef}
+          className="mt-12 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <ul className="flex items-stretch">
             {CATEGORY_TILES.map((tile) => {
@@ -222,24 +203,6 @@ export function ShopByCategory() {
               );
             })}
           </ul>
-        </div>
-
-        {/* ---------- Snap indicators (no arrow buttons — wheel + drag only) ---------- */}
-        <div className="mt-8 flex items-center justify-center gap-2.5">
-          {scrollSnaps.map((_, index) => (
-            <button
-              key={index}
-              type="button"
-              onClick={() => emblaApi?.scrollTo(index)}
-              aria-label={`${t("carousel.goToSlide", language)} ${index + 1}`}
-              aria-current={index === selectedIndex ? "true" : undefined}
-              className={`h-1.5 cursor-pointer rounded-full transition-all duration-500 ${EASE_LUXE} focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
-                index === selectedIndex
-                  ? "w-8 bg-primary"
-                  : "w-4 bg-white/20 hover:bg-white/40"
-              }`}
-            />
-          ))}
         </div>
       </div>
     </section>
