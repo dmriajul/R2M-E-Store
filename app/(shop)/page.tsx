@@ -110,15 +110,13 @@ export default async function HomePage() {
           <ShopByCategory />
         </Reveal>
 
-        {/* New Arrivals — server-rendered grid; fetches its own 8 products. */}
-        <Reveal>
-          <NewArrivalsGrid />
-        </Reveal>
+        {/* New Arrivals — server-rendered grid. It owns its own <Reveal>s so
+            the cards can stagger; an outer wrapper here would double-animate. */}
+        <NewArrivalsGrid />
 
-        {/* Editorial campaign banner — full-bleed, between grid and rail. */}
-        <Reveal>
-          <CampaignBanner />
-        </Reveal>
+        {/* Editorial campaign banner — full-bleed, between grid and rail.
+            Its copy lines stagger internally. */}
+        <CampaignBanner />
 
         {/* Curated rail — Embla, manual navigation only. */}
         <Reveal>

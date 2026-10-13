@@ -19,16 +19,21 @@ const container: Variants = {
   },
 };
 
+/**
+ * Hero copy variants.
+ *
+ * Animates **opacity and transform only** — an earlier version also tweened a
+ * `filter: blur()`, which is off-limits under the animation rules (and is a
+ * comparatively expensive property to animate on every hero element at once).
+ */
 function buildItemVariants(reducedMotion: boolean): Variants {
   return {
     hidden: {
       opacity: 0,
-      filter: reducedMotion ? "blur(0px)" : "blur(10px)",
       y: reducedMotion ? 0 : 40,
     },
     visible: {
       opacity: 1,
-      filter: "blur(0px)",
       y: 0,
       transition: { duration: reducedMotion ? 0.5 : 0.8, ease: EASE_LUXE },
     },

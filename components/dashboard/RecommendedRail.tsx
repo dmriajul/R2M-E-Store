@@ -12,9 +12,9 @@ export function RecommendedRail({ products }: { products: readonly Product[] }) 
 
   return (
     <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
-      {products.map((product, index) => (
+      {products.map((product) => (
         <div key={product.id} className="w-[78%] shrink-0 snap-start sm:w-[46%] lg:w-[31%]">
-          <ProductCard product={product} index={index} />
+          <ProductCard product={product} />
         </div>
       ))}
     </div>

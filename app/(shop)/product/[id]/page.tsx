@@ -309,11 +309,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
 
           <div className="-mx-4 mt-8 flex snap-x snap-mandatory gap-5 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {related.map((item, index) => (
+            {related.map((item) => (
               <ProductCard
                 key={item.id}
                 product={item}
-                index={index}
                 className="w-[70vw] shrink-0 snap-start sm:w-72"
               />
             ))}

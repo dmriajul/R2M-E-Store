@@ -108,16 +108,12 @@ export function FeaturedCarousel({ products }: FeaturedCarouselProps) {
           className="mt-12 overflow-hidden [touch-action:pan-y_pinch-zoom]"
         >
           <ul className="flex items-stretch">
-            {products.map((product, index) => (
+            {products.map((product) => (
               <li
                 key={product.id}
                 className="mr-4 w-[85%] min-w-0 shrink-0 grow-0 last:mr-0 sm:mr-6 sm:w-[45%] lg:w-[calc((100%-3rem)/3)]"
               >
-                <ProductCard
-                  product={product}
-                  index={index}
-                  className="h-full"
-                />
+                <ProductCard product={product} className="h-full" />
               </li>
             ))}
           </ul>

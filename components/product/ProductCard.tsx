@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { Check, Eye, Heart, Plus } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
 import {
@@ -13,7 +12,6 @@ import {
 } from "@/lib/site";
 import { useCartStore } from "@/store/useCartStore";
 import { useWishlistStore } from "@/store/useWishlistStore";
-import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { ProductArtwork } from "@/components/product/ProductArtwork";
 import { QuickViewDialog } from "@/components/product/QuickViewDialog";
 import { StarRating } from "@/components/product/StarRating";
@@ -25,14 +23,10 @@ export interface ProductCardProps {
   product: Product;
   /** `grid` = vertical tile, `list` = full-width row. */
   variant?: "grid" | "list";
-  /** Stagger index applied to the entrance animation. */
-  index?: number;
   /** Above-the-fold card: let next/image preload it (never more than ~4). */
   priority?: boolean;
   className?: string;
 }
-
-const EASE_LUXE = [0.22, 1, 0.36, 1] as const;
 
 /** Heart toggle, shared by both card variants and the detail page. */
 export function WishlistButton({
@@ -56,7 +50,12 @@ export function WishlistButton({
           : `Add ${product.name} to wishlist`
       }
       className={cn(
-        "inline-flex size-9 items-center justify-center rounded-full border border-glass-border bg-black/35 backdrop-blur-md transition-all duration-300 ease-[var(--ease-luxe)] hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        /* Hover and press are pure CSS (transform + box-shadow, 300ms) and both
+           are suppressed under `prefers-reduced-motion`. Press feedback is the
+           only "pop" here — it is driven by the user's own click, never by
+           mount or store rehydration. */
+        "inline-flex size-9 items-center justify-center rounded-full border border-glass-border bg-black/35 backdrop-blur-md transition-[transform,box-shadow] duration-300 ease-[var(--ease-luxe)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "motion-safe:hover:scale-110 motion-safe:active:scale-95 motion-reduce:transition-none",
         isWishlisted ? "text-rose" : "text-white/70 hover:text-rose",
         className,
       )}
@@ -137,43 +136,27 @@ function ColorDots({ colors, max = 4 }: { colors: string[]; max?: number }) {
 }
 
 /**
- * Catalogue tile. Renders as a vertical card or a full-width row, animates in
- * with a stagger and advertises `layout` so the shop grid can reflow items when
- * filters change (used together with <AnimatePresence>).
+ * Catalogue tile. Renders as a vertical card or a full-width row.
+ *
+ * Deliberately **animation-free**: no mount entrance, no `layout`, no JS hover.
+ * Cards used to animate themselves on mount, which meant below-the-fold tiles
+ * played their entrance off-screen and the grid double-animated inside
+ * <Reveal />. Scroll reveals now belong to the shared <Reveal /> wrapper
+ * (`whileInView`, `once`, `amount: 0.2`), and hover is pure CSS — transform +
+ * box-shadow only, gated behind `motion-safe:` so `prefers-reduced-motion`
+ * users get nothing.
  */
 export function ProductCard({
   product,
   variant = "grid",
-  index = 0,
   priority = false,
   className,
 }: ProductCardProps) {
-  const reducedMotion = usePrefersReducedMotion();
   const [quickViewOpen, setQuickViewOpen] = useState(false);
   const discount = product.originalPrice
     ? Math.round((1 - product.price / product.originalPrice) * 100)
     : null;
   const isList = variant === "list";
-
-  const entrance = {
-    initial: {
-      opacity: 0,
-      y: reducedMotion ? 0 : 24,
-      scale: reducedMotion ? 1 : 0.98,
-      filter: reducedMotion ? "blur(0px)" : "blur(8px)",
-    },
-    animate: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" },
-    exit: {
-      opacity: 0,
-      scale: reducedMotion ? 1 : 0.97,
-      filter: reducedMotion ? "blur(0px)" : "blur(6px)",
-    },
-    transition: {
-      duration: reducedMotion ? 0.3 : 0.5,
-      delay: reducedMotion ? 0 : Math.min(index, 8) * 0.045,
-      ease: EASE_LUXE,
-    },
-  };
 
   /* Artwork box: shared by product photos and the branded missing-image fallback. */
   const artworkClass = cn(
@@ -186,12 +169,12 @@ export function ProductCard({
 
   return (
     <>
-      <motion.article
-        layout={!reducedMotion}
-        {...entrance}
-        whileHover={reducedMotion ? undefined : { y: -6 }}
+      <article
         className={cn(
-          "group glass-soft shadow-playful relative flex overflow-hidden rounded-3xl transition-[box-shadow,border-color] duration-500 ease-[var(--ease-luxe)] hover:border-rose/35 hover:shadow-playful-hover focus-within:border-rose/35",
+          /* Micro-interaction is pure CSS: transform + box-shadow over 300ms,
+             with the lift suppressed under `prefers-reduced-motion`. */
+          "group glass-soft shadow-playful relative flex overflow-hidden rounded-3xl transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-luxe)] hover:border-rose/35 hover:shadow-playful-hover focus-within:border-rose/35",
+          "motion-safe:hover:-translate-y-1 motion-safe:hover:scale-[1.03] motion-reduce:transition-none",
           isList ? "flex-row gap-0" : "flex-col",
           className,
         )}
@@ -319,7 +302,7 @@ export function ProductCard({
             </div>
           </div>
         </div>
-      </motion.article>
+      </article>
 
       <QuickViewDialog
         product={product}
