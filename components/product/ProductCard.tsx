@@ -179,6 +179,9 @@ export function ProductCard({
   const artworkClass = cn(
     "transition-transform duration-700 ease-[var(--ease-luxe)] group-hover:scale-[1.06]",
     isList ? "h-full min-h-32 w-32 sm:w-44" : "aspect-4/5 w-full",
+    /* Sold-out pieces read as muted but stay visible, linkable and
+       wishlist-able — only the "Add to cart" action is disabled. */
+    !product.inStock && "opacity-55 saturate-[0.35]",
   );
 
   return (
@@ -286,28 +289,34 @@ export function ProductCard({
 
           <StarRating rating={product.rating} reviewCount={product.reviewCount} size="sm" />
 
-          <div className="flex items-baseline gap-2">
-            <span className="text-lg font-bold text-primary">
-              {formatPrice(product.price, product.currency)}
-            </span>
-            {product.originalPrice && (
-              <span className="text-xs text-muted-foreground line-through">
-                {formatPrice(product.originalPrice, product.currency)}
+          {/* Price and actions are bottom-anchored as one block. That keeps the
+              title pinned under the photo while prices line up across a grid
+              row, even when the meta row above wraps to two lines in a narrow
+              column. */}
+          <div className="mt-auto flex flex-col gap-3">
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg font-bold text-primary">
+                {formatPrice(product.price, product.currency)}
               </span>
-            )}
-          </div>
+              {product.originalPrice && (
+                <span className="text-xs text-muted-foreground line-through">
+                  {formatPrice(product.originalPrice, product.currency)}
+                </span>
+              )}
+            </div>
 
-          <div className={cn("mt-auto flex gap-2", isList && "sm:max-w-xs")}>
-            <AddToCartButton product={product} />
-            {isList && (
-              <Button
-                asChild
-                variant="outline"
-                className="shrink-0 rounded-full border-glass-border bg-glass text-[11px] tracking-[0.14em] uppercase transition-colors duration-300 hover:border-rose/40 hover:text-rose"
-              >
-                <Link href={`/product/${product.id}`}>View</Link>
-              </Button>
-            )}
+            <div className={cn("flex gap-2", isList && "sm:max-w-xs")}>
+              <AddToCartButton product={product} />
+              {isList && (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="shrink-0 rounded-full border-glass-border bg-glass text-[11px] tracking-[0.14em] uppercase transition-colors duration-300 hover:border-rose/40 hover:text-rose"
+                >
+                  <Link href={`/product/${product.id}`}>View</Link>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </motion.article>

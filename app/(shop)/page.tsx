@@ -12,7 +12,9 @@ import { HeroSection } from "@/components/sections/HeroSection";
 import { VirtualBoutique } from "@/components/sections/VirtualBoutique";
 import { BrandMarquee } from "@/components/sections/BrandMarquee";
 import { ShopByCategory } from "@/components/sections/ShopByCategory";
-import { FeaturedProducts } from "@/components/sections/FeaturedProducts";
+import { NewArrivalsGrid } from "@/components/sections/NewArrivalsGrid";
+import { CampaignBanner } from "@/components/sections/CampaignBanner";
+import { FeaturedCarousel } from "@/components/sections/FeaturedCarousel";
 import { StatsSection } from "@/components/sections/StatsSection";
 import { NewsletterForm } from "@/components/layout/NewsletterForm";
 import { Reveal } from "@/components/sections/Reveal";
@@ -42,17 +44,23 @@ export const dynamic = "force-dynamic";
  * Render order (top → bottom):
  *   1. <HeroSection />      — owns the viewport
  *   2. <BrandMarquee />     — "Brand values" ticker
- *   3. <ShopByCategory />   — #collections, now ABOVE the product rows
- *   4. <FeaturedProducts /> — #featured, #new-arrivals, #best-sellers
- *   5. <StatsSection />     — #stats (counters + Inner Circle signup)
- *   6. <NewsletterForm />   — moved here out of <Footer />
+ *   3. <ShopByCategory />   — #collections carousel
+ *   4. <NewArrivalsGrid />  — #new-arrivals, 8 latest products (2/3/4-up grid)
+ *   5. <CampaignBanner />   — full-bleed "The Winter Edit" campaign
+ *   6. <FeaturedCarousel /> — #featured, Embla rail (manual only)
+ *   7. <StatsSection />     — #stats (counters + Inner Circle signup)
+ *   8. <NewsletterForm />   — moved here out of <Footer />
  *   …then <Footer />, which lives in app/(shop)/layout.tsx and stays last.
  *
- * Vertical rhythm: ShopByCategory, FeaturedProducts and StatsSection each ship
- * their own `py-24 lg:py-32` internally, so the gaps between them are already
- * uniform — no wrapper spacing is added on top, which would double them up.
- * <NewsletterForm /> has no gutter of its own, so its wrapper supplies the same
- * frame (see the comment at the render site).
+ * Vertical rhythm: every section ships its own `py-24 lg:py-32` (the banner
+ * puts the token on its inner content frame so it can stay edge-to-edge), so
+ * the gaps between them are already uniform — no wrapper spacing is added on
+ * top, which would double them up. <NewsletterForm /> has no gutter of its own,
+ * so its wrapper supplies the same frame (see the comment at the render site).
+ *
+ * Data: the page only fetches what the client rail needs (`featured`). The grid
+ * fetches its own 8 newest products inside <NewArrivalsGrid />, so that query
+ * stays next to the markup that renders it.
  *
  * Two surfaces are parked behind flags in `FEATURES` (lib/config.ts) and are
  * therefore not rendered right now:
@@ -65,16 +73,17 @@ export const dynamic = "force-dynamic";
  * self-contained <section> whose height went with it.
  */
 export default async function HomePage() {
-  const [heroSettings, virtualBoutique, featured, newArrivals, bestSellers] = await Promise.all([
+  const [heroSettings, virtualBoutique, featured] = await Promise.all([
     getHeroSettings(),
     // Skip the query entirely while the Virtual Boutique is hidden — there is
     // no point paying for a round-trip whose results nothing renders.
     FEATURES.virtualBoutique
       ? listProducts({ placement: "virtualBoutique", limit: 3 })
       : Promise.resolve({ products: [] as Product[], source: "mock" as const }),
-    listProducts({ featured: true, limit: 4 }),
-    listProducts({ placement: "newArrival", limit: 4 }),
-    listProducts({ placement: "bestSeller", limit: 4 }),
+    // Curated rail. 8 rather than 4 so the carousel still has something to
+    // scroll at 3-up on desktop once more products get flagged. <NewArrivalsGrid />
+    // fetches its own data server-side, so it is not queried here.
+    listProducts({ featured: true, limit: 8 }),
   ]);
   return (
     /* reducedMotion="user" makes framer-motion honour prefers-reduced-motion
@@ -101,28 +110,19 @@ export default async function HomePage() {
           <ShopByCategory />
         </Reveal>
 
+        {/* New Arrivals — server-rendered grid; fetches its own 8 products. */}
         <Reveal>
-          <FeaturedProducts products={featured.products} />
+          <NewArrivalsGrid />
         </Reveal>
 
+        {/* Editorial campaign banner — full-bleed, between grid and rail. */}
         <Reveal>
-          <FeaturedProducts
-            id="new-arrivals"
-            eyebrow="Just Landed"
-            title="New Arrivals"
-            description="Discover the latest pieces added to the MUKRA collection."
-            products={newArrivals.products}
-          />
+          <CampaignBanner />
         </Reveal>
 
+        {/* Curated rail — Embla, manual navigation only. */}
         <Reveal>
-          <FeaturedProducts
-            id="best-sellers"
-            eyebrow="Loved by Families"
-            title="Best Sellers"
-            description="Explore the pieces families keep coming back for."
-            products={bestSellers.products}
-          />
+          <FeaturedCarousel products={featured.products} />
         </Reveal>
 
         <Reveal>

@@ -113,6 +113,15 @@ export interface ProductQuery {
   category?: string;
   featured?: boolean;
   placement?: "virtualBoutique" | "newArrival" | "bestSeller";
+  /**
+   * Standalone sort. Only `"newest"` is supported — it is what the home page's
+   * New Arrivals grid needs (the 8 most recently added pieces, regardless of
+   * whether anyone remembered to tick the `newArrival` flag).
+   *
+   * Precedence when several options are combined: `featured` > `placement` >
+   * `sort` > default (oldest first).
+   */
+  sort?: "newest";
   activeOnly?: boolean;
   limit?: number;
 }
@@ -144,7 +153,9 @@ export async function listProducts(
           ? [{ featuredOrder: "asc" }, { createdAt: "desc" }, { id: "asc" }]
           : query.placement
             ? [{ createdAt: "desc" }, { id: "asc" }]
-            : [{ createdAt: "asc" }, { id: "asc" }],
+            : query.sort === "newest"
+              ? [{ createdAt: "desc" }, { id: "asc" }]
+              : [{ createdAt: "asc" }, { id: "asc" }],
         ...(query.limit
           ? { take: Math.min(Math.max(Math.trunc(query.limit), 1), 100) }
           : {}),
@@ -169,7 +180,9 @@ export async function listProducts(
               a.id.localeCompare(b.id)
             : query.placement
               ? b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id)
-              : a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+              : query.sort === "newest"
+                ? b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id)
+                : a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
         )
         .slice(0, query.limit ? Math.min(Math.max(Math.trunc(query.limit), 1), 100) : undefined),
   );
