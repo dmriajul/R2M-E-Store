@@ -34,7 +34,7 @@ function StockBadge({ product }: { product: Product }) {
  * One saved piece: the standard catalogue tile, a stock badge and the
  * "Move to Cart" shortcut. The heart on the tile removes it from the wishlist.
  */
-function WishlistTile({ product, index }: { product: Product; index: number }) {
+function WishlistTile({ product }: { product: Product }) {
   const addItem = useCartStore((state) => state.addItem);
   const removeFromWishlist = useWishlistStore((state) => state.remove);
 
@@ -53,7 +53,7 @@ function WishlistTile({ product, index }: { product: Product; index: number }) {
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       className="flex flex-col gap-3"
     >
-      <ProductCard product={product} index={index} />
+      <ProductCard product={product} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <StockBadge product={product} />
@@ -147,8 +147,8 @@ export function WishlistGrid() {
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
       <AnimatePresence mode="popLayout" initial={false}>
-        {products.map((product, index) => (
-          <WishlistTile key={product.id} product={product} index={index} />
+        {products.map((product) => (
+          <WishlistTile key={product.id} product={product} />
         ))}
       </AnimatePresence>
     </div>

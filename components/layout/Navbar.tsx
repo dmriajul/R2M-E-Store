@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -74,6 +74,21 @@ function IconButton({ icon: Icon, label, href, onClick, className }: IconButtonP
 export function Navbar() {
   const pathname = usePathname();
   const itemCount = useCartStore(selectCartItemCount);
+  /**
+   * `revision` advances only on real cart mutations — never on rehydration.
+   * The badge bump is keyed off it so restoring a persisted bag on load stays
+   * completely still (a pop there would be an animation with no user action
+   * behind it).
+   */
+  const revision = useCartStore((state) => state.revision);
+  const [bump, setBump] = useState(0);
+  const seenRevision = useRef(revision);
+
+  useEffect(() => {
+    if (revision === seenRevision.current) return;
+    seenRevision.current = revision;
+    setBump((value) => value + 1);
+  }, [revision]);
   const reducedMotion = usePrefersReducedMotion();
   const language = useLanguageStore((state) => state.language);
   const toggleLanguage = useLanguageStore((state) => state.toggleLanguage);
@@ -200,11 +215,13 @@ export function Navbar() {
             )}
           >
             <ShoppingBag className="size-[18px] transition-transform duration-300 group-hover:scale-110" />
+            {/* Keyed on `bump`, which only advances on a user action.
+                `bump === 0` is the first appearance — including the mount
+                caused by rehydrating the bag — and renders at rest. */}
             {itemCount > 0 && (
-              /* Keyed on the count so every change replays the springy pop. */
               <motion.span
-                key={itemCount}
-                initial={reducedMotion ? { scale: 1 } : { scale: 0.5 }}
+                key={bump}
+                initial={bump === 0 || reducedMotion ? { scale: 1 } : { scale: 0.5 }}
                 aria-hidden
                 animate={{ scale: 1 }}
                 transition={

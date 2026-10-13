@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getProducts } from "@/lib/site";
@@ -148,8 +147,7 @@ export function ShopCatalog({ initialFilters, products: catalogue }: ShopCatalog
           </div>
         ) : (
           <>
-            <motion.div
-              layout
+            <div
               className={cn(
                 "grid gap-5",
                 isList
@@ -157,18 +155,18 @@ export function ShopCatalog({ initialFilters, products: catalogue }: ShopCatalog
                   : "grid-cols-2 md:grid-cols-3 xl:grid-cols-4",
               )}
             >
-              <AnimatePresence initial={false}>
-                {visible.map((product, index) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    index={index}
-                    variant={filters.view}
-                    /* Only the first row is above the fold. */
-                    priority={index < 4}
-                  />
-                ))}
-                {isLoadingMore &&
+              {/* No AnimatePresence / `layout` here any more: ProductCard is
+                  animation-free, so the filter reflow is instant. */}
+              {visible.map((product, index) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  variant={filters.view}
+                  /* Only the first row is above the fold. */
+                  priority={index < 4}
+                />
+              ))}
+              {isLoadingMore &&
                   Array.from(
                     { length: Math.min(SHOP_PAGE_SIZE, products.length - visible.length) },
                     (_, index) => (
@@ -186,8 +184,7 @@ export function ShopCatalog({ initialFilters, products: catalogue }: ShopCatalog
                       </div>
                     ),
                   )}
-              </AnimatePresence>
-            </motion.div>
+            </div>
 
             {hasMore && (
               <div className="mt-12 flex flex-col items-center gap-3">
