@@ -410,6 +410,9 @@ export const PRODUCT_CATEGORY_NAMES = [
   "Tops & Tees",
   "Innerwear & Thermals",
   "Accessories",
+  "Pants & Bottoms",
+  "Frocks & Dresses",
+  "Outerwear & Jackets",
 ] as const;
 
 export const PRODUCT_GENDERS = ["Girls", "Boys", "Unisex"] as const;

@@ -15,7 +15,11 @@ export type ProductCategory =
   | "Winter Sets & Tracksuits"
   | "Tops & Tees"
   | "Innerwear & Thermals"
-  | "Accessories";
+  | "Accessories"
+  /** Shopper-facing groupings used by the category carousel and mega menu. */
+  | "Pants & Bottoms"
+  | "Frocks & Dresses"
+  | "Outerwear & Jackets";
 
 export type ProductGender = "Girls" | "Boys" | "Unisex";
 
