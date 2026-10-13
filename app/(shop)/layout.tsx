@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { NewsletterSection } from "@/components/sections/NewsletterSection";
 import { PageTransition } from "@/components/providers/PageTransition";
 import { BackToTop } from "@/components/ui/BackToTop";
 
@@ -16,6 +17,8 @@ export default function ShopGroupLayout({
       <main id="main-content" className="relative z-10 flex-1">
         <PageTransition>{children}</PageTransition>
       </main>
+      {/* The storefront's single newsletter capture — once, above the footer. */}
+      <NewsletterSection />
       <Footer />
       <BackToTop />
     </>

@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { FOOTER_LINKS, SITE, type NavLink } from "@/lib/site";
 import { Separator } from "@/components/ui/separator";
-import { NewsletterForm } from "@/components/layout/NewsletterForm";
 import {
   InstagramIcon,
   LinkedInIcon,
@@ -54,7 +53,7 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="relative z-10 mt-24 border-t border-glass-border bg-[#070707]">
+    <footer className="relative z-10 border-t border-glass-border bg-[#070707]">
       <span aria-hidden className="hairline-gold block h-px w-full" />
 
       <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
@@ -120,21 +119,6 @@ export function Footer() {
               </div>
             );
           })}
-        </div>
-
-        <Separator className="my-12 bg-glass-border" />
-
-        {/* ---------- Newsletter ---------- */}
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h3 className="text-lg font-semibold tracking-wide">
-              Join the <span className="text-gradient-gold">private list</span>
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              First access to limited drops and archive pieces.
-            </p>
-          </div>
-          <NewsletterForm />
         </div>
 
         <Separator className="my-12 bg-glass-border" />
