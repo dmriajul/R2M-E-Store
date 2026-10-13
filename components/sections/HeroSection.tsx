@@ -59,7 +59,7 @@ export function HeroSection({ settings }: { settings: HeroSettings }) {
   const secondaryCtaLink = settings.secondaryCtaLink || "#featured";
   const mediaUrl = settings.heroMediaUrl || "/hero-fashion.mp4";
   const showImage = settings.heroMediaType === "image" && Boolean(settings.heroMediaUrl);
-  const freeShippingText = language === "bn" ? "ফ্রি সারা দেশে শিপিং" : "Free nationwide shipping";
+  const freeShippingText = t("shipping.freeNationwide", language);
   const easyReturnsText = language === "bn" ? "সহজ রিটার্নস" : "30-day easy returns";
   const scrollText = language === "bn" ? "স্ক্রল করুন" : "Scroll";
 

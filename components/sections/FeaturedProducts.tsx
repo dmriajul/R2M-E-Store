@@ -274,9 +274,21 @@ export function FeaturedProducts({
               className="mt-5 block h-px w-24 bg-gradient-to-r from-primary via-primary/50 to-transparent"
             />
           </div>
-          <p className="w-full max-w-sm text-sm leading-relaxed text-muted-foreground sm:w-auto">
-            {sectionDescription}
-          </p>
+          <div className="flex w-full max-w-sm flex-col gap-4 sm:w-auto sm:items-end">
+            <p className="text-sm leading-relaxed text-muted-foreground sm:text-right">
+              {sectionDescription}
+            </p>
+            <Button
+              asChild
+              variant="ghost"
+              className="group w-fit gap-2 text-sm tracking-[0.16em] text-primary uppercase transition-colors duration-300 hover:bg-glass hover:text-primary"
+            >
+              <Link href="/shop">
+                {t("common.viewAll", language)}
+                <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
+              </Link>
+            </Button>
+          </div>
         </header>
       </div>
 
@@ -297,18 +309,6 @@ export function FeaturedProducts({
         )}
       </div>
 
-      <div className="mx-auto mt-4 flex w-full max-w-7xl justify-end px-4 sm:px-6 lg:px-8">
-        <Button
-          asChild
-          variant="ghost"
-          className="group gap-2 text-sm tracking-[0.16em] text-primary uppercase transition-colors duration-300 hover:bg-glass hover:text-primary"
-        >
-          <Link href="/shop">
-            {t("common.viewAll", language)}
-            <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
-          </Link>
-        </Button>
-      </div>
     </section>
   );
 }
