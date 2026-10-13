@@ -16,16 +16,18 @@ const STATS: readonly Stat[] = [
   { value: 50, suffix: "+", label: "Countries" },
 ] as const;
 
-/** Counts from 0 to `to` once the section enters the viewport. */
+/**
+ * Progressive-enhancement count-up. The final value is the initial state, so
+ * it is server-rendered into the HTML (and shown with JS disabled or before
+ * hydration). Once the section scrolls into view, the count-up replays from
+ * 0 as an enhancement only — and never for reduced-motion visitors, who keep
+ * the final value throughout.
+ */
 function useCountUp(to: number, active: boolean, reducedMotion: boolean): number {
-  const [value, setValue] = useState(0);
+  const [value, setValue] = useState(to);
 
   useEffect(() => {
-    if (!active) return;
-    if (reducedMotion) {
-      setValue(to);
-      return;
-    }
+    if (!active || reducedMotion) return;
 
     const controls = animate(0, to, {
       duration: 2,

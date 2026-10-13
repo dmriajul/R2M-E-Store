@@ -1,23 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { ArrowRight, Mail, ShieldCheck, Sparkles, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { t } from "@/lib/utils";
+import { useLanguageStore } from "@/store/useLanguageStore";
 
-const PERKS = [
-  { icon: Truck, label: "Free worldwide shipping" },
-  { icon: ShieldCheck, label: "Authenticity guaranteed" },
-  { icon: Sparkles, label: "Concierge support" },
-] as const;
+/** Transactional routes where the newsletter capture must not compete. */
+const NEWSLETTER_HIDDEN_ROUTES = ["/checkout", "/cart"] as const;
 
 /**
  * The single newsletter capture for the storefront. Rendered once from the
  * shop layout, directly above the footer, so every page has exactly one
- * email-capture form. No endpoint yet — submission is simulated, matching
- * the previous homepage behaviour.
+ * email-capture form — except on checkout/cart routes, where it is hidden.
+ * No endpoint yet — submission is simulated, matching the previous
+ * homepage behaviour.
  */
 export function NewsletterSection() {
+  const pathname = usePathname();
+  const language = useLanguageStore((state) => state.language);
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
 
@@ -28,6 +31,21 @@ export function NewsletterSection() {
     setSubscribed(true);
     setEmail("");
   };
+
+  if (
+    pathname &&
+    NEWSLETTER_HIDDEN_ROUTES.some(
+      (route) => pathname === route || pathname.startsWith(`${route}/`),
+    )
+  ) {
+    return null;
+  }
+
+  const perks = [
+    { icon: Truck, label: t("shipping.freeNationwide", language) },
+    { icon: ShieldCheck, label: "Authenticity guaranteed" },
+    { icon: Sparkles, label: "Concierge support" },
+  ] as const;
 
   return (
     <section aria-label="Newsletter" className="relative py-24 lg:py-32">
@@ -56,7 +74,7 @@ export function NewsletterSection() {
               </p>
 
               <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-3">
-                {PERKS.map(({ icon: Icon, label }) => (
+                {perks.map(({ icon: Icon, label }) => (
                   <li
                     key={label}
                     className="flex items-center gap-2 text-xs tracking-wide text-muted-foreground"

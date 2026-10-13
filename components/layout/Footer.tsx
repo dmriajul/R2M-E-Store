@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { FOOTER_LINKS, SITE, type NavLink } from "@/lib/site";
+import { FOOTER_LINKS, SITE } from "@/lib/site";
 import { Separator } from "@/components/ui/separator";
 import {
   InstagramIcon,
@@ -10,37 +10,11 @@ import {
 } from "@/components/layout/SocialIcons";
 
 /**
- * Support column.
- *
- * The step-1 anchors are joined by the real legal pages (Step 7.5), so
- * "Shipping & Returns" and "FAQ" are replaced by the pages that actually answer
- * those questions instead of jumping to a section heading.
+ * Footer columns come straight from FOOTER_LINKS in site.ts — the single
+ * source of truth, already deduped: each destination appears exactly once,
+ * under one canonical name (e.g. "Shipping Info" in Support only;
+ * "Returns & Refunds", "Privacy Policy" and "Terms & Conditions" in Legal).
  */
-const SUPPORT_LINKS: readonly NavLink[] = [
-  { label: "Contact", href: "/#contact" },
-  { label: "Order Tracking", href: "/#tracking" },
-  { label: "Shipping Info", href: "/shipping" },
-  { label: "Return Policy", href: "/returns" },
-  { label: "FAQ", href: "/faq" },
-  { label: "Terms & Conditions", href: "/terms" },
-  { label: "Privacy Policy", href: "/privacy" },
-];
-
-/** Legal column: point the two documents that now have pages at the real URLs. */
-const LEGAL_LINKS: readonly NavLink[] = (FOOTER_LINKS.Legal ?? []).map((link) =>
-  link.label === "Privacy Policy"
-    ? { label: link.label, href: "/privacy" }
-    : link.label === "Terms of Service"
-      ? { label: link.label, href: "/terms" }
-      : link,
-);
-
-/** Resolved columns — Support and Legal are overridden, Shop comes from site.ts. */
-function footerLinks(heading: string): readonly NavLink[] {
-  if (heading === "Support") return SUPPORT_LINKS;
-  if (heading === "Legal") return LEGAL_LINKS;
-  return FOOTER_LINKS[heading] ?? [];
-}
 
 const SOCIALS = [
   { label: "Instagram", href: "https://instagram.com", icon: InstagramIcon },
@@ -97,8 +71,7 @@ export function Footer() {
           </div>
 
           {/* ---------- Link columns ---------- */}
-          {Object.entries(FOOTER_LINKS).map(([heading]) => {
-            const links = footerLinks(heading);
+          {Object.entries(FOOTER_LINKS).map(([heading, links]) => {
             return (
               <div key={heading}>
                 <h3 className="text-xs font-semibold tracking-[0.22em] text-primary uppercase">

@@ -333,7 +333,7 @@ export function t(key: string, language?: Language): string {
     "footer.about": { en: "About Us", bn: "আমাদের সম্পর্কে" },
     "footer.contact": { en: "Contact", bn: "যোগাযোগ" },
     "footer.privacy": { en: "Privacy Policy", bn: "গোপনীয়তা নীতি" },
-    "footer.terms": { en: "Terms of Service", bn: "সেবা শর্তাবলী" },
+    "footer.terms": { en: "Terms & Conditions", bn: "শর্তাবলী" },
 
     // Common
     "common.loading": { en: "Loading...", bn: "লোড হচ্ছে..." },
@@ -367,6 +367,10 @@ export function t(key: string, language?: Language): string {
 
     // Shipping
     "shipping.free": { en: "Free Shipping", bn: "ফ্রি শিপিং" },
+    "shipping.freeNationwide": {
+      en: "Free nationwide shipping",
+      bn: "ফ্রি সারা দেশে শিপিং",
+    },
     "shipping.standard": { en: "Standard Shipping", bn: "স্ট্যান্ডার্ড শিপিং" },
     "shipping.express": { en: "Express Shipping", bn: "এক্সপ্রেস শিপিং" },
     "shipping.gift_wrap": { en: "Gift Wrap", bn: "গিফট র‍্যাপ" },
@@ -497,7 +501,7 @@ export function getTranslations(key: string): Record<Language, string> {
     "footer.about": { en: "About Us", bn: "আমাদের সম্পর্কে" },
     "footer.contact": { en: "Contact", bn: "যোগাযোগ" },
     "footer.privacy": { en: "Privacy Policy", bn: "গোপনীয়তা নীতি" },
-    "footer.terms": { en: "Terms of Service", bn: "সেবা শর্তাবলী" },
+    "footer.terms": { en: "Terms & Conditions", bn: "শর্তাবলী" },
     "common.loading": { en: "Loading...", bn: "লোড হচ্ছে..." },
     "common.error": { en: "Error", bn: "ত্রুটি" },
     "common.success": { en: "Success", bn: "সফল" },
@@ -527,6 +531,10 @@ export function getTranslations(key: string): Record<Language, string> {
       bn: "এই স্টাইলটি দেখুন",
     },
     "shipping.free": { en: "Free Shipping", bn: "ফ্রি শিপিং" },
+    "shipping.freeNationwide": {
+      en: "Free nationwide shipping",
+      bn: "ফ্রি সারা দেশে শিপিং",
+    },
     "shipping.standard": { en: "Standard Shipping", bn: "স্ট্যান্ডার্ড শিপিং" },
     "shipping.express": { en: "Express Shipping", bn: "এক্সপ্রেস শিপিং" },
     "shipping.gift_wrap": { en: "Gift Wrap", bn: "গিফট র‍্যাপ" },

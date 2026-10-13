@@ -54,15 +54,14 @@ export const FOOTER_LINKS: Readonly<Record<string, readonly NavLink[]>> = {
   ],
   Support: [
     { label: "Contact", href: "/#contact" },
-    { label: "Shipping & Returns", href: "/#shipping" },
     { label: "Order Tracking", href: "/#tracking" },
-    { label: "FAQ", href: "/#faq" },
+    { label: "Shipping Info", href: "/shipping" },
+    { label: "FAQ", href: "/faq" },
   ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms of Service", href: "/terms" },
-    { label: "Returns Policy", href: "/returns" },
-    { label: "Shipping Info", href: "/shipping" },
+    { label: "Terms & Conditions", href: "/terms" },
+    { label: "Returns & Refunds", href: "/returns" },
   ],
 } as const;
 
