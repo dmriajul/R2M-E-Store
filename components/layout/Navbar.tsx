@@ -24,6 +24,7 @@ import {
 import { AccountMenu } from "@/components/layout/AccountMenu";
 import { CartSheet } from "@/components/layout/CartSheet";
 import { MobileMenu } from "@/components/layout/MobileMenu";
+import { ShopMegaMenu } from "@/components/layout/ShopMegaMenu";
 import { SearchDialog } from "@/components/layout/SearchDialog";
 
 const iconButtonClasses = cn(
@@ -116,12 +117,12 @@ export function Navbar() {
     >
       <nav
         aria-label="Main navigation"
-        className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:h-20 lg:px-8"
+        className="mx-auto grid h-16 w-full max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 sm:px-6 lg:h-20 lg:px-8"
       >
         {/* ---------- Logo ---------- */}
         <Link
           href="/"
-          className="group notranslate shrink-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="group notranslate shrink-0 justify-self-start focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           aria-label={`${SITE.name} — home`}
         >
           <Image
@@ -135,11 +136,19 @@ export function Navbar() {
         </Link>
 
         {/* ---------- Desktop nav ---------- */}
-        <ul className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 lg:flex">
+        <ul className="hidden items-center gap-1 justify-self-center lg:flex">
           {navLinks.map((link) => {
             const isActive =
               pathname === link.href ||
               (link.href !== "/" && pathname.startsWith(link.href));
+
+            if (link.href === "/shop") {
+              return (
+                <li key={link.href}>
+                  <ShopMegaMenu label={link.label} active={isActive} />
+                </li>
+              );
+            }
 
             return (
               <li key={link.href}>
@@ -168,7 +177,7 @@ export function Navbar() {
         </ul>
 
         {/* ---------- Actions ---------- */}
-        <div className="flex items-center gap-0.5 sm:gap-1">
+        <div className="flex items-center justify-self-end gap-0.5 sm:gap-1">
           <IconButton
             icon={Search}
             label="Search products"

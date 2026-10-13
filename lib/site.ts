@@ -1,3 +1,4 @@
+import { SHOP_CATEGORIES } from "@/lib/config";
 import type {
   AgeFilter,
   Product,
@@ -80,6 +81,9 @@ export const categories = [
   "Tops & Tees",
   "Innerwear & Thermals",
   "Accessories",
+  "Pants & Bottoms",
+  "Frocks & Dresses",
+  "Outerwear & Jackets",
 ] as const satisfies readonly (ProductCategory | "All")[];
 
 export type CategoryFilter = (typeof categories)[number];
@@ -174,6 +178,24 @@ export const CATEGORY_META: Readonly<Record<ProductCategory, CategoryMeta>> = {
     gradient: "from-yellow-300 to-amber-500",
     glow: "#FACC15",
   },
+  "Pants & Bottoms": {
+    slug: "pants-bottoms",
+    emoji: "👖",
+    gradient: "from-blue-400 to-indigo-600",
+    glow: "#60A5FA",
+  },
+  "Frocks & Dresses": {
+    slug: "frocks-dresses",
+    emoji: "👗",
+    gradient: "from-pink-400 to-rose-600",
+    glow: "#F472B6",
+  },
+  "Outerwear & Jackets": {
+    slug: "winter-jackets-hoodies",
+    emoji: "🧥",
+    gradient: "from-teal-400 to-emerald-600",
+    glow: "#2DD4BF",
+  },
 } as const;
 
 /** Badge palette: New = cyan, Sale = rose, Bestseller = gold, Organic = green. */
@@ -232,7 +254,7 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "A breezy A-line dress in breathable organic cotton that keeps little ones cool on warm days. The hidden back buttons make dressing quick, and the full skirt is made for spinning.",
     price: 3499,
     currency: "BDT",
-    category: "Tops & Tees",
+    category: "Frocks & Dresses",
     ageRange: "3-6Y",
     gender: "Girls",
     colors: ["Pink", "Lavender", "White"],
@@ -280,7 +302,7 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "Feather-light tulle layered over a cotton lining so it never itches. The elasticated rainbow waistband grows with them and stays put through the wiggliest of days.",
     price: 2799,
     currency: "BDT",
-    category: "Winter Bottoms / Trousers",
+    category: "Pants & Bottoms",
     ageRange: "2-5Y",
     gender: "Girls",
     colors: ["Pink", "Purple", "Yellow"],
@@ -378,7 +400,7 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
     price: 5999,
     originalPrice: 7999,
     currency: "BDT",
-    category: "Winter Sets & Tracksuits",
+    category: "Frocks & Dresses",
     ageRange: "4-8Y",
     gender: "Girls",
     colors: ["Lavender", "White", "Rose"],
@@ -428,7 +450,7 @@ const PRODUCT_SEEDS: readonly ProductSeed[] = [
       "Pre-washed cotton denim that feels broken-in from day one, with adjustable straps that grow with them. Popper legs make nappy changes and toilet trips quick work.",
     price: 3699,
     currency: "BDT",
-    category: "Winter Sets & Tracksuits",
+    category: "Pants & Bottoms",
     ageRange: "1-4Y",
     gender: "Unisex",
     colors: ["Denim", "Blue", "Cream"],
@@ -634,11 +656,19 @@ export function getProducts(query: ProductQuery = {}, catalogue: readonly Produc
   let products = catalogue.filter((product) => product.status === "active");
 
   if (category && category !== "All") {
-    products = products.filter(
-      (product) =>
-        product.category === category ||
-        product.categories?.some((assignedCategory) => assignedCategory === category),
-    );
+    const categoryGroup = SHOP_CATEGORIES.find((entry) => entry.title === category);
+    const includedCategories: readonly string[] =
+      categoryGroup?.productCategories ?? [category];
+
+    products = products.filter((product) => {
+      const assignedCategories = new Set<string>([
+        product.category,
+        ...(product.categories ?? []),
+      ]);
+      return includedCategories.some((includedCategory) =>
+        assignedCategories.has(includedCategory),
+      );
+    });
   }
 
   if (age && age !== "All Ages") {

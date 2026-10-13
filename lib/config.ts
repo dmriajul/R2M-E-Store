@@ -7,6 +7,7 @@
  */
 
 import { isCloudinaryConfigured, isDatabaseConfigured, isSSLCommerzEnabled } from "@/lib/demo-mode";
+import type { ProductCategory } from "@/types";
 
 /* -------------------------------------------------------------------------- */
 /*  Currency                                                                  */
@@ -55,6 +56,70 @@ export const STORE = {
   freeShippingThreshold: Number(process.env.NEXT_PUBLIC_FREE_SHIPPING_THRESHOLD ?? 5000),
   supportEmail: process.env.STORE_SUPPORT_EMAIL ?? "hello@mukra.com",
 } as const;
+
+/* -------------------------------------------------------------------------- */
+/*  Shopper-facing category groups                                            */
+/* -------------------------------------------------------------------------- */
+
+export interface ShopCategoryConfig {
+  title: string;
+  /** When present, used as the title in the desktop mega menu. */
+  menuTitle?: string;
+  slug: string;
+  image: string;
+  /** Existing and new admin taxonomy values included by this shopper group. */
+  productCategories: readonly ProductCategory[];
+  subcategories: readonly string[];
+}
+
+/**
+ * The storefront uses a small editorial taxonomy while products keep their
+ * admin taxonomy. Keeping the mapping here makes navigation, filtering and
+ * live counts agree without changing legacy product records.
+ */
+export const SHOP_CATEGORIES = [
+  {
+    title: "Tops & Tees",
+    slug: "tops-tees",
+    image: "/images/categories/tops-tees.jpg",
+    productCategories: ["Tops & Tees"],
+    subcategories: ["Graphic Tees", "Polo Shirts", "Sleeveless"],
+  },
+  {
+    title: "Pants & Bottoms",
+    slug: "pants-bottoms",
+    image: "/images/categories/pants-bottoms.jpg",
+    productCategories: ["Pants & Bottoms", "Winter Bottoms / Trousers"],
+    subcategories: ["Trousers", "Shorts", "Leggings", "Denim"],
+  },
+  {
+    title: "Frocks & Dresses",
+    slug: "frocks-dresses",
+    image: "/images/categories/frocks-dresses.jpg",
+    productCategories: ["Frocks & Dresses"],
+    subcategories: ["Party Gowns", "Summer Frocks", "Casual Dresses"],
+  },
+  {
+    title: "Outerwear & Jackets",
+    menuTitle: "Outerwear",
+    slug: "winter-jackets-hoodies",
+    image: "/images/categories/outerwear.jpg",
+    productCategories: [
+      "Outerwear & Jackets",
+      "Jackets & Coats",
+      "Sweatshirts & Hoodies",
+      "Sweaters & Cardigans",
+    ],
+    subcategories: ["Hoodies", "Jackets", "Winter Sweaters"],
+  },
+  {
+    title: "Kids Accessories",
+    slug: "accessories",
+    image: "/images/categories/accessories.jpg",
+    productCategories: ["Accessories"],
+    subcategories: ["Caps", "Socks", "Bags", "Shoes"],
+  },
+] as const satisfies readonly ShopCategoryConfig[];
 
 /* -------------------------------------------------------------------------- */
 /*  Shipping Rates                                                            */

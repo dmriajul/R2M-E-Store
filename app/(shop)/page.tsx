@@ -9,7 +9,8 @@ import { HeroSection } from "@/components/sections/HeroSection";
 import { VirtualBoutique } from "@/components/sections/VirtualBoutique";
 import { BrandMarquee } from "@/components/sections/BrandMarquee";
 import { FeaturedProducts } from "@/components/sections/FeaturedProducts";
-import { CollectionsGrid } from "@/components/sections/CollectionsGrid";
+import { ShopByCategory } from "@/components/sections/ShopByCategory";
+import { getShopCategoryCounts } from "@/lib/data/shop-categories";
 import { StatsSection } from "@/components/sections/StatsSection";
 import { Reveal } from "@/components/sections/Reveal";
 import { WelcomeOverlay } from "@/components/ui/WelcomeOverlay";
@@ -35,12 +36,20 @@ export const dynamic = "force-dynamic";
  * globals.css keeps the sticky navbar from covering them on jump.
  */
 export default async function HomePage() {
-  const [heroSettings, virtualBoutique, featured, newArrivals, bestSellers] = await Promise.all([
+  const [
+    heroSettings,
+    virtualBoutique,
+    featured,
+    newArrivals,
+    bestSellers,
+    categoryCounts,
+  ] = await Promise.all([
     getHeroSettings(),
     listProducts({ placement: "virtualBoutique", limit: 3 }),
     listProducts({ featured: true, limit: 4 }),
     listProducts({ placement: "newArrival", limit: 4 }),
     listProducts({ placement: "bestSeller", limit: 4 }),
+    getShopCategoryCounts(),
   ]);
   return (
     /* reducedMotion="user" makes framer-motion honour prefers-reduced-motion
@@ -81,7 +90,7 @@ export default async function HomePage() {
         </Reveal>
 
         <Reveal>
-          <CollectionsGrid />
+          <ShopByCategory counts={categoryCounts} />
         </Reveal>
 
         <Reveal>

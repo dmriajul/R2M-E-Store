@@ -710,6 +710,9 @@ const CATEGORY_BLURB: Readonly<Record<ProductCategory, string>> = {
   "Tops & Tees": "Everyday polos, tees and casual tops.",
   "Innerwear & Thermals": "Comfortable essentials and warm base layers.",
   Accessories: "Bags, clips and finishing touches.",
+  "Pants & Bottoms": "Trousers, shorts and denim for everyday adventures.",
+  "Frocks & Dresses": "Party-ready gowns and easy summer dresses.",
+  "Outerwear & Jackets": "Cosy hoodies, jackets and warm winter layers.",
 };
 
 export const ADMIN_CATEGORIES: readonly AdminCategory[] = (
