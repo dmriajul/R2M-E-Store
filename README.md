@@ -83,8 +83,34 @@ npm run db:seed        # seed demo data
 npm run db:studio      # browse the database
 ```
 
-**Demo credentials** — shopper: any email + `password123`; admin:
-`admin@mukra.com` / `admin123`.
+**Demo credentials** — one account per console role, plus a shopper:
+
+| Role | Email | Password | Console access |
+| --- | --- | --- | --- |
+| Super admin | `admin@mukra.com` | `password123` | everything |
+| Inventory manager | `inventory@mukra.com` | `password123` | dashboard, products, categories |
+| SEO manager | `seo@mukra.com` | `password123` | dashboard, products (metadata), settings |
+| Support manager | `support@mukra.com` | `password123` | dashboard, orders, returns, customers |
+| Shopper | `sarah@example.com` (or any email) | `password123` | storefront + account area |
+
+`prisma/seed.ts` creates the same staff accounts once a database is connected:
+`admin@ · inventory@ · seo@ · support@mukra.com`, all with the shared demo
+password `password123`.
+
+**Identity is always the session's.** Every account-area screen reads the signed-in
+person from `auth()` on the server or `useSession()` in the browser — never from a
+store, `localStorage` or a mock record. Switching accounts therefore switches the
+name, email, role and data everywhere at once, and `sarah@example.com` is the only
+identity that renders the seeded demo orders, addresses and notifications; every
+other account (staff included) sees genuine empty states.
+
+**Clearing a stuck session** — if a browser still looks signed in as someone else
+(a stale cookie, or a second account in another tab), open the account menu in the
+admin console and choose **Clear session & cache**. That signs you out and wipes
+all cookies, `localStorage`, `sessionStorage`, Cache Storage and service workers
+before dropping you on `/login?cleared=1`. Signing in and out also flushes the
+in-memory account-area caches, so a new sign-in never inherits the previous
+identity's data.
 
 ---
 
@@ -129,9 +155,9 @@ environment variables are present:
 | Area | Demo behaviour | With env vars |
 | --- | --- | --- |
 | Catalogue | 12 products from `lib/site.ts` | Prisma `Product` table (seeded identically) |
-| Auth | Any email + `password123`, `demo-<local>` user id | Supabase users, bcrypt hashes, JWT sessions |
+| Auth | Any email + `password123`, `demo-<local>` user id; the four role accounts above | Postgres users, bcrypt hashes, JWT sessions carrying the role |
 | Orders | In-memory records, `POST /api/orders` still re-prices the cart | Persisted `Order` + `OrderItem` rows |
-| Admin console | Client store seeded from `lib/mock-admin.ts` | Same UI, backed by the API |
+| Admin console | Same UI, in-session Zustand store (not durable) | Postgres through Server Actions + Prisma |
 | Uploads | Written to `.uploads/` and served via `/uploads/…` | Cloudinary (`mukra/products`, `mukra/models`) |
 | Payments | Wallet numbers + manual verification, cards disabled | Same, plus SSLCommerz when enabled |
 | Images | CSS gradients + emoji per category | Cloudinary URLs through `OptimizedImage` |
@@ -143,6 +169,151 @@ exactly which integrations are live:
 ```json
 { "status": "ok", "mode": "demo", "database": "mock", "cloudinary": "local-disk", "sslcommerz": "disabled" }
 ```
+
+## Roles & permissions (RBAC)
+
+The console has four operator roles. The matrix lives in **`lib/rbac.ts`** as
+plain data and is enforced at four points — edge middleware, the per-section
+server layouts, the Server Actions and the API routes — so nothing can drift out
+of sync, and the sidebar only ever shows what the role can actually open.
+
+| Section | Super admin | Inventory manager | SEO manager | Support manager |
+| --- | :-: | :-: | :-: | :-: |
+| Dashboard | ✅ | ✅ | ✅ | ✅ |
+| Products | ✅ | ✅ | ✅ *(metadata + placement only)* | — |
+| Categories | ✅ | ✅ | — | — |
+| Orders / Returns / Customers | ✅ | — | — | ✅ |
+| Coupons | ✅ | — | — | — |
+| Settings (hero/banners) | ✅ | — | ✅ | — |
+| Analytics | ✅ | — | — | — |
+| Staff & Roles (assign roles) | ✅ | — | — | — |
+
+How it is enforced:
+
+1. **`middleware.ts` → `lib/auth.config.ts`** — runs on the edge for every
+   `/admin/*` request. A signed-out visitor goes to `/login?callbackUrl=…`, a
+   shopper to `/dashboard`, and a staff member without the section role to
+   `/unauthorized?from=…`. This covers POSTs (Server Action calls) too.
+2. **Per-section layouts** — `app/admin/<section>/layout.tsx` calls
+   `requireAdminSection(section)`, so a page can never render for the wrong role
+   even if the middleware were bypassed (`/admin/staff` is super-admin only).
+3. **Server Actions** — every action in `app/admin/actions.ts` starts with
+   `requirePermission("products:write")` and friends, which resolves the Auth.js
+   session and checks it against the same matrix. An action is a public POST
+   endpoint, so this is the check that really protects the data.
+4. **API routes** — `app/api/admin/**` guards with
+   `requireActionRole(rolesForPermission(…))`, answering 401 (no session) or 403
+   (wrong role).
+
+The session is real now: `lib/auth.ts` normalises the stored role (the legacy
+two-role `ADMIN` value reads as `SUPER_ADMIN`, so an un-migrated database keeps
+working), the JWT/session callbacks carry it, and the console renders it —
+`app/admin/layout.tsx` resolves the operator and `AdminSessionProvider` hands the
+role to the client components (`AdminShell`, `ProductForm`, the dashboard), which
+use the same `can("products:write")` helpers to hide what the server would reject
+anyway.
+
+| Role | Shown in the profile menu as |
+| --- | --- |
+| `SUPER_ADMIN` | Full access to every console section |
+| `INVENTORY_MANAGER` | Products, categories and stock |
+| `SEO_MANAGER` | Product metadata, banners and SEO |
+| `SUPPORT_MANAGER` | Orders, returns and customers |
+
+### Database change required
+
+The `Role` enum gained the console roles. `ADMIN` is **kept** so an existing
+database keeps working — it simply reads as `SUPER_ADMIN` everywhere:
+
+```diff
+ enum Role {
+   CUSTOMER
+-  ADMIN
++  ADMIN            // legacy alias of SUPER_ADMIN
++  SUPER_ADMIN
++  INVENTORY_MANAGER
++  SEO_MANAGER
++  SUPPORT_MANAGER
+ }
+```
+
+Adding enum values is additive in Postgres (`ALTER TYPE … ADD VALUE`) and no
+table is rewritten. Apply with `npm run db:push`, then `npm run db:seed` to write
+the super-admin role and create one account per manager role.
+
+---
+
+## Admin writes (Server Actions + Prisma)
+
+Every mutation in the console goes through **`app/admin/actions.ts`** — Next.js 15
+Server Actions that run on the server, not in the browser:
+
+| Action | What it writes |
+| --- | --- |
+| `saveProductAction` | Create/update a product, including `featuredOrder`, the display placements (`categories`, `virtualBoutique`, `newArrival`, `bestSeller`, `featured`) and `active` |
+| `saveProductSeoAction` | The SEO manager's write path: slug, `metaTitle`, `metaDescription`, badge, publication and display placement — never pricing, media or stock |
+| `deleteProductsAction` | Hard-deletes products and their variants |
+| `duplicateProductAction` | Copies a product as an unpublished draft (unique `-copy` slug/SKU) |
+| `setProductsOutOfStockAction` | Zeroes stock on products *and* every variant |
+| `restockProductAction` | Adds units, spread across variants |
+| `updateOrderStatusAction` | Pending → Confirmed → Processing → Shipped → Delivered, or Cancelled / Refunded |
+| `decidePaymentAction` | Manual wallet verification (bKash / Nagad / Rocket): approve → **Confirmed + Paid**, reject → **Cancelled + Failed**, plus COD cash collection → **Delivered + Paid**. A verified wallet payment now has its own **Confirmed** status (the console used to fold `CONFIRMED` into *Processing*) |
+| `addOrderNoteAction` / `refundOrderAction` | Order notes and full refunds |
+| `saveCategoryAction` / `deleteCategoryAction` | Category metadata (name, slug, emoji, blurb, parent) |
+| `updateUserRoleAction` | **Super admin only.** Moves an account between `SUPER_ADMIN`, `INVENTORY_MANAGER`, `SEO_MANAGER`, `SUPPORT_MANAGER` and `CUSTOMER` — refuses self-changes and protects the last super admin |
+
+Rules the actions follow:
+
+1. **Role-guarded.** Each action re-checks the Auth.js session *and* the caller's
+   role (`lib/rbac.ts`) before touching data (`updateUserRoleAction` additionally
+   refuses to change the caller's own role, or to demote the last super admin) — middleware guards the pages, but an
+   action is a public POST endpoint. A caller without the permission gets
+   `{ ok: false, error }`, never data.
+2. **Zod-validated.** Arguments arrive as `unknown` and are parsed with the shared
+   schemas in `lib/validations.ts` before they reach Prisma.
+3. **No silent demo fallback.** With `DATABASE_URL` set, a write either commits or
+   returns `{ ok: false, error }` — `withDatabase()`'s catch-and-serve-mock
+   behaviour is deliberately unused here, so an operator is never told a change
+   was saved when it wasn't. With no database at all the action reports
+   `source: "demo"` and the console updates its in-session store.
+4. **Revalidated.** Successful writes call `revalidatePath` for the console, the
+   storefront (`/`, `/shop`, `/product/[id]`, `/sitemap.xml`) and the shopper's
+   order pages, so both sides reflect the change on the next render.
+
+The console reads live rows too: `app/admin/layout.tsx` loads products, orders and
+categories on the server and seeds the Zustand store through
+`components/admin/AdminDataHydrator.tsx`, so the tables, the dashboard widgets and
+the low-stock alert all show the same records the actions mutate.
+
+### Database change required
+
+The additive Prisma change below has been written to `prisma/schema.prisma`:
+
+```prisma
+/// Console-managed category metadata.
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  emoji       String   @default("🧸")
+  description String   @default("")
+  parent      String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([parent])
+  @@index([sortOrder, name])
+}
+```
+
+Apply it through the approved database-change process (`npm run db:push`, then
+`npm run db:seed` to load the eight storefront categories), and run
+`npx prisma generate` where engine downloads are available. Nothing else in the
+schema changed: products, orders and coupons already had every column the console
+needs.
+
+---
 
 ## Product display placement
 
@@ -193,6 +364,10 @@ app/
 │   └── error.tsx              storefront error boundary
 ├── admin/                     operations console — products, orders, customers,
 │                              coupons, categories, analytics, settings
+│   ├── actions.ts             Server Actions (Zod + role guard + revalidatePath)
+│   ├── staff/page.tsx         Staff & Roles (super admin) — role assignment
+│   ├── layout.tsx             session + products/orders/categories for the console
+│   └── <section>/layout.tsx   RBAC gate per console section
 ├── api/                       auth, register, orders, products, upload, health
 ├── uploads/[...path]/         local-disk upload streaming (demo mode)
 ├── offline/                   offline fallback destination
@@ -216,7 +391,9 @@ components/
 
 lib/                           cart maths, config, demo-mode, seo (JSON-LD),
                                image-optimizer, legal-content, payments, prisma,
-                               cloudinary, validations, mock data
+                               cloudinary, validations, mock data, rbac (roles)
+lib/data/                      admin-orders · admin-products · categories ·
+                               admin-errors — Prisma reads/writes for the console
 store/                         zustand stores (cart, wishlist, checkout, admin, …)
 prisma/                        schema.prisma + seed.ts
 public/                        manifest.json, icons/, images/, models/, demo/
@@ -287,8 +464,16 @@ verified with `tsc --noEmit`, `eslint`, a production build and a curl sweep:
 ### Known limitations
 
 - SSLCommerz is intentionally parked; cards show "Coming soon".
-- The admin console is a client-side demo: mutations live for the session and are
-  not written back to Postgres (the storefront order API is the wired path).
+- Admin console writes (`app/admin/actions.ts`) are wired to Postgres through
+  Server Actions, so products, orders and categories persist. Demo installs
+  without `DATABASE_URL` keep the old in-session behaviour: the action answers
+  `source: "demo"` and the change is applied to the Zustand store only. Console
+  customers, coupons and store settings are still session-only — their routes and
+  API endpoints are RBAC-guarded, but those mutations have no Server Action yet.
+- `/unauthorized` is the destination for a role that can't open a section; a
+  shopper who opens `/admin` is sent to `/dashboard` instead.
+- Deleting a product that appears in an existing order is refused (order lines
+  are the sales history) — turn `Active` off to hide it from the storefront.
 - `prisma generate` needs to download engine binaries — blocked in offline
   sandboxes. The schema is hand-verified; run `npx prisma generate` once you have
   network access.

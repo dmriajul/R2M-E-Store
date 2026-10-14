@@ -4,19 +4,25 @@
  *   npx prisma db push     # create the tables
  *   npm run db:seed        # load this file
  *
- * Creates 4 staff accounts with RBAC roles + 3 demo customers.
+ * It loads exactly what the storefront shows in demo mode: the 12 catalogue
+ * products from `lib/site.ts`, the eight category cards, the staff accounts for
+ * every console role (`admin@ · inventory@ · seo@ · support@mukra.com`, all on
+ * `password123`), three shoppers (`password123`), the four coupons the console
+ * lists and five orders — including two wallet payments waiting for an operator
+ * to verify.
  */
 
 import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
-import { PRODUCTS } from "../lib/site";
+import { CATEGORY_DESCRIPTIONS, CATEGORY_META, PRODUCTS } from "../lib/site";
 
 const prisma = new PrismaClient();
 
 const BCRYPT_ROUNDS = 10;
+/** Shared by every seeded account — staff and shoppers alike. */
 const DEMO_PASSWORD = "password123";
-const ADMIN_PASSWORD = "admin123";
 
+/** Walks the seeded orders in order, so `at(0)` is the newest. */
 interface SeedOrderItem {
   productId: string;
   color: string;
@@ -38,13 +44,13 @@ interface SeedOrder {
   items: SeedOrderItem[];
 }
 
+/** Shipping is free over $50, matching `lib/cart.ts`. */
 function shippingFor(subtotal: number): number {
   return subtotal >= 50 ? 0 : 4.99;
 }
 
 async function main(): Promise<void> {
   const password = await hash(DEMO_PASSWORD, BCRYPT_ROUNDS);
-  const adminPassword = await hash(ADMIN_PASSWORD, BCRYPT_ROUNDS);
 
   /* ---------- wipe (idempotent re-runs) ---------- */
   await prisma.orderItem.deleteMany();
@@ -53,50 +59,48 @@ async function main(): Promise<void> {
   await prisma.wishlistItem.deleteMany();
   await prisma.address.deleteMany();
   await prisma.coupon.deleteMany();
+  await prisma.category.deleteMany();
   await prisma.product.deleteMany();
   await prisma.user.deleteMany();
 
-  /* ---------- STAFF USERS (RBAC) ---------- */
-  const [superAdmin, inventoryManager, seoManager, supportManager] = await Promise.all([
-    prisma.user.create({
-      data: {
-        name: "Super Admin",
-        email: "admin@mukra.com",
-        phone: "+880 1712 345678",
-        password: adminPassword,
-        role: "SUPER_ADMIN",
-      },
-    }),
-    prisma.user.create({
-      data: {
-        name: "Inventory Manager",
+  /* ---------- users ---------- */
+  /* One account per console role, so RBAC can be exercised on a real database. */
+  const admin = await prisma.user.create({
+    data: {
+      name: "Riajul Khandokar",
+      email: "admin@mukra.com",
+      phone: "+880 1712 345678",
+      password,
+      role: "SUPER_ADMIN",
+    },
+  });
+
+  await prisma.user.createMany({
+    data: [
+      {
+        name: "Imran Hossain",
         email: "inventory@mukra.com",
-        phone: "+880 1712 345679",
+        phone: "+880 1713 220011",
         password,
         role: "INVENTORY_MANAGER",
       },
-    }),
-    prisma.user.create({
-      data: {
-        name: "SEO Manager",
+      {
+        name: "Nusrat Jahan",
         email: "seo@mukra.com",
-        phone: "+880 1712 345680",
+        phone: "+880 1714 330022",
         password,
         role: "SEO_MANAGER",
       },
-    }),
-    prisma.user.create({
-      data: {
-        name: "Support Manager",
+      {
+        name: "Tanvir Hasan",
         email: "support@mukra.com",
-        phone: "+880 1712 345681",
+        phone: "+880 1715 440033",
         password,
         role: "SUPPORT_MANAGER",
       },
-    }),
-  ]);
+    ],
+  });
 
-  /* ---------- CUSTOMER USERS ---------- */
   const [sarah, priya, fatima] = await Promise.all([
     prisma.user.create({
       data: {
@@ -139,6 +143,7 @@ async function main(): Promise<void> {
 
     await prisma.product.create({
       data: {
+        // The catalogue id doubles as the slug, so mock cart lines resolve.
         id: product.id,
         name: product.name,
         slug: product.slug,
@@ -168,6 +173,22 @@ async function main(): Promise<void> {
       },
     });
   }
+
+  /* ---------- categories (console metadata: emoji, blurb, parent) ---------- */
+  const categoryNames = Object.keys(CATEGORY_META) as Array<
+    keyof typeof CATEGORY_META
+  >;
+
+  await prisma.category.createMany({
+    data: categoryNames.map((name, index) => ({
+      name,
+      slug: CATEGORY_META[name].slug,
+      emoji: CATEGORY_META[name].emoji,
+      description: CATEGORY_DESCRIPTIONS[name],
+      parent: null,
+      sortOrder: index,
+    })),
+  });
 
   /* ---------- addresses ---------- */
   await prisma.address.createMany({
@@ -402,11 +423,12 @@ async function main(): Promise<void> {
     users: await prisma.user.count(),
     products: await prisma.product.count(),
     orders: await prisma.order.count(),
+    categories: await prisma.category.count(),
     coupons: await prisma.coupon.count(),
-    admin: superAdmin.email,
+    admin: admin.email,
   };
 
-  console.warn("[seed] Mukra ready ", counts);
+  console.warn("[seed] Mukra ready", counts);
 }
 
 main()

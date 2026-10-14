@@ -563,6 +563,43 @@ export type AdminProductValues = z.infer<typeof adminProductSchema>;
 /** Raw form values — numeric fields arrive as strings before Zod coerces them. */
 export type AdminProductFormInput = z.input<typeof adminProductSchema>;
 
+/**
+ * The slice of a product an **SEO manager** may change: the URL slug, the
+ * metadata, the badge, publication and display placement (`featuredOrder`,
+ * `virtualBoutique`, `newArrival`, `bestSeller`). Name, description, pricing,
+ * media and stock stay with the inventory team — `saveProductSeoAction` only
+ * writes the fields below.
+ */
+export const adminProductSeoSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .min(3, "Slug needs at least 3 characters")
+    .regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers and hyphens")
+    .optional(),
+  metaTitle: z
+    .string()
+    .trim()
+    .max(70, "Keep the meta title under 70 characters")
+    .optional(),
+  metaDescription: z
+    .string()
+    .trim()
+    .max(160, "Keep the meta description under 160 characters")
+    .optional(),
+  badge: z.enum(["none", "New", "Sale", "Bestseller", "Organic"]).optional(),
+  categories: z.array(z.enum(PRODUCT_CATEGORY_NAMES)).optional(),
+  active: z.boolean().optional(),
+  featured: z.boolean().optional(),
+  featuredOrder: z.coerce.number().int().min(0).max(9999).optional(),
+  virtualBoutique: z.boolean().optional(),
+  newArrival: z.boolean().optional(),
+  bestSeller: z.boolean().optional(),
+});
+
+export type AdminProductSeoValues = z.infer<typeof adminProductSeoSchema>;
+export type AdminProductSeoFormInput = z.input<typeof adminProductSeoSchema>;
+
 export const COUPON_TYPES = ["percentage", "fixed", "free-shipping"] as const;
 
 export const adminCouponSchema = z

@@ -35,6 +35,7 @@ export interface PrismaLikeClient {
   returnRequest: PrismaDelegate;
   productVariant: PrismaDelegate;
   coupon: PrismaDelegate;
+  category: PrismaDelegate;
   review: PrismaDelegate;
   wishlistItem: PrismaDelegate;
   address: PrismaDelegate;

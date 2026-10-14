@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireActionRole } from "@/lib/auth";
+import { rolesForPermission } from "@/lib/rbac";
 import { getPrisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
 import { MailjetError, sendMailjetEmail } from "@/lib/mailjet";
@@ -107,17 +108,11 @@ export async function POST(
   _request: NextRequest,
   context: RouteContext,
 ): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user) {
+  const gate = await requireActionRole(rolesForPermission("orders:write"));
+  if (!gate.ok) {
     return NextResponse.json(
-      { data: null, error: "Sign in first", success: false },
-      { status: 401 },
-    );
-  }
-  if (session.user.role !== "ADMIN") {
-    return NextResponse.json(
-      { data: null, error: "Admin access required", success: false },
-      { status: 403 },
+      { data: null, error: gate.message, success: false },
+      { status: gate.reason === "unauthenticated" ? 401 : 403 },
     );
   }
 

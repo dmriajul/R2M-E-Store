@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireActionRole } from "@/lib/auth";
+import { rolesForPermission } from "@/lib/rbac";
 import {
   parseAdminProduct,
   saveAdminProduct,
@@ -18,8 +19,8 @@ export async function PATCH(
   request: NextRequest,
   context: RouteContext,
 ): Promise<NextResponse<ApiResponse<{ product: AdminProduct | null }>>> {
-  const session = await auth();
-  if (session?.user?.role !== "ADMIN") {
+  const gate = await requireActionRole(rolesForPermission("products:write"));
+  if (!gate.ok) {
     return NextResponse.json(
       { data: null, error: "Administrator access required", success: false },
       { status: 403 },

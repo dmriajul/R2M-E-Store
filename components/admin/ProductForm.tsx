@@ -42,6 +42,8 @@ import {
   adminSelectClass,
 } from "@/components/admin/Field";
 import { useAdminStore } from "@/store/useAdminStore";
+import { saveProductAction, saveProductSeoAction } from "@/app/admin/actions";
+import { useAdminSession } from "@/components/admin/AdminSessionProvider";
 import { MarkdownDescriptionEditor } from "@/components/admin/MarkdownDescriptionEditor";
 import type { AdminProduct, UploadResult } from "@/types";
 
@@ -207,6 +209,9 @@ interface ProductFormProps {
 export function ProductForm({ open, onOpenChange, product = null }: ProductFormProps) {
   const saveProduct = useAdminStore((state) => state.saveProduct);
   const upsertProduct = useAdminStore((state) => state.upsertProduct);
+  /* Roles that may edit metadata/placement but not the inventory fields. */
+  const { can } = useAdminSession();
+  const seoOnly = can("products:seo") && !can("products:write");
   const [slugTouched, setSlugTouched] = useState(false);
   const [skuTouched, setSkuTouched] = useState(false);
 
@@ -398,45 +403,93 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
     );
   };
 
+  /**
+   * Save through the Server Action.
+   *
+   * With Postgres configured the action persists the row (including
+   * `featuredOrder`, the display placements and `active`) and hands back the
+   * saved record, which updates the local cache. In demo mode nothing is
+   * persisted, so the same values are applied to the in-session store — the
+   * console behaves exactly as it did before a database existed.
+   */
   const onSubmit = handleSubmit(async (values) => {
-    const stock = values.variants.reduce((sum, variant) => sum + variant.stock, 0);
-    const endpoint = product
-      ? `/api/admin/products/${encodeURIComponent(product.id)}`
-      : "/api/admin/products";
+    /* SEO managers submit the metadata slice only — the action enforces the
+       same boundary server-side (`saveProductSeoAction`). */
+    if (seoOnly) {
+      if (!product) {
+        toast.error("Only the inventory team can create products");
+        return;
+      }
 
-    try {
-      const response = await fetch(endpoint, {
-        method: product ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, stock }),
+      const seoResult = await saveProductSeoAction(product.id, {
+        slug: values.slug,
+        metaTitle: values.metaTitle,
+        metaDescription: values.metaDescription,
+        badge: values.badge,
+        categories: values.categories,
+        active: values.active,
+        featured: values.featured,
+        featuredOrder: values.featuredOrder,
+        virtualBoutique: values.virtualBoutique,
+        newArrival: values.newArrival,
+        bestSeller: values.bestSeller,
       });
-      const payload = (await response.json()) as {
-        data?: { product: AdminProduct | null };
-        error?: string;
-        source?: "database" | "mock";
-      };
 
-      if (!response.ok || !payload.data) {
-        throw new Error(payload.error ?? "Product could not be saved");
+      if (!seoResult.ok) {
+        toast.error("Product metadata couldn't be saved", { description: seoResult.error });
+        return;
       }
 
-      let id: string;
-      if (payload.source === "database" && payload.data.product) {
-        id = payload.data.product.id;
-        upsertProduct(payload.data.product);
+      if (seoResult.source === "database" && seoResult.data) {
+        upsertProduct(seoResult.data);
       } else {
-        id = saveProduct({ ...values, stock }, product?.id);
+        /* Demo install: mirror the metadata-only change in the session store. */
+        upsertProduct({
+          ...product,
+          slug: values.slug,
+          categories: [...values.categories],
+          badge: values.badge === "none" ? undefined : values.badge,
+          status: values.active ? "active" : "draft",
+          inStock: product.stock > 0 && values.active,
+          featured: values.featured,
+          featuredOrder: values.featuredOrder,
+          virtualBoutique: values.virtualBoutique,
+          newArrival: values.newArrival,
+          bestSeller: values.bestSeller,
+          metaTitle: values.metaTitle?.trim() ? values.metaTitle : `${values.name} | Mukra`,
+          metaDescription: values.metaDescription?.trim()
+            ? values.metaDescription
+            : product.description.slice(0, 160),
+        });
       }
 
-      toast.success("Product saved! ✅", {
-        description: product ? `${values.name} updated.` : `${values.name} added as ${id}.`,
+      toast.success("Product metadata saved! ✅", {
+        description: `${values.name} updated.`,
       });
       onOpenChange(false);
-    } catch (error) {
-      toast.error("Product couldn't be saved", {
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
+      return;
     }
+
+    const stock = values.variants.reduce((sum, variant) => sum + variant.stock, 0);
+    const result = await saveProductAction({ ...values, stock }, product?.id);
+
+    if (!result.ok) {
+      toast.error("Product couldn't be saved", { description: result.error });
+      return;
+    }
+
+    let id: string;
+    if (result.source === "database" && result.data) {
+      id = result.data.id;
+      upsertProduct(result.data);
+    } else {
+      id = saveProduct({ ...values, stock }, product?.id);
+    }
+
+    toast.success("Product saved! ✅", {
+      description: product ? `${values.name} updated.` : `${values.name} added as ${id}.`,
+    });
+    onOpenChange(false);
   });
 
   const categoryEmoji = category ? CATEGORY_META[category].emoji : "🧥";
@@ -472,7 +525,17 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-7">
             <div className="flex flex-col gap-6">
-              {/* ---------- Basic info ---------- */}
+              {seoOnly && (
+                <p className="rounded-lg border border-primary/25 bg-primary/8 px-3 py-2 text-[11px] text-primary">
+                  Editing metadata, publication and display placement. Pricing, media and
+                  stock are managed by the inventory team.
+                </p>
+              )}
+
+              {/* Inventory-owned sections: hidden for the metadata-only role. */}
+              {!seoOnly && (
+                <>
+                  {/* ---------- Basic info ---------- */}
               <FormSection title="Basic info">
                 <AdminField
                   label="Product name"
@@ -1029,6 +1092,9 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
                 </div>
 
               </FormSection>
+
+                </>
+              )}
 
               {/* ---------- Status ---------- */}
               <FormSection title="Status">

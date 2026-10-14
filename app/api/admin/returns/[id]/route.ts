@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireActionRole } from "@/lib/auth";
+import { rolesForPermission } from "@/lib/rbac";
 import { returnRequestInclude, hydrateReturnRequest } from "@/lib/data/returns";
 import { getPrisma } from "@/lib/prisma";
 import { returnAdminActionSchema } from "@/lib/validations";
@@ -15,9 +16,12 @@ export async function PATCH(
   request: NextRequest,
   context: RouteContext,
 ): Promise<NextResponse<ApiResponse<{ request: ReturnRequestRecord; notification: string }>>> {
-  const session = await auth();
-  if (session?.user?.role !== "ADMIN") {
-    return NextResponse.json({ data: null, error: "Admin access required", success: false }, { status: session?.user ? 403 : 401 });
+  const gate = await requireActionRole(rolesForPermission("returns:write"));
+  if (!gate.ok) {
+    return NextResponse.json(
+      { data: null, error: gate.message, success: false },
+      { status: gate.reason === "unauthenticated" ? 401 : 403 },
+    );
   }
   let payload: unknown;
   try {

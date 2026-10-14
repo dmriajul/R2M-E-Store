@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -19,9 +19,8 @@ import {
 import { toast } from "sonner";
 import { cn, initials } from "@/lib/utils";
 import { MukraLogo } from "@/components/brand/MukraLogo";
-import { DEMO_USER, DEMO_WISHLIST_IDS } from "@/lib/mock-dashboard";
+import { useDashboardSession } from "@/components/dashboard/DashboardSessionProvider";
 import { useDashboardStore } from "@/store/useDashboardStore";
-import { useWishlistStore } from "@/store/useWishlistStore";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
@@ -118,7 +117,9 @@ function Breadcrumbs() {
 }
 
 function Avatar({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const name = useDashboardStore((state) => state.profile?.name ?? DEMO_USER.name);
+  /* Initials come from the session — never from a mock profile. */
+  const { user } = useDashboardSession();
+  const name = user.name;
 
   return (
     <span
@@ -213,14 +214,14 @@ function LogoutButton({
  * Sidebar identity block: avatar, name, email.
  */
 function SidebarIdentity() {
-  const profile = useDashboardStore((state) => state.profile ?? DEMO_USER);
+  const { user } = useDashboardSession();
 
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-glass-border bg-white/4 p-3">
       <Avatar />
       <div className="hidden min-w-0 lg:block">
-        <p className="truncate text-sm font-semibold text-foreground">{profile.name}</p>
-        <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
+        <p className="truncate text-sm font-semibold text-foreground">{user.name}</p>
+        <p className="truncate text-xs text-muted-foreground">{user.email}</p>
       </div>
     </div>
   );
@@ -237,20 +238,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const unread = useDashboardStore((state) =>
     state.notifications?.filter((notification) => notification && !notification.read).length ?? 0,
   );
-  const seeded = useDashboardStore((state) => state.wishlistSeeded);
-  const markWishlistSeeded = useDashboardStore((state) => state.markWishlistSeeded);
-  const profile = useDashboardStore((state) => state.profile ?? DEMO_USER);
+  /* The signed-in shopper, straight from the server session. */
+  const { user } = useDashboardSession();
   const [moreOpen, setMoreOpen] = useState(false);
-
-  // Demo persona: a signed-in shopper arrives with favourites already saved.
-  // Runs in an effect so the server render stays deterministic.
-  useEffect(() => {
-    if (seeded) return;
-    if (useWishlistStore.getState().ids.length === 0) {
-      useWishlistStore.setState({ ids: [...DEMO_WISHLIST_IDS] });
-    }
-    markWishlistSeeded();
-  }, [seeded, markWishlistSeeded]);
 
   const pageAnimation = {
     initial: { opacity: 0, y: reducedMotion ? 0 : 14 },
@@ -358,8 +348,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <div className="flex items-center gap-3 border-b border-glass-border p-4">
                   <Avatar />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{profile.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
+                    <p className="truncate text-sm font-semibold">{user.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{user.email}</p>
                   </div>
                 </div>
 

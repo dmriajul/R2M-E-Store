@@ -25,6 +25,7 @@ import {
   adminInputClass,
   adminSelectClass,
 } from "@/components/admin/Field";
+import { saveCategoryAction } from "@/app/admin/actions";
 import { useAdminStore } from "@/store/useAdminStore";
 import type { AdminCategory } from "@/types";
 
@@ -65,6 +66,7 @@ export function CategoryDialog({
   parents,
 }: CategoryDialogProps) {
   const saveCategory = useAdminStore((state) => state.saveCategory);
+  const upsertCategory = useAdminStore((state) => state.upsertCategory);
   const [slugTouched, setSlugTouched] = useState(false);
 
   const {
@@ -93,8 +95,25 @@ export function CategoryDialog({
     setValue("slug", slugify(name ?? ""), { shouldValidate: false });
   }, [name, open, slugTouched, setValue]);
 
-  const onSubmit = handleSubmit((values) => {
-    saveCategory(values, category?.id);
+  /**
+   * Persist through the Server Action. Postgres answers with the saved row
+   * (console cache updated from it); without a database the change is applied
+   * to the in-session store instead.
+   */
+  const onSubmit = handleSubmit(async (values) => {
+    const result = await saveCategoryAction(values, category?.id);
+
+    if (!result.ok) {
+      toast.error("Category couldn't be saved", { description: result.error });
+      return;
+    }
+
+    if (result.source === "database" && result.data) {
+      upsertCategory(result.data);
+    } else {
+      saveCategory(values, category?.id);
+    }
+
     toast.success(category ? "Category updated! 📂" : "Category created! 📂", {
       description: `${values.emoji} ${values.name}`,
     });

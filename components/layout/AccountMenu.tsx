@@ -1,10 +1,13 @@
 "use client";
+import { ADMIN_ROLE_LABEL, isStaff, landingPathFor, normalizeRole } from "@/lib/rbac";
+import type { AdminRole } from "@/types";
 
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { ChevronDown, LayoutDashboard, LogOut, Package, ShieldCheck, User } from "lucide-react";
 import { toast } from "sonner";
 import { cn, initials } from "@/lib/utils";
+import { clearIdentityCaches } from "@/lib/session-cache";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -65,6 +68,8 @@ export function AccountMenu() {
   }
 
   const handleSignOut = async () => {
+    /* Forget this account's cached account-area data before the next sign-in. */
+    clearIdentityCaches();
     await signOut({ redirect: false });
     toast.success("Signed out 👋", { description: "See you soon!" });
   };
@@ -107,9 +112,9 @@ export function AccountMenu() {
           <span className="truncate text-[11px] font-normal text-muted-foreground">
             {user.email}
           </span>
-          {user.role === "ADMIN" && (
+          {isStaff(user.role) && (
             <span className="mt-0.5 w-fit rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[9px] font-bold tracking-[0.14em] text-primary uppercase">
-              Admin
+              {ADMIN_ROLE_LABEL[normalizeRole(user.role) as AdminRole]}
             </span>
           )}
         </DropdownMenuLabel>
@@ -130,9 +135,9 @@ export function AccountMenu() {
           </Link>
         </DropdownMenuItem>
 
-        {user.role === "ADMIN" && (
+        {isStaff(user.role) && (
           <DropdownMenuItem asChild className={itemClasses}>
-            <Link href="/admin">
+            <Link href={landingPathFor(normalizeRole(user.role) as AdminRole)}>
               <ShieldCheck className="size-3.5" />
               Admin Console
             </Link>

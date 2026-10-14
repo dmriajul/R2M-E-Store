@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
 import { getOrderById } from "@/lib/mock-dashboard";
+import { useDashboardSession } from "@/components/dashboard/DashboardSessionProvider";
 import { OrderDetailView } from "@/components/dashboard/OrderDetailView";
 import { Button } from "@/components/ui/button";
 import { toDashboardOrder } from "@/lib/dashboard-orders";
@@ -13,12 +14,15 @@ import type { ApiResponse, DashboardOrder, OrderRecord } from "@/types";
 export default function DashboardOrderDetailPage() {
   const params = useParams<{ id: string }>();
   const id = typeof params.id === "string" ? params.id : "";
-  const [order, setOrder] = useState<DashboardOrder | undefined>(() => getOrderById(id));
+  const { isDemoIdentity } = useDashboardSession();
+  const [order, setOrder] = useState<DashboardOrder | undefined>(() =>
+    isDemoIdentity ? getOrderById(id) : undefined,
+  );
   const [loading, setLoading] = useState(!order);
 
   useEffect(() => {
     let active = true;
-    const demoOrder = getOrderById(id);
+    const demoOrder = isDemoIdentity ? getOrderById(id) : undefined;
     setOrder(demoOrder);
     setLoading(!demoOrder);
     fetch("/api/orders", { cache: "no-store" })
@@ -38,7 +42,7 @@ export default function DashboardOrderDetailPage() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, isDemoIdentity]);
 
   if (loading) {
     return <div className="glass-soft rounded-3xl border border-glass-border p-8 text-center text-sm text-muted-foreground">Loading order details…</div>;

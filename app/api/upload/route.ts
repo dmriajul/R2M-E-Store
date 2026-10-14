@@ -1,7 +1,8 @@
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth, requireActionRole } from "@/lib/auth";
+import { rolesForPermission } from "@/lib/rbac";
 import { PRODUCT_FOLDER, deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
 import { isCloudinaryConfigured } from "@/lib/demo-mode";
 import { validateHeroUploadFile, validateUploadFile } from "@/lib/images";
@@ -67,11 +68,15 @@ async function saveLocally(
 export async function POST(request: NextRequest): Promise<NextResponse<ApiResponse<unknown>>> {
   const session = await auth();
   const isHeroUpload = request.nextUrl.searchParams.get("purpose") === "hero";
-  if (isHeroUpload && session?.user?.role !== "ADMIN") {
-    return NextResponse.json(
-      { data: null, error: "Administrator access required", success: false },
-      { status: 403 },
-    );
+  if (isHeroUpload) {
+    /* Hero/banner images are the SEO manager's surface (plus super admins). */
+    const gate = await requireActionRole(rolesForPermission("settings:write"));
+    if (!gate.ok) {
+      return NextResponse.json(
+        { data: null, error: gate.message, success: false },
+        { status: gate.reason === "unauthenticated" ? 401 : 403 },
+      );
+    }
   }
 
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();

@@ -5,12 +5,12 @@ import { Copy, Download, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PRODUCT_CATEGORY_NAMES } from "@/lib/validations";
-import { PRODUCTS } from "@/lib/site";
 import { getStockState } from "@/lib/mock-admin";
 import { ProductArtwork } from "@/components/product/ProductArtwork";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { StockBadge } from "@/components/admin/StatusBadge";
 import { ProductForm } from "@/components/admin/ProductForm";
+import { useAdminSession } from "@/components/admin/AdminSessionProvider";
 import { ConfirmActionDialog } from "@/components/admin/ConfirmActionDialog";
 import {
   adminButtonBlue,
@@ -18,6 +18,11 @@ import {
   adminInputClass,
   adminSelectClass,
 } from "@/components/admin/Field";
+import {
+  deleteProductsAction,
+  duplicateProductAction,
+  setProductsOutOfStockAction,
+} from "@/app/admin/actions";
 import { useAdminStore } from "@/store/useAdminStore";
 import type { AdminProduct, ProductCategory, StockState } from "@/types";
 
@@ -47,11 +52,17 @@ function categoryFilterOf(query: string): ProductCategory | "all" {
 }
 
 export default function AdminProductsPage() {
+  /* Live data: the admin layout hydrates this store from Postgres (or keeps
+     the in-session demo catalogue when no database is configured). */
   const products = useAdminStore((state) => state.products);
+  /* The SEO manager edits metadata and placement only — no create, no delete. */
+  const { can } = useAdminSession();
+  const canWrite = can("products:write");
+  const canManageSeo = can("products:seo");
   const deleteProducts = useAdminStore((state) => state.deleteProducts);
   const duplicateProduct = useAdminStore((state) => state.duplicateProduct);
   const setProductsOutOfStock = useAdminStore((state) => state.setProductsOutOfStock);
-  const replaceProducts = useAdminStore((state) => state.setProducts);
+  const upsertProduct = useAdminStore((state) => state.upsertProduct);
   /* Handoff from the top-bar search and the category cards. */
   const seed = useAdminStore((state) => state.search);
   const clearSeed = useAdminStore((state) => state.setSearch);
@@ -102,34 +113,6 @@ export default function AdminProductsPage() {
     setSelected((current) => current.filter((id) => products.some((product) => product.id === id)));
   }, [products]);
 
-  useEffect(() => {
-    let mounted = true;
-    void fetch("/api/admin/products", { cache: "no-store" })
-      .then(async (response) => {
-        const payload = (await response.json()) as {
-          data?: AdminProduct[] | null;
-          error?: string | null;
-          source?: "database" | "mock";
-        };
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Could not load saved products");
-        }
-        if (mounted && payload.source === "database" && payload.data) {
-          replaceProducts(payload.data);
-        }
-      })
-      .catch((error: unknown) => {
-        if (mounted) {
-          toast.error("Saved products couldn't be loaded", {
-            description: error instanceof Error ? error.message : undefined,
-          });
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [replaceProducts]);
-
   /* Apply the one-shot handoff, then clear it so other pages start fresh. */
   useEffect(() => {
     if (!seed) return;
@@ -155,25 +138,66 @@ export default function AdminProductsPage() {
     setFormOpen(true);
   };
 
-  const handleDuplicate = (product: AdminProduct) => {
+  /**
+   * All four mutations below run a Server Action (`app/admin/actions.ts`).
+   *
+   * `source: "database"` means Postgres committed the change; `source: "demo"`
+   * means no database is configured, so the same change is applied to the
+   * in-session console store. Either way a failure is reported — never faked.
+   */
+  const handleDuplicate = async (product: AdminProduct) => {
+    const result = await duplicateProductAction(product.id);
+
+    if (!result.ok) {
+      toast.error("Product couldn't be duplicated", { description: result.error });
+      return;
+    }
+
+    if (result.source === "database" && result.data) {
+      upsertProduct(result.data);
+      toast.success("Product duplicated 📄", { description: `Created ${result.data.slug}.` });
+      return;
+    }
+
     const id = duplicateProduct(product.id);
     toast.success("Product duplicated 📄", { description: `Created ${id}.` });
   };
 
-  const handleDelete = (product: AdminProduct) => {
+  const handleDelete = async (product: AdminProduct) => {
+    const result = await deleteProductsAction([product.id]);
+
+    if (!result.ok) {
+      toast.error("Product couldn't be deleted", { description: result.error });
+      return;
+    }
+
     deleteProducts([product.id]);
     toast.success("Product deleted 🗑️", { description: `${product.name} removed from the catalogue.` });
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     const count = selected.length;
+    const result = await deleteProductsAction(selected);
+
+    if (!result.ok) {
+      toast.error("Products couldn't be deleted", { description: result.error });
+      return;
+    }
+
     deleteProducts(selected);
     clearSelection();
     toast.success(`${count} products deleted 🗑️`);
   };
 
-  const handleBulkOutOfStock = () => {
+  const handleBulkOutOfStock = async () => {
     const count = selected.length;
+    const result = await setProductsOutOfStockAction(selected);
+
+    if (!result.ok) {
+      toast.error("Stock couldn't be updated", { description: result.error });
+      return;
+    }
+
     setProductsOutOfStock(selected);
     clearSelection();
     toast.success(`${count} products set to out of stock`);
@@ -279,17 +303,21 @@ export default function AdminProductsPage() {
             icon={<Pencil aria-hidden className="size-3.5" />}
             onClick={() => openEdit(product)}
           />
-          <IconAction
-            label={`Duplicate ${product.name}`}
-            icon={<Copy aria-hidden className="size-3.5" />}
-            onClick={() => handleDuplicate(product)}
-          />
-          <IconAction
-            label={`Delete ${product.name}`}
-            icon={<Trash2 aria-hidden className="size-3.5" />}
-            destructive
-            onClick={() => setPendingDelete(product)}
-          />
+          {canWrite && (
+            <>
+              <IconAction
+                label={`Duplicate ${product.name}`}
+                icon={<Copy aria-hidden className="size-3.5" />}
+                onClick={() => handleDuplicate(product)}
+              />
+              <IconAction
+                label={`Delete ${product.name}`}
+                icon={<Trash2 aria-hidden className="size-3.5" />}
+                destructive
+                onClick={() => setPendingDelete(product)}
+              />
+            </>
+          )}
         </span>
       ),
     },
@@ -348,10 +376,12 @@ export default function AdminProductsPage() {
               ))}
             </select>
 
-            <button type="button" onClick={openCreate} className={cn(adminButtonBlue, "min-h-10")}>
-              <Plus aria-hidden className="size-4" />
-              Add Product
-            </button>
+            {canWrite && (
+              <button type="button" onClick={openCreate} className={cn(adminButtonBlue, "min-h-10")}>
+                <Plus aria-hidden className="size-4" />
+                Add Product
+              </button>
+            )}
           </div>
         </div>
 
@@ -387,7 +417,7 @@ export default function AdminProductsPage() {
 
           <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <Download aria-hidden className="size-3.5" />
-            {rows.length} shown · {PRODUCTS.length} in the catalogue
+            {rows.length} shown · {products.length} in the catalogue
           </span>
         </div>
       </section>
@@ -401,15 +431,20 @@ export default function AdminProductsPage() {
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <button
               type="button"
+              disabled={!canWrite}
               onClick={handleBulkOutOfStock}
-              className={cn(adminButtonGhost, "min-h-9 px-3")}
+              className={cn(adminButtonGhost, "min-h-9 px-3 disabled:opacity-40")}
             >
               Set Out of Stock
             </button>
             <button
               type="button"
+              disabled={!canWrite}
               onClick={() => setBulkDeleteOpen(true)}
-              className={cn(adminButtonBlue, "min-h-9 bg-rose-500 px-3 text-white hover:bg-rose-400")}
+              className={cn(
+                adminButtonBlue,
+                "min-h-9 bg-rose-500 px-3 text-white hover:bg-rose-400 disabled:opacity-40",
+              )}
             >
               <Trash2 aria-hidden className="size-3.5" />
               Delete Selected
@@ -433,12 +468,19 @@ export default function AdminProductsPage() {
         columns={columns}
         rowKey={(product) => product.id}
         initialSort={initialSort}
-        selectable
+        selectable={canWrite}
         selected={selected}
         onSelectedChange={setSelected}
         onRowClick={openEdit}
         emptyMessage="No products match these filters."
       />
+
+      {canManageSeo && !canWrite && (
+        <p className="rounded-xl border border-[#242424] bg-[#141414] px-4 py-3 text-[11px] text-muted-foreground">
+          Your role edits product metadata, publication and display placement. Pricing, media
+          and stock belong to the inventory team.
+        </p>
+      )}
 
       <ProductForm open={formOpen} onOpenChange={setFormOpen} product={editing} />
 
@@ -448,7 +490,7 @@ export default function AdminProductsPage() {
         title="Delete this product?"
         description={
           pendingDelete
-            ? `${pendingDelete.name} will be removed from the catalogue. This can't be undone in the demo.`
+            ? `${pendingDelete.name} will be removed from the catalogue. Products that appear in orders are kept for the sales history.`
             : undefined
         }
         confirmLabel="Delete product"
@@ -460,7 +502,7 @@ export default function AdminProductsPage() {
         open={bulkDeleteOpen}
         onOpenChange={setBulkDeleteOpen}
         title={`Delete ${selected.length} products?`}
-        description="Selected products are removed from the local catalogue."
+        description="Selected products are removed from the catalogue and the storefront."
         confirmLabel="Delete selected"
         destructive
         onConfirm={handleBulkDelete}

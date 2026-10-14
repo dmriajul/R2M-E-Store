@@ -45,9 +45,19 @@ export const DEMO_KIDS: readonly KidProfile[] = [
   { name: "Emma", birthday: "2021-03-15" },
 ] as const;
 
-export const DEMO_USER: DashboardUser = {
+/**
+ * The demo shopper the mock account data belongs to.
+ *
+ * This is **not** who is signed in — identity always comes from the Auth.js
+ * session (`components/dashboard/DashboardSessionProvider.tsx`). It is the seed
+ * record for that one account: orders, addresses, notifications and the wishlist
+ * below are seeded only when the session email matches `DEMO_SHOPPER_EMAIL`.
+ */
+export const DEMO_SHOPPER_EMAIL = "sarah@example.com";
+
+export const DEMO_SHOPPER: DashboardUser = {
   name: "Sarah Ahmed",
-  email: "sarah@example.com",
+  email: DEMO_SHOPPER_EMAIL,
   phone: "+880 1712 345678",
   memberSince: "2025-01-10",
   dateOfBirth: "1992-06-18",
@@ -55,6 +65,23 @@ export const DEMO_USER: DashboardUser = {
   kids: [...DEMO_KIDS],
   rewardPoints: 350,
   totalSpent: 28497, // ৳28,497 in BDT
+};
+
+/**
+ * What the profile looks like before the session is applied — no name, no email,
+ * nothing that could be mistaken for a signed-in person. The account-area layout
+ * replaces it with the real session user before anything renders.
+ */
+export const EMPTY_DASHBOARD_PROFILE: DashboardUser = {
+  name: "",
+  email: "",
+  phone: "",
+  memberSince: "",
+  dateOfBirth: "",
+  gender: "",
+  kids: [],
+  rewardPoints: 0,
+  totalSpent: 0,
 };
 
 export const MOCK_ADDRESSES: Address[] = [

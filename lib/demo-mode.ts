@@ -30,6 +30,8 @@ export const isSSLCommerzEnabled = (): boolean =>
 /** Human label used in the UI and in API payloads. */
 export const dataSourceLabel = (): string => (IS_DEMO ? "demo" : "database");
 
+/** The password for every demo account — staff roles included. */
 export const DEMO_PASSWORD = "password123";
-export const DEMO_ADMIN_EMAIL = "admin@littleluxe.com";
-export const DEMO_ADMIN_PASSWORD = "admin123";
+
+/** Super-admin demo account (the other staff logins are in `lib/data/users.ts`). */
+export const DEMO_ADMIN_EMAIL = "admin@mukra.com";

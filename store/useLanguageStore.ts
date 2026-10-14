@@ -24,7 +24,7 @@ export const useLanguageStore = create<LanguageState>()(
       setLanguage: (lang) => set({ language: lang }),
     }),
     {
-      name: "little-luxe-language",
+      name: "mukra-language",
       partialize: (state) => ({ language: state.language }),
       skipHydration: true,
     },

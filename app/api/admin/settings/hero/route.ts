@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireActionRole } from "@/lib/auth";
+import { rolesForPermission } from "@/lib/rbac";
 import { getHeroSettings, saveHeroSettings } from "@/lib/data/hero-settings";
 import { settingsHeroSchema } from "@/lib/validations";
 import type { ApiResponse } from "@/types";
@@ -9,9 +10,13 @@ import type { HeroSettings } from "@/lib/hero-settings";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function isAdministrator() {
-  const session = await auth();
-  return session?.user?.role === "ADMIN";
+/**
+ * Hero/banner settings are the SEO manager's surface (plus super admins), so
+ * both reading the current values and saving them need `settings:write`.
+ */
+async function isAdministrator(): Promise<boolean> {
+  const gate = await requireActionRole(rolesForPermission("settings:write"));
+  return gate.ok;
 }
 
 export async function GET(): Promise<NextResponse<ApiResponse<HeroSettings>>> {

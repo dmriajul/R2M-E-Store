@@ -25,9 +25,13 @@ datasource db {
 /*  Enums                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/// Console roles. `ADMIN` is the original two-role build's staff value, kept so
+/// an un-migrated database keeps working — it is read as `SUPER_ADMIN`
+/// everywhere (`normalizeRole()` in lib/rbac.ts).
 enum Role {
   CUSTOMER
-  ADMIN           // Legacy alias - maps to SUPER_ADMIN
+  // Legacy alias kept for existing rows — `normalizeRole()` maps it to SUPER_ADMIN.
+  ADMIN
   SUPER_ADMIN
   INVENTORY_MANAGER
   SEO_MANAGER
@@ -291,6 +295,28 @@ model Coupon {
   endDate     DateTime?
   active      Boolean    @default(true)
   createdAt   DateTime   @default(now())
+}
+
+/// Console-managed category metadata.
+///
+/// `Product.category` / `Product.categories` stay denormalised strings (the
+/// storefront filters on the fixed names in `lib/validations.ts`), so this table
+/// holds the presentation layer only: the emoji, the blurb and the parent.
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  emoji       String   @default("🧸")
+  description String   @default("")
+  /// Parent category name, or null for a top-level category.
+  parent      String?
+  /// Lower values are listed first in the console.
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([parent])
+  @@index([sortOrder, name])
 }
 
 model SiteSettings {

@@ -37,6 +37,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { adminButtonGhost, adminInputClass } from "@/components/admin/Field";
+import {
+  decidePaymentAction,
+  updateOrderStatusAction,
+} from "@/app/admin/actions";
 import { useAdminStore } from "@/store/useAdminStore";
 import { useLanguageStore } from "@/store/useLanguageStore";
 import type { AdminOrder, AdminOrderStatus } from "@/types";
@@ -49,6 +53,7 @@ const DAY = 86_400_000;
 const STATUS_TABS: readonly { id: StatusTab; label: { en: string; bn: string } }[] = [
   { id: "all", label: { en: "All", bn: "সব" } },
   { id: "pending", label: { en: "Pending", bn: "লম্বা" } },
+  { id: "confirmed", label: { en: "Confirmed", bn: "নিশ্চিত" } },
   { id: "processing", label: { en: "Processing", bn: "প্রক্রিয়াকরণ" } },
   { id: "shipped", label: { en: "Shipped", bn: "পাঠানো হয়েছে" } },
   { id: "delivered", label: { en: "Delivered", bn: "বিতরণ" } },
@@ -64,10 +69,13 @@ const DATE_RANGES: readonly { id: DateRange; label: { en: string; bn: string } }
 ];
 
 export default function AdminOrdersPage() {
+  /* Live rows: the admin layout hydrates this list from Postgres, or keeps the
+     in-session demo orders when no database is configured. */
   const orders = useAdminStore((state) => state.orders);
   const updateOrderStatus = useAdminStore((state) => state.updateOrderStatus);
   const verifyPayment = useAdminStore((state) => state.verifyPayment);
   const rejectPayment = useAdminStore((state) => state.rejectPayment);
+  const upsertOrder = useAdminStore((state) => state.upsertOrder);
 
   const language = useLanguageStore((state) => state.language);
 
@@ -176,12 +184,30 @@ export default function AdminOrdersPage() {
     );
   };
 
-  const handleStatusChange = (order: AdminOrder, next: AdminOrderStatus) => {
-    updateOrderStatus(order.id, next);
+  /**
+   * Server Action first — Postgres commits the status, then the console cache
+   * takes the record the action returns. Without a database the action answers
+   * `source: "demo"` and the change stays in-session.
+   */
+  const handleStatusChange = async (order: AdminOrder, next: AdminOrderStatus) => {
+    const result = await updateOrderStatusAction(order.number, next);
+
+    if (!result.ok) {
+      toast.error("Order status couldn't be updated", { description: result.error });
+      return;
+    }
+
+    if (result.source === "database" && result.data) {
+      upsertOrder(result.data);
+    } else {
+      updateOrderStatus(order.id, next);
+    }
+
     const statusLabel =
       language === "bn"
         ? {
             pending: "লম্বা",
+            confirmed: "নিশ্চিত",
             processing: "প্রক্রিয়াকরণ",
             shipped: "পাঠানো হয়েছে",
             delivered: "বিতরণ",
@@ -190,6 +216,7 @@ export default function AdminOrdersPage() {
           }
         : {
             pending: "Pending",
+            confirmed: "Confirmed",
             processing: "Processing",
             shipped: "Shipped",
             delivered: "Delivered",
@@ -204,6 +231,13 @@ export default function AdminOrdersPage() {
     );
   };
 
+  /**
+   * Manual wallet verification (bKash / Nagad / Rocket screenshot).
+   *
+   * The decision is persisted by the Server Action: approving moves the order to
+   * Confirmed + Paid, rejecting cancels it with a failed payment. The action
+   * returns the updated order, which replaces the row in the console cache.
+   */
   const handlePaymentVerification = async (
     order: AdminOrder,
     action: "approve" | "reject",
@@ -212,11 +246,25 @@ export default function AdminOrdersPage() {
     setApprovalLoading(order.id);
 
     try {
-      // Simulate verification delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const result = await decidePaymentAction(orderNumber, action);
+
+      if (!result.ok) {
+        toast.error(
+          language === "bn" ? "যাচাইকরণ ব্যর্থ হয়েছে" : "Verification failed",
+          { description: result.error },
+        );
+        return;
+      }
+
+      if (result.source === "database" && result.data) {
+        upsertOrder(result.data);
+      } else if (action === "approve") {
+        verifyPayment(order.id);
+      } else {
+        rejectPayment(order.id);
+      }
 
       if (action === "approve") {
-        verifyPayment(order.id);
         toast.success(
           language === "bn" ? "পেমেন্ট অনুমোদন করা হয়েছে! ✅" : "Payment approved! ✅",
           {
@@ -224,7 +272,6 @@ export default function AdminOrdersPage() {
           },
         );
       } else {
-        rejectPayment(order.id);
         toast.success(
           language === "bn" ? "পেমেন্ট প্রত্যাখ্যান করা হয়েছে ❌" : "Payment rejected ❌",
           {
@@ -232,10 +279,6 @@ export default function AdminOrdersPage() {
           },
         );
       }
-    } catch {
-      toast.error(
-        language === "bn" ? "যাচাইকরণ ব্যর্থ হয়েছে" : "Verification failed",
-      );
     } finally {
       setApprovalLoading(null);
       setVerifyingOrderId(null);

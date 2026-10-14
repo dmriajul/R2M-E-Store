@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireActionRole } from "@/lib/auth";
+import { rolesForPermission } from "@/lib/rbac";
 import { markCashCollected, resolveManualPayment } from "@/lib/data/orders";
 import { paymentsAdminSchema } from "@/lib/validations";
 import type { ApiResponse, OrderRecord } from "@/types";
@@ -21,14 +22,11 @@ export async function PATCH(
   request: NextRequest,
   context: RouteContext,
 ): Promise<NextResponse<ApiResponse<OrderRecord | { updated: boolean }>>> {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ data: null, error: "Sign in first", success: false }, { status: 401 });
-  }
-  if (session.user.role !== "ADMIN") {
+  const gate = await requireActionRole(rolesForPermission("orders:write"));
+  if (!gate.ok) {
     return NextResponse.json(
-      { data: null, error: "Admin access required", success: false },
-      { status: 403 },
+      { data: null, error: gate.message, success: false },
+      { status: gate.reason === "unauthenticated" ? 401 : 403 },
     );
   }
 

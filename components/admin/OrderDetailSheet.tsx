@@ -37,6 +37,12 @@ import {
   adminInputClass,
   adminSelectClass,
 } from "@/components/admin/Field";
+import {
+  addOrderNoteAction,
+  decidePaymentAction,
+  refundOrderAction,
+  updateOrderStatusAction,
+} from "@/app/admin/actions";
 import { useAdminStore } from "@/store/useAdminStore";
 import type { AdminOrderStatus, OrderStepState } from "@/types";
 
@@ -60,6 +66,7 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
   const order = useAdminStore((state) =>
     orderId ? state.orders.find((entry) => entry.id === orderId) : undefined,
   );
+  const upsertOrder = useAdminStore((state) => state.upsertOrder);
   const updateOrderStatus = useAdminStore((state) => state.updateOrderStatus);
   const addOrderNote = useAdminStore((state) => state.addOrderNote);
   const refundOrder = useAdminStore((state) => state.refundOrder);
@@ -94,59 +101,120 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
     paymentStatus === "PENDING" && paymentKey !== null && isManualPayment(paymentKey);
 
   /**
-   * Records the decision.
+   * Records the operator's decision on a manual payment.
    *
-   * The API is the source of truth for orders that live in Postgres; seeded
-   * demo orders only exist in this console, so the local list always updates
-   * too (the request legitimately 404s for those).
+   * The Server Action writes it to Postgres (approve → Confirmed + Paid,
+   * reject → Cancelled + Failed, collect-cash → Delivered + Paid) and returns
+   * the updated order, which replaces the row in the console cache. A demo
+   * install without a database keeps the change in the local list instead.
    */
   const decidePayment = async (action: "approve" | "reject" | "collect-cash") => {
     if (!order) return;
 
-    try {
-      await fetch(`/api/admin/orders/${encodeURIComponent(order.number.replace(/^#/, ""))}/payment`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-    } catch {
-      /* Offline or demo order — the console list below is authoritative. */
+    const result = await decidePaymentAction(order.number, action);
+
+    if (!result.ok) {
+      toast.error("Payment decision couldn't be saved", { description: result.error });
+      return;
+    }
+
+    if (result.source === "database" && result.data) {
+      upsertOrder(result.data);
+    } else if (action === "approve") {
+      verifyPayment(order.id);
+    } else if (action === "reject") {
+      rejectPayment(order.id);
+    } else {
+      markCashPaid(order.id);
     }
 
     if (action === "approve") {
-      verifyPayment(order.id);
       toast.success("Payment verified ✅", {
         description: `${order.number} is confirmed and now Processing.`,
       });
     } else if (action === "reject") {
-      rejectPayment(order.id);
       toast.success("Payment rejected", {
         description: `${order.number} is cancelled and the customer is notified.`,
       });
     } else {
-      markCashPaid(order.id);
       toast.success("Cash collected 💵", {
         description: `${order.number} is delivered and marked as paid.`,
       });
     }
   };
 
-  const applyStatus = () => {
+  /** Fulfilment status, persisted by the Server Action. */
+  const applyStatus = async () => {
     if (!order) return;
-    updateOrderStatus(order.id, nextStatus);
+
+    const result = await updateOrderStatusAction(order.number, nextStatus);
+
+    if (!result.ok) {
+      toast.error("Order status couldn't be updated", { description: result.error });
+      return;
+    }
+
+    if (result.source === "database" && result.data) {
+      upsertOrder(result.data);
+    } else {
+      updateOrderStatus(order.id, nextStatus);
+    }
+
     toast.success("Order status updated! ✅", {
       description: `${order.number} is now ${ADMIN_ORDER_STATUS_LABEL[nextStatus]}.`,
     });
   };
 
-  const handleAddNote = () => {
+  /** Internal note, appended to the order's audit trail in Postgres. */
+  const persistNote = async (note: string) => {
+    if (!order) return false;
+
+    const result = await addOrderNoteAction(order.number, note);
+
+    if (!result.ok) {
+      toast.error("Note couldn't be saved", { description: result.error });
+      return false;
+    }
+
+    if (result.source === "database" && result.data) {
+      upsertOrder(result.data);
+    } else {
+      addOrderNote(order.id, note);
+    }
+
+    return true;
+  };
+
+  /** Full refund, persisted by the Server Action. */
+  const applyRefund = async () => {
+    if (!order) return;
+
+    const result = await refundOrderAction(order.number);
+
+    if (!result.ok) {
+      toast.error("Refund couldn't be issued", { description: result.error });
+      return;
+    }
+
+    if (result.source === "database" && result.data) {
+      upsertOrder(result.data);
+    } else {
+      refundOrder(order.id);
+    }
+
+    toast.success("Refund issued 💸", { description: `${order.number} is now Refunded.` });
+  };
+
+  const handleAddNote = async () => {
     if (!order) return;
     const trimmed = note.trim();
     if (trimmed.length === 0) {
       toast.error("Write a note first");
       return;
     }
-    addOrderNote(order.id, trimmed);
+
+    if (!(await persistNote(trimmed))) return;
+
     setNote("");
     toast.success("Note added 📝");
   };
@@ -623,8 +691,9 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
         }
         destructive={confirmPayment === "reject"}
         onConfirm={() => {
-          if (confirmPayment) void decidePayment(confirmPayment);
+          const decision = confirmPayment;
           setConfirmPayment(null);
+          if (decision) void decidePayment(decision);
         }}
       />
 
@@ -632,14 +701,10 @@ export function OrderDetailSheet({ orderId, onOpenChange }: OrderDetailSheetProp
         open={confirmRefund}
         onOpenChange={setConfirmRefund}
         title="Issue a full refund?"
-        description="The mock order moves to Refunded and the note is recorded on the order."
+        description="The order moves to Refunded, the payment is marked refunded and the note is recorded on the order."
         confirmLabel="Issue refund"
         destructive
-        onConfirm={() => {
-          if (!order) return;
-          refundOrder(order.id);
-          toast.success("Refund issued 💸", { description: `${order.number} is now Refunded.` });
-        }}
+        onConfirm={() => void applyRefund()}
       />
     </>
   );

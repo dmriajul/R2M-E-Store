@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireActionRole } from "@/lib/auth";
+import { rolesForPermission } from "@/lib/rbac";
 import { returnRequestInclude, hydrateReturnRequest } from "@/lib/data/returns";
 import { getPrisma } from "@/lib/prisma";
 import type { ApiResponse, ReturnRequestRecord, ReturnStatusKey } from "@/types";
@@ -9,9 +10,12 @@ export const runtime = "nodejs";
 export async function GET(
   request: NextRequest,
 ): Promise<NextResponse<ApiResponse<ReturnRequestRecord[] | number>>> {
-  const session = await auth();
-  if (session?.user?.role !== "ADMIN") {
-    return NextResponse.json({ data: null, error: "Admin access required", success: false }, { status: session?.user ? 403 : 401 });
+  const gate = await requireActionRole(rolesForPermission("returns:read"));
+  if (!gate.ok) {
+    return NextResponse.json(
+      { data: null, error: gate.message, success: false },
+      { status: gate.reason === "unauthenticated" ? 401 : 403 },
+    );
   }
   const db = await getPrisma();
   if (!db) {

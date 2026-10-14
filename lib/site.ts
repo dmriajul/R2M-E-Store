@@ -175,6 +175,24 @@ export const CATEGORY_META: Readonly<Record<ProductCategory, CategoryMeta>> = {
   },
 } as const;
 
+/**
+ * One-line blurbs for the category cards.
+ *
+ * Shared by the console (`lib/mock-admin.ts` seeds `AdminCategory` from it) and
+ * by `prisma/seed.ts`, so the database and the demo catalogue describe the
+ * categories identically.
+ */
+export const CATEGORY_DESCRIPTIONS: Readonly<Record<ProductCategory, string>> = {
+  "Jackets & Coats": "Warm outer layers for colder adventures.",
+  "Sweatshirts & Hoodies": "Cosy layers for everyday play.",
+  "Sweaters & Cardigans": "Soft knits for comfortable layering.",
+  "Winter Bottoms / Trousers": "Warm trousers made for playground adventures.",
+  "Winter Sets & Tracksuits": "Coordinated sets for comfort and warmth.",
+  "Tops & Tees": "Everyday polos, tees and casual tops.",
+  "Innerwear & Thermals": "Comfortable essentials and warm base layers.",
+  Accessories: "Bags, clips and finishing touches.",
+};
+
 /** Badge palette: New = cyan, Sale = rose, Bestseller = gold, Organic = green. */
 export const BADGE_STYLES: Readonly<Record<ProductBadge, string>> = {
   New: "bg-cyan/15 text-cyan border-cyan/40",

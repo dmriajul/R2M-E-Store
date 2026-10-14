@@ -12,6 +12,7 @@ import {
   getActiveOrderCount,
 } from "@/lib/mock-dashboard";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
+import { useDashboardSession } from "@/components/dashboard/DashboardSessionProvider";
 import { OrderCard } from "@/components/dashboard/OrderCard";
 import { Button } from "@/components/ui/button";
 import type { OrderStatus } from "@/types";
@@ -22,6 +23,8 @@ const EASE_LUXE = [0.22, 1, 0.36, 1] as const;
 
 /** Status tabs with the gold underline, and the list of matching orders. */
 export function OrdersExplorer() {
+  /* Mock orders belong to the demo shopper; other accounts start empty. */
+  const { isDemoIdentity } = useDashboardSession();
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
   const [liveOrders, setLiveOrders] = useState<OrderRecord[] | null>(null);
   const reducedMotion = usePrefersReducedMotion();
@@ -45,17 +48,26 @@ export function OrdersExplorer() {
   }, []);
 
   const allOrders = useMemo(
-    () => liveOrders === null ? [...MOCK_ORDERS] : liveOrders.map(toDashboardOrder),
-    [liveOrders],
+    () =>
+      liveOrders !== null
+        ? liveOrders.map(toDashboardOrder)
+        : isDemoIdentity
+          ? [...MOCK_ORDERS]
+          : [],
+    [liveOrders, isDemoIdentity],
   );
   const orders = useMemo(
     () => (filter === "all" ? allOrders : allOrders.filter((o) => o.status === filter)),
     [allOrders, filter],
   );
 
-  const activeCount = liveOrders === null
-    ? getActiveOrderCount()
-    : allOrders.filter((order) => order.status === "processing" || order.status === "shipped").length;
+  const activeCount =
+    liveOrders !== null
+      ? allOrders.filter((order) => order.status === "processing" || order.status === "shipped")
+          .length
+      : isDemoIdentity
+        ? getActiveOrderCount()
+        : 0;
 
   return (
     <div className="flex flex-col gap-6">

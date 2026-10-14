@@ -8,6 +8,7 @@ import {
   Bell,
   ChevronRight,
   LayoutDashboard,
+  Eraser,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -22,18 +23,25 @@ import { toast } from "sonner";
 import { cn, formatRelative } from "@/lib/utils";
 import { MukraLogo } from "@/components/brand/MukraLogo";
 import {
-  ADMIN_NAV,
   adminPageMeta,
   isActiveRoute,
+  navForRole,
   type AdminNavItem,
 } from "@/components/admin/admin-nav";
+import { ADMIN_NOTIFICATIONS, getStockState } from "@/lib/mock-admin";
 import {
-  ADMIN_NOTIFICATIONS,
-  ADMIN_USER,
-  getStockState,
-} from "@/lib/mock-admin";
+  ADMIN_ROLE_HINT,
+  ADMIN_ROLE_LABEL,
+  canAccessSection,
+  searchDestinationFor,
+} from "@/lib/rbac";
+import { useAdminSession } from "@/components/admin/AdminSessionProvider";
 import { DEMO_NOW } from "@/lib/mock-dashboard";
 import { useAdminStore } from "@/store/useAdminStore";
+import { signOut } from "next-auth/react";
+import { clearIdentityCaches, clearSessionCache } from "@/lib/session-cache";
+import { ConfirmActionDialog } from "@/components/admin/ConfirmActionDialog";
+import type { AdminRole, AdminUser } from "@/types";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +52,31 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+
+/** "Riajul Khandokar" → "RK"; falls back to the email's first letters. */
+function initialsFor(user: AdminUser): string {
+  const source = user.name.trim() || user.email;
+  const parts = source.split(/[\s@._-]+/).filter(Boolean);
+  const initials = parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+  return initials || "OP";
+}
+
+/** Small gold pill that names the signed-in operator's role. */
+function RoleBadge({ role, className }: { role: AdminRole; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "rounded border border-primary/35 bg-primary/12 px-1.5 py-px text-[10px] font-semibold tracking-[0.1em] text-primary uppercase",
+        className,
+      )}
+    >
+      {ADMIN_ROLE_LABEL[role]}
+    </span>
+  );
+}
 
 /** Signature logo shared by the desktop rail and the mobile drawer. */
 function AdminLogo({ collapsed = false }: { collapsed?: boolean }) {
@@ -114,18 +147,23 @@ function NavLink({
 
 function SidebarNav({
   pathname,
+  role,
   collapsed = false,
   pendingReturns,
   onNavigate,
 }: {
   pathname: string;
+  role: AdminRole;
   collapsed?: boolean;
   pendingReturns: number;
   onNavigate?: () => void;
 }) {
+  /* Only the sections this role may open — the same matrix the server uses. */
+  const sections = navForRole(role);
+
   return (
     <nav aria-label="Admin sections" className="flex flex-1 flex-col gap-5 overflow-y-auto px-2.5 py-4">
-      {ADMIN_NAV.map((section) => (
+      {sections.map((section) => (
         <div key={section.label} className="flex flex-col gap-1.5">
           {!collapsed && (
             <p className="px-1.5 text-[10px] font-semibold tracking-[0.18em] text-muted-foreground/80 uppercase">
@@ -149,7 +187,8 @@ function SidebarNav({
   );
 }
 
-function AdminIdentity({ collapsed = false }: { collapsed?: boolean }) {
+/** Sidebar footer: the operator actually signed in, with their console role. */
+function AdminIdentity({ user, collapsed = false }: { user: AdminUser; collapsed?: boolean }) {
   return (
     <div
       className={cn(
@@ -158,22 +197,16 @@ function AdminIdentity({ collapsed = false }: { collapsed?: boolean }) {
       )}
     >
       <span className="grid size-8 shrink-0 place-items-center rounded-full border border-primary/35 bg-gold-soft text-[11px] font-semibold text-primary">
-        {ADMIN_USER.initials}
+        {initialsFor(user)}
       </span>
       {!collapsed && (
         <span className="min-w-0">
-          <span className="block truncate text-xs font-medium text-foreground">
-            {ADMIN_USER.name}
-          </span>
-          <span className="block truncate text-[11px] text-muted-foreground">
-            {ADMIN_USER.email}
-          </span>
+          <span className="block truncate text-xs font-medium text-foreground">{user.name}</span>
+          <span className="block truncate text-[11px] text-muted-foreground">{user.email}</span>
         </span>
       )}
       {!collapsed && (
-        <span className="ml-auto rounded border border-primary/35 bg-primary/12 px-1.5 py-px text-[10px] font-semibold tracking-[0.1em] text-primary uppercase">
-          Admin
-        </span>
+        <RoleBadge role={user.role} className="ml-auto shrink-0" />
       )}
     </div>
   );
@@ -190,6 +223,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pendingReturns, setPendingReturns] = useState(0);
+  const [clearSessionOpen, setClearSessionOpen] = useState(false);
+
+  /* The operator's real session (resolved on the server by the layout). */
+  const { user, can } = useAdminSession();
+  const canSeeReturns = canAccessSection(user.role, "returns");
 
   const setSearch = useAdminStore((state) => state.setSearch);
   const lowStockCount = useAdminStore(
@@ -209,6 +247,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    /* Support/super admins only — anyone else would just collect a 403. */
+    if (!canSeeReturns) return;
     let active = true;
     const refreshPendingReturns = () => {
       fetch("/api/admin/returns?countOnly=true", { cache: "no-store" })
@@ -227,7 +267,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       active = false;
       window.removeEventListener("mukra:returns-updated", refreshPendingReturns);
     };
-  }, [pathname]);
+  }, [pathname, canSeeReturns]);
 
   // Client pages can't export metadata, so the console titles itself.
   useEffect(() => {
@@ -248,7 +288,28 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     event.preventDefault();
     const term = query.trim();
     setSearch(term);
-      if (term) router.push("/admin/products");
+    /* Products table for roles that have it, otherwise the orders queue. */
+    if (term) router.push(searchDestinationFor(user.role));
+  };
+
+  const handleSignOut = async () => {
+    /* Drop the account-area caches too, so the next sign-in starts clean. */
+    clearIdentityCaches();
+    toast.success("Signed out of the admin console");
+    await signOut({ callbackUrl: "/login" });
+  };
+
+  /**
+   * Debug escape hatch: sign out, wipe cookies, localStorage, sessionStorage,
+   * Cache Storage and service workers, then reload at the login screen. Useful
+   * when a stale session (or a second account in another tab) is suspected.
+   */
+  const handleClearSession = async () => {
+    setClearSessionOpen(false);
+    toast.info("Clearing session and caches…", {
+      description: "Cookies, localStorage and cached bundles are being removed.",
+    });
+    await clearSessionCache();
   };
 
   return (
@@ -264,7 +325,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <AdminLogo collapsed={collapsed} />
         </div>
 
-        <SidebarNav pathname={pathname} collapsed={collapsed} pendingReturns={pendingReturns} />
+        <SidebarNav
+          pathname={pathname}
+          role={user.role}
+          collapsed={collapsed}
+          pendingReturns={pendingReturns}
+        />
 
         <button
           type="button"
@@ -283,7 +349,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           )}
         </button>
 
-        <AdminIdentity collapsed={collapsed} />
+        <AdminIdentity user={user} collapsed={collapsed} />
       </aside>
 
       {/* ---------- Content column ---------- */}
@@ -370,17 +436,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   className="inline-flex items-center gap-2 rounded-lg border border-[#2A2A2A] p-1 pr-2.5 transition-colors duration-200 hover:border-[#3A3A3A] hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
                 >
                   <span className="grid size-8 place-items-center rounded-full border border-primary/35 bg-gold-soft text-[11px] font-semibold text-primary">
-                    {ADMIN_USER.initials}
+                    {initialsFor(user)}
                   </span>
                   <span className="hidden text-xs font-medium text-foreground sm:block">
-                    {ADMIN_USER.name}
+                    {user.name}
                   </span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 border-[#2A2A2A] bg-[#141414] p-1.5">
-                <DropdownMenuLabel className="flex flex-col gap-0.5">
-                  <span className="text-xs font-medium text-foreground">{ADMIN_USER.name}</span>
-                  <span className="text-[11px] text-muted-foreground">{ADMIN_USER.email}</span>
+                <DropdownMenuLabel className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-foreground">{user.name}</span>
+                  <span className="text-[11px] text-muted-foreground">{user.email}</span>
+                  <RoleBadge role={user.role} className="mt-0.5 w-fit" />
+                  <span className="text-[11px] font-normal text-muted-foreground">
+                    {ADMIN_ROLE_HINT[user.role]}
+                  </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-[#242424]" />
                 <DropdownMenuItem asChild className="text-xs focus:bg-white/5">
@@ -388,18 +458,25 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     <UserCog aria-hidden /> <span className="text-foreground">Profile</span>
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild className="text-xs focus:bg-white/5">
-                  <Link href="/admin/settings">
-                    <Settings aria-hidden /> <span className="text-foreground">Settings</span>
-                  </Link>
-                </DropdownMenuItem>
+                {can("settings:write") && (
+                  <DropdownMenuItem asChild className="text-xs focus:bg-white/5">
+                    <Link href="/admin/settings">
+                      <Settings aria-hidden /> <span className="text-foreground">Settings</span>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator className="bg-[#242424]" />
+                <DropdownMenuItem
+                  className="text-xs focus:bg-white/5"
+                  onSelect={() => setClearSessionOpen(true)}
+                >
+                  <Eraser aria-hidden /> <span className="text-foreground">Clear session &amp; cache</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"
                   className="text-xs"
                   onSelect={() => {
-                    toast.success("Signed out of the admin console");
-                    router.push("/login");
+                    void handleSignOut();
                   }}
                 >
                   <LogOut aria-hidden /> Logout
@@ -479,8 +556,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
 
-              <SidebarNav pathname={pathname} pendingReturns={pendingReturns} onNavigate={() => setDrawerOpen(false)} />
-              <AdminIdentity />
+              <SidebarNav
+                pathname={pathname}
+                role={user.role}
+                pendingReturns={pendingReturns}
+                onNavigate={() => setDrawerOpen(false)}
+              />
+              <AdminIdentity user={user} />
 
               <p className="border-t border-[#1F1F1F] px-4 py-3 text-[11px] text-muted-foreground">
                 <Sparkles aria-hidden className="mr-1 inline size-3 text-primary" />
@@ -490,6 +572,26 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </>
         )}
       </AnimatePresence>
+
+      {/* Debug: obliterate this browser's session + caches. */}
+      <ConfirmActionDialog
+        open={clearSessionOpen}
+        onOpenChange={setClearSessionOpen}
+        title="Clear session and caches?"
+        description={
+          <>
+            Signs you out and removes <strong>all cookies</strong>, localStorage, sessionStorage,
+            Cache Storage and service workers for this site. Use it when a stale session or a
+            second signed-in account is suspected. The basket is cleared too, so the storefront
+            starts from a blank slate.
+          </>
+        }
+        confirmLabel="Clear everything"
+        destructive
+        onConfirm={() => {
+          void handleClearSession();
+        }}
+      />
     </div>
   );
 }

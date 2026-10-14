@@ -3,16 +3,21 @@
 import { Camera, Cake, Gift, Mail, Phone, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatMonthYear, formatPrice, initials } from "@/lib/utils";
+import { useDashboardSession } from "@/components/dashboard/DashboardSessionProvider";
 import { useDashboardStore } from "@/store/useDashboardStore";
 
 /** Identity block above the profile forms — avatar, contact details, member since. */
 export function ProfileCard() {
+  /* Name and contact details always come from the session, never a store. */
+  const { user } = useDashboardSession();
   const profile = useDashboardStore((state) => state.profile);
 
   const chips = [
-    { icon: Mail, label: profile.email },
-    { icon: Phone, label: profile.phone },
-    { icon: Wallet, label: `Member since ${formatMonthYear(profile.memberSince)}` },
+    { icon: Mail, label: user.email },
+    { icon: Phone, label: user.phone || profile.phone },
+    ...(profile.memberSince
+      ? [{ icon: Wallet, label: `Member since ${formatMonthYear(profile.memberSince)}` }]
+      : []),
     { icon: Gift, label: `${profile.rewardPoints} reward points` },
     { icon: Cake, label: `Total spent ${formatPrice(profile.totalSpent)}` },
   ];
@@ -30,7 +35,7 @@ export function ProfileCard() {
         className="group relative mx-auto shrink-0 rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:mx-0"
       >
         <span className="flex size-24 items-center justify-center rounded-full bg-linear-to-br from-primary via-rose to-lavender text-3xl font-bold text-black/80 shadow-[0_10px_40px_-14px_rgba(212,175,55,0.9)]">
-          {initials(profile.name)}
+          {initials(user.name)}
         </span>
         <span
           aria-hidden
@@ -42,7 +47,7 @@ export function ProfileCard() {
       </button>
 
       <div className="min-w-0 flex-1 text-center sm:text-left">
-        <h2 className="text-xl font-bold tracking-tight">{profile.name}</h2>
+        <h2 className="text-xl font-bold tracking-tight">{user.name}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {profile.kids.length > 0
             ? `Parent to ${profile.kids.map((kid) => kid.name).join(", ")} 🧸`

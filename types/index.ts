@@ -324,6 +324,20 @@ export interface DashboardUser {
   totalSpent: number;
 }
 
+/**
+ * Whose account the in-memory dashboard data belongs to.
+ *
+ * `demo` marks the seeded demo shopper (`sarah@example.com`) — the only identity
+ * the mock orders/addresses/notifications belong to. Every other account starts
+ * with empty collections, so one shopper's records can never surface under
+ * another account.
+ */
+export interface DashboardIdentity {
+  id: string;
+  email: string;
+  demo: boolean;
+}
+
 export type DashboardPreferenceKey =
   | "emailNotifications"
   | "smsNotifications"
@@ -336,9 +350,16 @@ export type DashboardPreferences = Record<DashboardPreferenceKey, boolean>;
 /*  Admin console                                                             */
 /* -------------------------------------------------------------------------- */
 
-/** Order lifecycle as the operations team sees it (adds pending + refunded). */
+/**
+ * Order lifecycle as the operations team sees it.
+ *
+ * `confirmed` is written when a manual wallet payment (bKash / Nagad / Rocket)
+ * is verified — it matches the Prisma `CONFIRMED` status, and the order becomes
+ * `processing` once the team starts preparing it.
+ */
 export type AdminOrderStatus =
   | "pending"
+  | "confirmed"
   | "processing"
   | "shipped"
   | "delivered"
@@ -544,8 +565,31 @@ export interface ReturnRequestRecord {
 /*  Backend integration (Step 7)                                              */
 /* -------------------------------------------------------------------------- */
 
-/** Mirrors the Prisma `Role` enum. */
-export type AuthRole = "CUSTOMER" | "ADMIN";
+/**
+ * Mirrors the Prisma `Role` enum.
+ *
+ * `ADMIN` is the original two-role build's staff value and is kept as a legacy
+ * alias: it is normalised to `SUPER_ADMIN` wherever a role is read (session,
+ * middleware, console), so a database that has not been re-seeded keeps full
+ * access.
+ */
+export type AuthRole =
+  | "CUSTOMER"
+  | "ADMIN"
+  | "SUPER_ADMIN"
+  | "INVENTORY_MANAGER"
+  | "SEO_MANAGER"
+  | "SUPPORT_MANAGER";
+
+/** The four console roles — what `ADMIN`/`SUPER_ADMIN` normalises to. */
+export type AdminRole =
+  | "SUPER_ADMIN"
+  | "INVENTORY_MANAGER"
+  | "SEO_MANAGER"
+  | "SUPPORT_MANAGER";
+
+/** What a session/JWT carries: a shopper, or one of the four console roles. */
+export type SessionRole = "CUSTOMER" | AdminRole;
 
 /** The signed-in user as the API and the session expose it (never the hash). */
 export interface AuthUser {
@@ -555,6 +599,31 @@ export interface AuthUser {
   phone?: string;
   role: AuthRole;
   avatar?: string;
+}
+
+/** The signed-in operator as the console consumes it (role already normalised). */
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: AdminRole;
+}
+
+/**
+ * A user account as the **Staff & Roles** console lists it.
+ *
+ * `AdminUser` is the *signed-in* operator; this is any account on file — the
+ * super admin can move one between the five roles from `/admin/staff`.
+ */
+export interface AdminUserAccount {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  /** Always normalised: the legacy `ADMIN` value never reaches the console. */
+  role: SessionRole;
+  /** ISO date the account was created (or the demo's fixed join date). */
+  joinedAt: string;
 }
 
 /** Mirrors the Prisma `PaymentMethod` enum (card payments map to SSLCOMMERZ). */

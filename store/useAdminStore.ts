@@ -1,5 +1,18 @@
 "use client";
 
+/**
+ * Admin console client store.
+ *
+ * This is the console's **session cache**: the server (Postgres when
+ * `DATABASE_URL` is set, the mock dataset otherwise) is the source of truth and
+ * every mutation is performed by a Server Action in `app/admin/actions.ts`.
+ *
+ * - `source: "database"` → the action returns the saved record and the console
+ *   upserts it here, so the tables update without a full reload.
+ * - `source: "demo"` (no database configured) → nothing was persisted, so the
+ *   local mutators below keep the demo experience exactly as it was.
+ */
+
 import { create } from "zustand";
 import { slugify } from "@/lib/utils";
 import {
@@ -97,6 +110,19 @@ interface AdminState {
   setProducts: (products: AdminProduct[]) => void;
   upsertProduct: (product: AdminProduct) => void;
 
+  /* ------------------------------------------------------------------ */
+  /*  Server-backed collections                                          */
+  /* ------------------------------------------------------------------ */
+  /*  The console hydrates these from the server (Postgres when          */
+  /*  DATABASE_URL is set) and refreshes them with the records the        */
+  /*  Server Actions return. Without a database the mock seeds above      */
+  /*  stay in place and the demo mutations further down apply locally.   */
+
+  setOrders: (orders: AdminOrder[]) => void;
+  upsertOrder: (order: AdminOrder) => void;
+  setCategories: (categories: AdminCategory[]) => void;
+  upsertCategory: (category: AdminCategory) => void;
+
   saveProduct: (values: AdminProductValues, id?: string) => string;
   deleteProducts: (ids: string[]) => void;
   duplicateProduct: (id: string) => string | undefined;
@@ -139,6 +165,25 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       products: state.products.some((product) => product.id === next.id)
         ? state.products.map((product) => (product.id === next.id ? next : product))
         : [next, ...state.products],
+    })),
+
+  /* Newest first, matching the order the API returns. */
+  setOrders: (orders) =>
+    set({ orders: [...orders].sort((a, b) => (a.placedAt < b.placedAt ? 1 : -1)) }),
+  upsertOrder: (next) =>
+    set((state) => ({
+      orders: (
+        state.orders.some((order) => order.id === next.id)
+          ? state.orders.map((order) => (order.id === next.id ? next : order))
+          : [next, ...state.orders]
+      ).sort((a, b) => (a.placedAt < b.placedAt ? 1 : -1)),
+    })),
+  setCategories: (categories) => set({ categories }),
+  upsertCategory: (next) =>
+    set((state) => ({
+      categories: state.categories.some((category) => category.id === next.id)
+        ? state.categories.map((category) => (category.id === next.id ? next : category))
+        : [...state.categories, next],
     })),
 
   saveProduct: (values, id) => {
@@ -261,9 +306,9 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
         if (order.id !== id) return order;
         const next: AdminOrder = {
           ...order,
-          // The console's status set has no "confirmed" — a verified payment
-          // moves the order straight into preparation.
-          status: "processing",
+          // A verified manual payment lands on Confirmed + Paid, mirroring
+          // `decideAdminManualPayment()` in Postgres.
+          status: "confirmed",
           paymentStatus: "PAID",
           notes: [...order.notes, "Payment verified by an operator."],
         };

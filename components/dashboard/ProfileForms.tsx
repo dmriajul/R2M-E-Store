@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, KeyRound, Sparkles } from "lucide-react";
@@ -14,6 +14,7 @@ import {
   type ProfileValues,
 } from "@/lib/validations";
 import { useDashboardStore } from "@/store/useDashboardStore";
+import { useDashboardSession } from "@/components/dashboard/DashboardSessionProvider";
 import { PasswordStrength } from "@/components/auth/PasswordStrength";
 import { ConfirmDialog } from "@/components/dashboard/ConfirmDialog";
 import { Field, checkoutInputClass } from "@/components/checkout/Field";
@@ -64,6 +65,9 @@ function Panel({
 export function ProfileDetailsForm() {
   const profile = useDashboardStore((state) => state.profile);
   const updateProfile = useDashboardStore((state) => state.updateProfile);
+  /* The name/email/phone a real account must edit come from the session, so the
+     form is never blank just because the store has not hydrated yet. */
+  const { user } = useDashboardSession();
 
   const {
     register,
@@ -73,13 +77,25 @@ export function ProfileDetailsForm() {
   } = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      fullName: profile.name,
-      email: profile.email,
-      phone: profile.phone,
+      fullName: user.name,
+      email: user.email,
+      phone: user.phone,
       dateOfBirth: profile.dateOfBirth,
       gender: profile.gender,
     },
   });
+
+  /* Re-point the form whenever the signed-in account changes. */
+  useEffect(() => {
+    reset({
+      fullName: user.name,
+      email: user.email,
+      phone: user.phone,
+      dateOfBirth: profile.dateOfBirth,
+      gender: profile.gender,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- identity key only
+  }, [user.id, user.name, user.email, user.phone]);
 
   const onSubmit = (values: ProfileValues) => {
     updateProfile({
