@@ -138,9 +138,9 @@ curl -s https://your-domain.com/api/health
 # { "mode": "production", "database": "connected", ... }
 ```
 
-The admin login is `admin@mukra.com` / `admin123` — **change it immediately**
-after your first sign-in (Admin → Settings), and rotate the demo customer
-passwords while you are there.
+The seeded admin login is `admin@mukra.com` / `password123` — **change it
+immediately** after your first sign-in (Admin → Settings), and rotate the demo
+customer passwords while you are there.
 
 ---
 
@@ -186,7 +186,7 @@ Final checklist before announcing:
       `"database":"connected"`
 - [ ] `NEXTAUTH_SECRET` set to a fresh 32-byte random string, `NEXTAUTH_URL`
       points at the real domain
-- [ ] Admin password changed away from `admin123`
+- [ ] Admin password changed away from `password123`
 - [ ] Cloudinary keys set; one test upload round-trips through the admin console
 - [ ] Wallet numbers in `PAYMENT_*` match the accounts you actually check
 - [ ] `mukra.com` + `www` resolve with a valid certificate

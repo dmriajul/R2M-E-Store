@@ -6,10 +6,10 @@
  *
  * It loads exactly what the storefront shows in demo mode: the 12 catalogue
  * products from `lib/site.ts`, the eight category cards, the staff accounts for
- * every console role (`admin@mukra.com / admin123` plus
- * `inventory@ · seo@ · support@mukra.com` on `password123`), three shoppers
- * (`password123`), the four coupons the console lists and five orders —
- * including two wallet payments waiting for an operator to verify.
+ * every console role (`admin@ · inventory@ · seo@ · support@mukra.com`, all on
+ * `password123`), three shoppers (`password123`), the four coupons the console
+ * lists and five orders — including two wallet payments waiting for an operator
+ * to verify.
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -19,8 +19,8 @@ import { CATEGORY_DESCRIPTIONS, CATEGORY_META, PRODUCTS } from "../lib/site";
 const prisma = new PrismaClient();
 
 const BCRYPT_ROUNDS = 10;
+/** Shared by every seeded account — staff and shoppers alike. */
 const DEMO_PASSWORD = "password123";
-const ADMIN_PASSWORD = "admin123";
 
 /** Walks the seeded orders in order, so `at(0)` is the newest. */
 interface SeedOrderItem {
@@ -51,7 +51,6 @@ function shippingFor(subtotal: number): number {
 
 async function main(): Promise<void> {
   const password = await hash(DEMO_PASSWORD, BCRYPT_ROUNDS);
-  const adminPassword = await hash(ADMIN_PASSWORD, BCRYPT_ROUNDS);
 
   /* ---------- wipe (idempotent re-runs) ---------- */
   await prisma.orderItem.deleteMany();
@@ -71,7 +70,7 @@ async function main(): Promise<void> {
       name: "Riajul Khandokar",
       email: "admin@mukra.com",
       phone: "+880 1712 345678",
-      password: adminPassword,
+      password,
       role: "SUPER_ADMIN",
     },
   });

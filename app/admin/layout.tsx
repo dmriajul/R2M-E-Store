@@ -9,7 +9,7 @@ import { getAdminCategories } from "@/lib/data/categories";
 
 export const metadata: Metadata = {
   title: { default: "Admin", template: "%s · Admin · Mukra" },
-  description: "LUXE operations console — products, orders and inventory.",
+  description: "MUKRA operations console — products, orders and inventory.",
   robots: { index: false, follow: false },
 };
 

@@ -87,15 +87,15 @@ npm run db:studio      # browse the database
 
 | Role | Email | Password | Console access |
 | --- | --- | --- | --- |
-| Super admin | `admin@littleluxe.com` | `admin123` | everything |
-| Inventory manager | `inventory@littleluxe.com` | `password123` | dashboard, products, categories |
-| SEO manager | `seo@littleluxe.com` | `password123` | dashboard, products (metadata), settings |
-| Support manager | `support@littleluxe.com` | `password123` | dashboard, orders, returns, customers |
+| Super admin | `admin@mukra.com` | `password123` | everything |
+| Inventory manager | `inventory@mukra.com` | `password123` | dashboard, products, categories |
+| SEO manager | `seo@mukra.com` | `password123` | dashboard, products (metadata), settings |
+| Support manager | `support@mukra.com` | `password123` | dashboard, orders, returns, customers |
 | Shopper | `sarah@example.com` (or any email) | `password123` | storefront + account area |
 
-`prisma/seed.ts` creates the same staff accounts on `@mukra.com`
-(`admin@mukra.com` / `admin123` and `inventory@ · seo@ · support@mukra.com` on
-`password123`) once a database is connected.
+`prisma/seed.ts` creates the same staff accounts once a database is connected:
+`admin@ · inventory@ · seo@ · support@mukra.com`, all with the shared demo
+password `password123`.
 
 ---
 

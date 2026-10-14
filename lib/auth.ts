@@ -16,9 +16,9 @@ import type { AdminRole, AdminUser, SessionRole } from "@/types";
  * Auth.js (NextAuth v5) instance.
  *
  * Credentials + bcrypt against Postgres when `DATABASE_URL` exists, and the
- * demo accounts (`admin@littleluxe.com / admin123`, `sarah@example.com /
- * password123`, or any email with `password123`) when it does not — so the
- * login form behaves identically in both modes.
+ * demo accounts (`admin@mukra.com`, `sarah@example.com`, or any other email —
+ * all on `password123`) when it does not — so the login form behaves identically
+ * in both modes.
  *
  * The JWT carries `role`, normalised through `normalizeRole()` so a legacy
  * `ADMIN` row reads as `SUPER_ADMIN` everywhere downstream.

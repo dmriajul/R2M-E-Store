@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { loginSchema, type LoginValues } from "@/lib/validations";
-import { DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD, DEMO_PASSWORD } from "@/lib/demo-mode";
+import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD } from "@/lib/demo-mode";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { SocialButtons } from "@/components/auth/SocialButtons";
@@ -25,7 +25,7 @@ const ERROR_COPY: Readonly<Record<string, { title: string; description: string }
   },
   "wrong-password": {
     title: "That password does not match",
-    description: `For this demo, use “${DEMO_PASSWORD}” (or “${DEMO_ADMIN_PASSWORD}” for the admin console).`,
+    description: `For this demo, use “${DEMO_PASSWORD}” — the same password unlocks the admin console accounts.`,
   },
   CredentialsSignin: {
     title: "That password does not match",

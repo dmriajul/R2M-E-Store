@@ -4,20 +4,15 @@
  * Passwords are hashed with bcrypt in the database path. In demo mode a set of
  * well-known accounts exists so **every console role can be tried without a
  * database**: the super admin (and the legacy `ADMIN` alias), one account per
- * manager role, and a shopper (`sarah@example.com / password123`). Any other
- * email also works with `password123`, mirroring the mock auth the storefront
- * shipped with — those sessions are always `CUSTOMER` unless a demo account
- * matches, so the extra accounts can't leak console access.
+ * manager role, and a shopper (`sarah@example.com`). All of them share the demo
+ * password `password123`; any other email also works with it, mirroring the mock
+ * auth the storefront shipped with — those sessions are always `CUSTOMER` unless
+ * a demo account matches, so the extra accounts can't leak console access.
  */
 
 import { compare, hash } from "bcryptjs";
 import { withDatabase } from "@/lib/prisma";
-import {
-  DEMO_ADMIN_EMAIL,
-  DEMO_ADMIN_PASSWORD,
-  DEMO_PASSWORD,
-  isDatabaseConfigured,
-} from "@/lib/demo-mode";
+import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD, isDatabaseConfigured } from "@/lib/demo-mode";
 import type { AuthRole, AuthUser } from "@/types";
 
 export const BCRYPT_ROUNDS = 10;
@@ -33,7 +28,7 @@ interface DemoAccount extends UserRecord {
 
 /**
  * Accounts that always exist so the demo (and each RBAC role) can be signed
- * into. Every non-admin account uses the shared demo password.
+ * into. Every account uses the shared demo password (`password123`).
  */
 export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
@@ -41,14 +36,14 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     name: "Riajul Khandokar",
     email: DEMO_ADMIN_EMAIL,
     phone: "+880 1712 345678",
-    password: DEMO_ADMIN_PASSWORD,
+    password: DEMO_PASSWORD,
     role: "SUPER_ADMIN",
     demo: true,
   },
   {
     id: "demo-inventory",
     name: "Imran Hossain",
-    email: "inventory@littleluxe.com",
+    email: "inventory@mukra.com",
     phone: "+880 1713 220011",
     password: DEMO_PASSWORD,
     role: "INVENTORY_MANAGER",
@@ -57,7 +52,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
     id: "demo-seo",
     name: "Nusrat Jahan",
-    email: "seo@littleluxe.com",
+    email: "seo@mukra.com",
     phone: "+880 1714 330022",
     password: DEMO_PASSWORD,
     role: "SEO_MANAGER",
@@ -66,7 +61,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
     id: "demo-support",
     name: "Tanvir Hasan",
-    email: "support@littleluxe.com",
+    email: "support@mukra.com",
     phone: "+880 1715 440033",
     password: DEMO_PASSWORD,
     role: "SUPPORT_MANAGER",
