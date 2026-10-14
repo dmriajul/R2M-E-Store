@@ -85,7 +85,9 @@ export type AdminPermission =
   | "coupons:write"
   | "categories:write"
   | "settings:write"
-  | "analytics:read";
+  | "analytics:read"
+  /** Staff & Roles: listing accounts and moving them between roles. */
+  | "users:manage";
 
 /** The single source of truth: which roles may exercise each permission. */
 export const PERMISSION_ROLES: Readonly<Record<AdminPermission, readonly AdminRole[]>> = {
@@ -102,6 +104,8 @@ export const PERMISSION_ROLES: Readonly<Record<AdminPermission, readonly AdminRo
   "categories:write": ["SUPER_ADMIN", "INVENTORY_MANAGER"],
   "settings:write": ["SUPER_ADMIN", "SEO_MANAGER"],
   "analytics:read": ["SUPER_ADMIN"],
+  /** Role management is super-admin only — no manager can grant roles. */
+  "users:manage": ["SUPER_ADMIN"],
 };
 
 /** Roles allowed to exercise `permission`. */
@@ -144,7 +148,8 @@ export type AdminSection =
   | "coupons"
   | "categories"
   | "settings"
-  | "analytics";
+  | "analytics"
+  | "staff";
 
 /**
  * Route guards. The dashboard belongs to every console role (it is the home the
@@ -161,6 +166,7 @@ export const SECTION_ROLES: Readonly<Record<AdminSection, readonly AdminRole[]>>
   categories: PERMISSION_ROLES["categories:write"],
   settings: PERMISSION_ROLES["settings:write"],
   analytics: PERMISSION_ROLES["analytics:read"],
+  staff: PERMISSION_ROLES["users:manage"],
 };
 
 const SECTION_PATHS: Readonly<Record<Exclude<AdminSection, "dashboard">, string>> = {
@@ -172,6 +178,7 @@ const SECTION_PATHS: Readonly<Record<Exclude<AdminSection, "dashboard">, string>
   categories: "/admin/categories",
   settings: "/admin/settings",
   analytics: "/admin/analytics",
+  staff: "/admin/staff",
 };
 
 /** `"/admin/products"` → `"products"`. Unknown/`/admin` paths → the dashboard. */
@@ -213,4 +220,110 @@ export function sectionsForRole(role: AdminRole): AdminSection[] {
   return (Object.keys(SECTION_ROLES) as AdminSection[]).filter((section) =>
     canAccessSection(role, section),
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Roles, as the Staff & Roles console shows them                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The five roles an operator can assign, most privileged first.
+ * `ADMIN` is deliberately absent: it is a legacy value that is read as
+ * `SUPER_ADMIN`, never written back.
+ */
+export const ASSIGNABLE_ROLES = [
+  "SUPER_ADMIN",
+  "INVENTORY_MANAGER",
+  "SEO_MANAGER",
+  "SUPPORT_MANAGER",
+  "CUSTOMER",
+] as const satisfies readonly SessionRole[];
+
+/** Display name for every role, shopper included. */
+export const ROLE_LABEL: Readonly<Record<SessionRole, string>> = {
+  CUSTOMER: "Customer",
+  ...ADMIN_ROLE_LABEL,
+};
+
+/** One-line reminder of what each role can reach (used in the role picker). */
+export const ROLE_HINT: Readonly<Record<SessionRole, string>> = {
+  CUSTOMER: "Storefront only — no console access",
+  ...ADMIN_ROLE_HINT,
+};
+
+/** Narrowing helper for values coming from forms/JSON. */
+export function isAssignableRole(role: unknown): role is SessionRole {
+  return typeof role === "string" && (ASSIGNABLE_ROLES as readonly string[]).includes(role);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Role-change policy (Staff & Roles)                                        */
+/* -------------------------------------------------------------------------- */
+
+/** The three facts the policy needs about an account. */
+export interface RoleChangeSubject {
+  id: string;
+  email: string;
+  role: SessionRole;
+}
+
+export type RoleChangeVerdict =
+  | { ok: true }
+  | { ok: false; reason: "unknown-account" | "self" | "last-super-admin"; error: string };
+
+/**
+ * Can `actorId`/`actorEmail` move the account `targetId` to `newRole`?
+ *
+ * Three rules, in one testable place:
+ *
+ * 1. the target must exist in the list the actor is looking at;
+ * 2. nobody may change **their own** role — matched by id *and* email, so the
+ *    guard holds even if a demo id and a session id ever disagree;
+ * 3. the **last** super admin may not be demoted, so the console can never be
+ *    left without an owner.
+ *
+ * Rule 3 is defence in depth: while only `SUPER_ADMIN` holds `users:manage` the
+ * caller is himself a super admin, so a demotable "last" super admin can only
+ * appear in a stale list (the caller's own row missing) or if the permission is
+ * ever widened to another role.
+ */
+export function checkRoleChange(params: {
+  accounts: readonly RoleChangeSubject[];
+  actorId: string;
+  actorEmail: string;
+  targetId: string;
+  newRole: SessionRole;
+}): RoleChangeVerdict {
+  const { accounts, actorId, actorEmail, targetId, newRole } = params;
+
+  const target = accounts.find((account) => account.id === targetId);
+  if (!target) {
+    return {
+      ok: false,
+      reason: "unknown-account",
+      error: "That account no longer exists — reload the console",
+    };
+  }
+
+  const email = actorEmail.trim().toLowerCase();
+  if (target.id === actorId || (email.length > 0 && target.email.trim().toLowerCase() === email)) {
+    return {
+      ok: false,
+      reason: "self",
+      error: "You can't change your own role — ask another super admin to do it.",
+    };
+  }
+
+  if (target.role === "SUPER_ADMIN" && newRole !== "SUPER_ADMIN") {
+    const superAdmins = accounts.filter((account) => account.role === "SUPER_ADMIN").length;
+    if (superAdmins <= 1) {
+      return {
+        ok: false,
+        reason: "last-super-admin",
+        error: "At least one super admin must remain. Promote another account first.",
+      };
+    }
+  }
+
+  return { ok: true };
 }

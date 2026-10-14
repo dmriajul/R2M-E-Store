@@ -14,7 +14,9 @@
  *    re-checks the session *and* the caller's role before touching data. The
  *    role matrix lives in `lib/rbac.ts`: `SUPER_ADMIN` can do everything,
  *    `INVENTORY_MANAGER` owns products/categories, `SEO_MANAGER` owns product
- *    metadata and settings, `SUPPORT_MANAGER` owns orders/returns/customers.
+ *    metadata and settings, `SUPPORT_MANAGER` owns orders/returns/customers, and
+ *    only `SUPER_ADMIN` can move accounts between those roles
+ *    (`updateUserRoleAction`).
  * 2. **Validate everything.** Arguments arrive from the browser as `unknown`
  *    and are parsed with the shared Zod schemas in `lib/validations.ts`.
  * 3. **Never fake a write.** With `DATABASE_URL` configured, a failure is
@@ -30,6 +32,8 @@ import { z } from "zod";
 import { requireActionRole } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/demo-mode";
 import {
+  ASSIGNABLE_ROLES,
+  checkRoleChange,
   rolesForPermission,
   type AdminPermission,
 } from "@/lib/rbac";
@@ -50,6 +54,8 @@ import {
   type PaymentDecision,
 } from "@/lib/data/admin-orders";
 import { deleteAdminCategory, saveAdminCategory } from "@/lib/data/categories";
+import { getAdminUserAccounts, updateAdminUserRole } from "@/lib/data/admin-users";
+import { getDemoUserAccounts, setDemoUserRole } from "@/lib/data/users";
 import {
   adminCategorySchema,
   adminProductSchema,
@@ -61,6 +67,7 @@ import type {
   AdminOrderStatus,
   AdminProduct,
   AdminUser,
+  AdminUserAccount,
 } from "@/types";
 
 /* -------------------------------------------------------------------------- */
@@ -529,5 +536,90 @@ export async function deleteCategoryAction(
     return { ok: true, source: "database", data: { deleted: true } };
   } catch (error) {
     return failure<{ deleted: true }>(error, "Could not delete the category");
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Staff & Roles (super admin only)                                          */
+/* -------------------------------------------------------------------------- */
+
+/** The five assignable roles — `ADMIN` is a legacy value, never written back. */
+const assignableRoleSchema = z.enum(ASSIGNABLE_ROLES);
+
+/** Everything a role change can visibly affect. */
+function revalidateUserPaths(): void {
+  revalidatePath("/admin");
+  revalidatePath("/admin/staff");
+  revalidatePath("/admin/customers");
+}
+
+/**
+ * Moves one account to a new role.
+ *
+ * **Super admin only** (`users:manage`), and the rest of the policy lives in
+ * `checkRoleChange()` (`lib/rbac.ts`) so it can be read and tested on its own:
+ * nobody may change their own role, and the last super admin may not be demoted.
+ *
+ * Deletion is deliberately not offered anywhere: a role can always be taken
+ * away, but accounts are never removed from the console.
+ */
+export async function updateUserRoleAction(
+  userId: string,
+  newRole: unknown,
+): Promise<AdminActionResult<AdminUserAccount>> {
+  const gate = await requirePermission("users:manage");
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const parsedId = idSchema.safeParse(userId);
+  if (!parsedId.success) return { ok: false, error: "Invalid account id" };
+
+  const parsedRole = assignableRoleSchema.safeParse(newRole);
+  if (!parsedRole.success) {
+    return { ok: false, error: "Choose one of the five roles" };
+  }
+  const role = parsedRole.data;
+
+  const database = isDatabaseConfigured();
+  let accounts: AdminUserAccount[];
+  if (database) {
+    const rows = await getAdminUserAccounts();
+    if (!rows) return { ok: false, error: "Could not load the account list — try again" };
+    accounts = rows;
+  } else {
+    accounts = getDemoUserAccounts();
+  }
+
+  const target = accounts.find((account) => account.id === parsedId.data);
+  if (!target) {
+    return { ok: false, error: "That account no longer exists — reload the console" };
+  }
+
+  /* Choosing the role the account already has is a no-op, not an error. */
+  if (target.role === role) {
+    return { ok: true, source: database ? "database" : "demo", data: target };
+  }
+
+  const verdict = checkRoleChange({
+    accounts,
+    actorId: gate.user.id,
+    actorEmail: gate.user.email,
+    targetId: target.id,
+    newRole: role,
+  });
+  if (!verdict.ok) return { ok: false, error: verdict.error };
+
+  if (!database) {
+    const updated = setDemoUserRole(target.id, role);
+    if (!updated) return { ok: false, error: "That demo account no longer exists" };
+    revalidateUserPaths();
+    return { ok: true, source: "demo", data: updated };
+  }
+
+  try {
+    const updated = await updateAdminUserRole(target.id, role);
+    revalidateUserPaths();
+    return { ok: true, source: "database", data: updated };
+  } catch (error) {
+    return failure<AdminUserAccount>(error, "Could not update that role");
   }
 }

@@ -171,6 +171,7 @@ of sync, and the sidebar only ever shows what the role can actually open.
 | Coupons | ✅ | — | — | — |
 | Settings (hero/banners) | ✅ | — | ✅ | — |
 | Analytics | ✅ | — | — | — |
+| Staff & Roles (assign roles) | ✅ | — | — | — |
 
 How it is enforced:
 
@@ -180,7 +181,7 @@ How it is enforced:
    `/unauthorized?from=…`. This covers POSTs (Server Action calls) too.
 2. **Per-section layouts** — `app/admin/<section>/layout.tsx` calls
    `requireAdminSection(section)`, so a page can never render for the wrong role
-   even if the middleware were bypassed.
+   even if the middleware were bypassed (`/admin/staff` is super-admin only).
 3. **Server Actions** — every action in `app/admin/actions.ts` starts with
    `requirePermission("products:write")` and friends, which resolves the Auth.js
    session and checks it against the same matrix. An action is a public POST
@@ -244,11 +245,13 @@ Server Actions that run on the server, not in the browser:
 | `decidePaymentAction` | Manual wallet verification (bKash / Nagad / Rocket): approve → **Confirmed + Paid**, reject → **Cancelled + Failed**, plus COD cash collection → **Delivered + Paid**. A verified wallet payment now has its own **Confirmed** status (the console used to fold `CONFIRMED` into *Processing*) |
 | `addOrderNoteAction` / `refundOrderAction` | Order notes and full refunds |
 | `saveCategoryAction` / `deleteCategoryAction` | Category metadata (name, slug, emoji, blurb, parent) |
+| `updateUserRoleAction` | **Super admin only.** Moves an account between `SUPER_ADMIN`, `INVENTORY_MANAGER`, `SEO_MANAGER`, `SUPPORT_MANAGER` and `CUSTOMER` — refuses self-changes and protects the last super admin |
 
 Rules the actions follow:
 
 1. **Role-guarded.** Each action re-checks the Auth.js session *and* the caller's
-   role (`lib/rbac.ts`) before touching data — middleware guards the pages, but an
+   role (`lib/rbac.ts`) before touching data (`updateUserRoleAction` additionally
+   refuses to change the caller's own role, or to demote the last super admin) — middleware guards the pages, but an
    action is a public POST endpoint. A caller without the permission gets
    `{ ok: false, error }`, never data.
 2. **Zod-validated.** Arguments arrive as `unknown` and are parsed with the shared
@@ -347,6 +350,7 @@ app/
 ├── admin/                     operations console — products, orders, customers,
 │                              coupons, categories, analytics, settings
 │   ├── actions.ts             Server Actions (Zod + role guard + revalidatePath)
+│   ├── staff/page.tsx         Staff & Roles (super admin) — role assignment
 │   ├── layout.tsx             session + products/orders/categories for the console
 │   └── <section>/layout.tsx   RBAC gate per console section
 ├── api/                       auth, register, orders, products, upload, health

@@ -595,6 +595,23 @@ export interface AdminUser {
   role: AdminRole;
 }
 
+/**
+ * A user account as the **Staff & Roles** console lists it.
+ *
+ * `AdminUser` is the *signed-in* operator; this is any account on file — the
+ * super admin can move one between the five roles from `/admin/staff`.
+ */
+export interface AdminUserAccount {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  /** Always normalised: the legacy `ADMIN` value never reaches the console. */
+  role: SessionRole;
+  /** ISO date the account was created (or the demo's fixed join date). */
+  joinedAt: string;
+}
+
 /** Mirrors the Prisma `PaymentMethod` enum (card payments map to SSLCOMMERZ). */
 export type PaymentKey = "COD" | "BKASH" | "NAGAD" | "ROCKET" | "SSLCOMMERZ";
 

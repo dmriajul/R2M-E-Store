@@ -13,7 +13,12 @@
 import { compare, hash } from "bcryptjs";
 import { withDatabase } from "@/lib/prisma";
 import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD, isDatabaseConfigured } from "@/lib/demo-mode";
-import type { AuthRole, AuthUser } from "@/types";
+import type {
+  AdminUserAccount,
+  AuthRole,
+  AuthUser,
+  SessionRole,
+} from "@/types";
 
 export const BCRYPT_ROUNDS = 10;
 
@@ -24,6 +29,36 @@ export interface UserRecord extends AuthUser {
 
 interface DemoAccount extends UserRecord {
   demo: true;
+  /** Fixed join date so the console's "Joined" column is stable across renders. */
+  joinedAt: string;
+}
+
+/**
+ * Role changes made from **Staff & Roles** while no database is connected.
+ *
+ * The demo accounts are module constants, so an override map is the only way a
+ * super admin's change can be both visible in the console *and* honoured on the
+ * next sign-in. Keyed by normalised email; cleared when the server restarts
+ * (a database install writes to Postgres instead — see `lib/data/admin-users.ts`).
+ */
+const demoScope = globalThis as typeof globalThis & {
+  __mukraDemoRoleOverrides?: Map<string, SessionRole>;
+};
+
+/**
+ * The map lives on `globalThis` rather than in this module on purpose: Next.js
+ * compiles the console's server components, the Server Actions and the Auth.js
+ * route handler into separate server bundles, so a module-level `Map` would
+ * exist once **per bundle** — a role change recorded by the action would be
+ * invisible to the login route. One map per process keeps all three in step.
+ */
+const demoRoleOverrides: Map<string, SessionRole> = (demoScope.__mukraDemoRoleOverrides ??=
+  new Map<string, SessionRole>());
+
+/** Applies any pending demo override to an account record. */
+function withDemoRole(account: UserRecord): UserRecord {
+  const override = demoRoleOverrides.get(normalise(account.email));
+  return override ? { ...account, role: override } : account;
 }
 
 /**
@@ -39,6 +74,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     password: DEMO_PASSWORD,
     role: "SUPER_ADMIN",
     demo: true,
+    joinedAt: "2024-11-04T09:15:00.000Z",
   },
   {
     id: "demo-inventory",
@@ -48,6 +84,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     password: DEMO_PASSWORD,
     role: "INVENTORY_MANAGER",
     demo: true,
+    joinedAt: "2025-01-12T07:40:00.000Z",
   },
   {
     id: "demo-seo",
@@ -57,6 +94,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     password: DEMO_PASSWORD,
     role: "SEO_MANAGER",
     demo: true,
+    joinedAt: "2025-02-02T10:05:00.000Z",
   },
   {
     id: "demo-support",
@@ -66,6 +104,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     password: DEMO_PASSWORD,
     role: "SUPPORT_MANAGER",
     demo: true,
+    joinedAt: "2025-02-18T11:30:00.000Z",
   },
   {
     id: "demo-sarah",
@@ -75,6 +114,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     password: DEMO_PASSWORD,
     role: "CUSTOMER",
     demo: true,
+    joinedAt: "2025-03-09T14:20:00.000Z",
   },
 ] as const;
 
@@ -82,7 +122,7 @@ const normalise = (email: string): string => email.trim().toLowerCase();
 
 function demoUserFor(email: string, password: string): UserRecord | null {
   const account = DEMO_ACCOUNTS.find((entry) => entry.email === normalise(email));
-  if (account && password === account.password) return account;
+  if (account && password === account.password) return withDemoRole(account);
 
   // Any other email works with the shared demo password.
   if (!account && password === DEMO_PASSWORD) {
@@ -114,7 +154,10 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
         | null;
       return row;
     },
-    () => DEMO_ACCOUNTS.find((entry) => entry.email === normalise(email)) ?? null,
+    () => {
+      const account = DEMO_ACCOUNTS.find((entry) => entry.email === normalise(email));
+      return account ? withDemoRole(account) : null;
+    },
   );
 
   return data;
@@ -209,6 +252,42 @@ export async function createUser(
   );
 
   return { user: stripPassword(data), error: null, source };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Demo directory (no database)                                              */
+/* -------------------------------------------------------------------------- */
+
+/** The demo accounts as the Staff & Roles console lists them. */
+export function getDemoUserAccounts(): AdminUserAccount[] {
+  return DEMO_ACCOUNTS.map((account) => ({
+    id: account.id,
+    name: account.name,
+    email: account.email,
+    phone: account.phone ?? "",
+    role: withDemoRole(account).role as SessionRole,
+    joinedAt: account.joinedAt,
+  }));
+}
+
+/**
+ * Records a role change for a demo account so the console list *and* the next
+ * sign-in agree. Returns the updated account, or `null` for an unknown id.
+ */
+export function setDemoUserRole(id: string, role: SessionRole): AdminUserAccount | null {
+  const account = DEMO_ACCOUNTS.find((entry) => entry.id === id);
+  if (!account) return null;
+
+  demoRoleOverrides.set(account.email, role);
+
+  return {
+    id: account.id,
+    name: account.name,
+    email: account.email,
+    phone: account.phone ?? "",
+    role,
+    joinedAt: account.joinedAt,
+  };
 }
 
 export function stripPassword(user: UserRecord): AuthUser {

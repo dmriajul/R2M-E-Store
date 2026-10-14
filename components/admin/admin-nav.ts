@@ -7,6 +7,7 @@ import {
   Package,
   RotateCcw,
   Settings,
+  ShieldCheck,
   ShoppingCart,
   Tag,
   Users,
@@ -51,6 +52,13 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     label: "Management",
     items: [
       { href: "/admin/customers", label: "Customers", icon: Users, emoji: "👥", section: "customers" },
+      {
+        href: "/admin/staff",
+        label: "Staff & Roles",
+        icon: ShieldCheck,
+        emoji: "🛡️",
+        section: "staff",
+      },
       { href: "/admin/coupons", label: "Coupons", icon: Tag, emoji: "🏷️", section: "coupons" },
       { href: "/admin/categories", label: "Categories", icon: FolderTree, emoji: "📂", section: "categories" },
     ],
@@ -90,6 +98,10 @@ export const ADMIN_PAGE_META: Readonly<Record<string, { title: string; subtitle:
   "/admin/orders": { title: "Orders", subtitle: "Fulfilment queue and history" },
   "/admin/returns": { title: "Returns", subtitle: "Review refunds and exchanges" },
   "/admin/customers": { title: "Customers", subtitle: "Shoppers and their order history" },
+  "/admin/staff": {
+    title: "Staff & Roles",
+    subtitle: "Accounts and their console permissions",
+  },
   "/admin/coupons": { title: "Coupons", subtitle: "Discount codes and campaigns" },
   "/admin/categories": { title: "Categories", subtitle: "How the catalogue is grouped" },
   "/admin/settings": { title: "Settings", subtitle: "Store, homepage, shipping, payments and alerts" },
