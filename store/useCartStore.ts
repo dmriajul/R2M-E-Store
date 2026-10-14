@@ -15,6 +15,14 @@ interface CartState {
   total: number;
   /** Sum of every line quantity — drives the navbar badge. */
   itemCount: number;
+  /**
+   * Monotonic counter advanced by **every user-driven mutation** and by
+   * nothing else. It is excluded from `partialize`, so rehydrating a persisted
+   * bag leaves it at its current value. That is what lets the UI tell
+   * "the shopper changed the bag" apart from "we restored their bag on load" —
+   * feedback animations may only fire for the former.
+   */
+  revision: number;
 
   /**
    * Adds a line, keying it by `${productId}-${color}-${size}` so the same
@@ -71,6 +79,7 @@ export const useCartStore = create<CartState>()(
   items: [],
   total: 0,
   itemCount: 0,
+  revision: 0,
 
   addItem: (product, quantity = 1, variantOrColor, sizeArg) => {
     const variant: ProductVariant =
@@ -114,7 +123,7 @@ export const useCartStore = create<CartState>()(
         )
       : [...items, draft];
 
-    set(withTotals(nextItems));
+    set((state) => ({ ...withTotals(nextItems), revision: state.revision + 1 }));
 
     const nextTotal = get().total;
     toast.success("Added to bag! 🛍️", {
@@ -134,11 +143,10 @@ export const useCartStore = create<CartState>()(
     const line = resolveLine(items, identifier);
     if (!line) return;
 
-    set(
-      withTotals(
-        items.filter((item) => item.lineId !== line.lineId),
-      ),
-    );
+    set((state) => ({
+      ...withTotals(items.filter((item) => item.lineId !== line.lineId)),
+      revision: state.revision + 1,
+    }));
 
     toast("Removed from bag", { description: `${line.name} · ${line.size}` });
   },
@@ -153,18 +161,20 @@ export const useCartStore = create<CartState>()(
     const line = resolveLine(items, identifier);
     if (!line) return;
 
-    set(
-      withTotals(
+    set((state) => ({
+      ...withTotals(
         items.map((item) =>
           item.lineId === line.lineId
             ? { ...item, quantity: clampQuantity(quantity, item.stock) }
             : item,
         ),
       ),
-    );
+      revision: state.revision + 1,
+    }));
   },
 
-  clearCart: () => set(withTotals([])),
+  clearCart: () =>
+    set((state) => ({ ...withTotals([]), revision: state.revision + 1 })),
 
   getItemByLineId: (lineId) =>
     get().items.find((item) => item.lineId === lineId),
@@ -193,7 +203,7 @@ export const useCartStore = create<CartState>()(
           item.lineId === lineId ? { ...item, lineId: nextLineId, size } : item,
         );
 
-    set(withTotals(nextItems));
+    set((state) => ({ ...withTotals(nextItems), revision: state.revision + 1 }));
   },
 
   updateItemColor: (lineId, color) => {
@@ -219,7 +229,7 @@ export const useCartStore = create<CartState>()(
           item.lineId === lineId ? { ...item, lineId: nextLineId, color } : item,
         );
 
-    set(withTotals(nextItems));
+    set((state) => ({ ...withTotals(nextItems), revision: state.revision + 1 }));
     },
     }),
     {
