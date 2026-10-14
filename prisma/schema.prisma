@@ -30,6 +30,7 @@ datasource db {
 /// everywhere (`normalizeRole()` in lib/rbac.ts).
 enum Role {
   CUSTOMER
+  // Legacy alias kept for existing rows — `normalizeRole()` maps it to SUPER_ADMIN.
   ADMIN
   SUPER_ADMIN
   INVENTORY_MANAGER

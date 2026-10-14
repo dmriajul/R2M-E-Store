@@ -428,7 +428,7 @@ async function main(): Promise<void> {
     admin: admin.email,
   };
 
-  console.warn("[seed] Mukra ready 🌟", counts);
+  console.warn("[seed] Mukra ready", counts);
 }
 
 main()
