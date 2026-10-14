@@ -25,9 +25,16 @@ datasource db {
 /*  Enums                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/// Console roles. `ADMIN` is the original two-role build's staff value, kept so
+/// an un-migrated database keeps working — it is read as `SUPER_ADMIN`
+/// everywhere (`normalizeRole()` in lib/rbac.ts).
 enum Role {
   CUSTOMER
   ADMIN
+  SUPER_ADMIN
+  INVENTORY_MANAGER
+  SEO_MANAGER
+  SUPPORT_MANAGER
 }
 
 enum OrderStatus {

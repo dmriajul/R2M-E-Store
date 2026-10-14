@@ -306,9 +306,9 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
         if (order.id !== id) return order;
         const next: AdminOrder = {
           ...order,
-          // The console's status set has no "confirmed" — a verified payment
-          // moves the order straight into preparation.
-          status: "processing",
+          // A verified manual payment lands on Confirmed + Paid, mirroring
+          // `decideAdminManualPayment()` in Postgres.
+          status: "confirmed",
           paymentStatus: "PAID",
           notes: [...order.notes, "Payment verified by an operator."],
         };

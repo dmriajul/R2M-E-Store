@@ -80,12 +80,13 @@ const orderInclude = {
 /* -------------------------------------------------------------------------- */
 
 /**
- * `CONFIRMED` has no console status of its own: a verified wallet payment is
- * "being prepared", which the products/orders tables show as **Processing**.
+ * Database status → the console's own vocabulary. `CONFIRMED` is the state a
+ * verified manual wallet payment lands in and is shown as **Confirmed**; the
+ * team moves the order to *Processing* when preparation actually starts.
  */
 const UI_ORDER_STATUS: Readonly<Record<string, AdminOrderStatus>> = {
   PENDING: "pending",
-  CONFIRMED: "processing",
+  CONFIRMED: "confirmed",
   PROCESSING: "processing",
   SHIPPED: "shipped",
   DELIVERED: "delivered",
@@ -96,6 +97,7 @@ const UI_ORDER_STATUS: Readonly<Record<string, AdminOrderStatus>> = {
 /** Console status → Prisma `OrderStatus`. */
 export const ORDER_STATUS_FOR_DB: Readonly<Record<AdminOrderStatus, string>> = {
   pending: "PENDING",
+  confirmed: "CONFIRMED",
   processing: "PROCESSING",
   shipped: "SHIPPED",
   delivered: "DELIVERED",

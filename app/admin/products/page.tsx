@@ -10,6 +10,7 @@ import { ProductArtwork } from "@/components/product/ProductArtwork";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { StockBadge } from "@/components/admin/StatusBadge";
 import { ProductForm } from "@/components/admin/ProductForm";
+import { useAdminSession } from "@/components/admin/AdminSessionProvider";
 import { ConfirmActionDialog } from "@/components/admin/ConfirmActionDialog";
 import {
   adminButtonBlue,
@@ -54,6 +55,10 @@ export default function AdminProductsPage() {
   /* Live data: the admin layout hydrates this store from Postgres (or keeps
      the in-session demo catalogue when no database is configured). */
   const products = useAdminStore((state) => state.products);
+  /* The SEO manager edits metadata and placement only — no create, no delete. */
+  const { can } = useAdminSession();
+  const canWrite = can("products:write");
+  const canManageSeo = can("products:seo");
   const deleteProducts = useAdminStore((state) => state.deleteProducts);
   const duplicateProduct = useAdminStore((state) => state.duplicateProduct);
   const setProductsOutOfStock = useAdminStore((state) => state.setProductsOutOfStock);
@@ -298,17 +303,21 @@ export default function AdminProductsPage() {
             icon={<Pencil aria-hidden className="size-3.5" />}
             onClick={() => openEdit(product)}
           />
-          <IconAction
-            label={`Duplicate ${product.name}`}
-            icon={<Copy aria-hidden className="size-3.5" />}
-            onClick={() => handleDuplicate(product)}
-          />
-          <IconAction
-            label={`Delete ${product.name}`}
-            icon={<Trash2 aria-hidden className="size-3.5" />}
-            destructive
-            onClick={() => setPendingDelete(product)}
-          />
+          {canWrite && (
+            <>
+              <IconAction
+                label={`Duplicate ${product.name}`}
+                icon={<Copy aria-hidden className="size-3.5" />}
+                onClick={() => handleDuplicate(product)}
+              />
+              <IconAction
+                label={`Delete ${product.name}`}
+                icon={<Trash2 aria-hidden className="size-3.5" />}
+                destructive
+                onClick={() => setPendingDelete(product)}
+              />
+            </>
+          )}
         </span>
       ),
     },
@@ -367,10 +376,12 @@ export default function AdminProductsPage() {
               ))}
             </select>
 
-            <button type="button" onClick={openCreate} className={cn(adminButtonBlue, "min-h-10")}>
-              <Plus aria-hidden className="size-4" />
-              Add Product
-            </button>
+            {canWrite && (
+              <button type="button" onClick={openCreate} className={cn(adminButtonBlue, "min-h-10")}>
+                <Plus aria-hidden className="size-4" />
+                Add Product
+              </button>
+            )}
           </div>
         </div>
 
@@ -420,15 +431,20 @@ export default function AdminProductsPage() {
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <button
               type="button"
+              disabled={!canWrite}
               onClick={handleBulkOutOfStock}
-              className={cn(adminButtonGhost, "min-h-9 px-3")}
+              className={cn(adminButtonGhost, "min-h-9 px-3 disabled:opacity-40")}
             >
               Set Out of Stock
             </button>
             <button
               type="button"
+              disabled={!canWrite}
               onClick={() => setBulkDeleteOpen(true)}
-              className={cn(adminButtonBlue, "min-h-9 bg-rose-500 px-3 text-white hover:bg-rose-400")}
+              className={cn(
+                adminButtonBlue,
+                "min-h-9 bg-rose-500 px-3 text-white hover:bg-rose-400 disabled:opacity-40",
+              )}
             >
               <Trash2 aria-hidden className="size-3.5" />
               Delete Selected
@@ -452,12 +468,19 @@ export default function AdminProductsPage() {
         columns={columns}
         rowKey={(product) => product.id}
         initialSort={initialSort}
-        selectable
+        selectable={canWrite}
         selected={selected}
         onSelectedChange={setSelected}
         onRowClick={openEdit}
         emptyMessage="No products match these filters."
       />
+
+      {canManageSeo && !canWrite && (
+        <p className="rounded-xl border border-[#242424] bg-[#141414] px-4 py-3 text-[11px] text-muted-foreground">
+          Your role edits product metadata, publication and display placement. Pricing, media
+          and stock belong to the inventory team.
+        </p>
+      )}
 
       <ProductForm open={formOpen} onOpenChange={setFormOpen} product={editing} />
 

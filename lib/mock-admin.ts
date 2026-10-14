@@ -41,13 +41,12 @@ import type {
   StockState,
 } from "@/types";
 
-/** Signed-in operator (decorative — there is no auth backend). */
-export const ADMIN_USER = {
-  name: "Riajul Khandokar",
-  email: "admin@mukra.com",
-  role: "Admin",
-  initials: "RK",
-} as const;
+/*
+ * There is no `ADMIN_USER` here any more: the console renders the real Auth.js
+ * session (`lib/auth.ts`, `components/admin/AdminSessionProvider.tsx`). The
+ * seeded super admin lives in `lib/data/users.ts` (demo) and `prisma/seed.ts`
+ * (database).
+ */
 
 /** Default threshold: stock at or below this (but above zero) reads as low. */
 export const ADMIN_LOW_STOCK_THRESHOLD = 20;
@@ -303,9 +302,10 @@ const shiftHours = (iso: string, hours: number): string =>
 
 const STATUS_RANK: Readonly<Record<AdminOrderStatus, number>> = {
   pending: 1,
-  processing: 2,
-  shipped: 3,
-  delivered: 4,
+  confirmed: 2,
+  processing: 3,
+  shipped: 4,
+  delivered: 5,
   cancelled: 0,
   refunded: 0,
 };
@@ -333,6 +333,7 @@ export function buildAdminTimeline(order: AdminOrder): OrderTimelineStep[] {
   const steps = [
     step("placed", "Order Placed", "🧾", placedAt, "done"),
     step("paid", "Payment Confirmed", "💳", shiftHours(placedAt, 0.25), "done"),
+    step("confirmed", "Confirmed", "✅", shiftHours(placedAt, 1), "done"),
     step("processing", "Processing", "📦", shiftHours(placedAt, 6), "done"),
     step("shipped", "Shipped", "🚚", shiftHours(placedAt, 28), "done"),
     step("delivered", "Delivered", "🏠", shiftHours(placedAt, 54), "done"),
@@ -845,6 +846,7 @@ export const ADMIN_CURRENCIES = ["BDT", "USD", "EUR"] as const;
 export const ADMIN_TIMEZONES = ["Asia/Dhaka", "Asia/Kolkata", "Europe/London", "America/New_York"] as const;
 export const ADMIN_STATUSES: readonly AdminOrderStatus[] = [
   "pending",
+  "confirmed",
   "processing",
   "shipped",
   "delivered",
@@ -854,6 +856,7 @@ export const ADMIN_STATUSES: readonly AdminOrderStatus[] = [
 
 export const ADMIN_ORDER_STATUS_LABEL: Readonly<Record<AdminOrderStatus, string>> = {
   pending: "Pending",
+  confirmed: "Confirmed",
   processing: "Processing",
   shipped: "Shipped",
   delivered: "Delivered",

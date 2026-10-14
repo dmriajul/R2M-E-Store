@@ -1,3 +1,5 @@
+import { SECTION_ROLES, type AdminSection } from "@/lib/rbac";
+import type { AdminRole } from "@/types";
 import {
   FolderTree,
   LayoutDashboard,
@@ -18,6 +20,8 @@ export interface AdminNavItem {
   /** Emoji shown in the collapsed rail so sections stay readable. */
   emoji: string;
   pendingBadge?: boolean;
+  /** Console section this link opens — its roles come from `lib/rbac.ts`. */
+  section: AdminSection;
 }
 
 export interface AdminNavSection {
@@ -30,28 +34,54 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
   {
     label: "Main",
     items: [
-      { href: "/admin", label: "Dashboard", icon: LayoutDashboard, emoji: "📊" },
-      { href: "/admin/products", label: "Products", icon: Package, emoji: "📦" },
-      { href: "/admin/orders", label: "Orders", icon: ShoppingCart, emoji: "🛒" },
-      { href: "/admin/returns", label: "Returns", icon: RotateCcw, emoji: "↩️", pendingBadge: true },
+      { href: "/admin", label: "Dashboard", icon: LayoutDashboard, emoji: "📊", section: "dashboard" },
+      { href: "/admin/products", label: "Products", icon: Package, emoji: "📦", section: "products" },
+      { href: "/admin/orders", label: "Orders", icon: ShoppingCart, emoji: "🛒", section: "orders" },
+      {
+        href: "/admin/returns",
+        label: "Returns",
+        icon: RotateCcw,
+        emoji: "↩️",
+        pendingBadge: true,
+        section: "returns",
+      },
     ],
   },
   {
     label: "Management",
     items: [
-      { href: "/admin/customers", label: "Customers", icon: Users, emoji: "👥" },
-      { href: "/admin/coupons", label: "Coupons", icon: Tag, emoji: "🏷️" },
-      { href: "/admin/categories", label: "Categories", icon: FolderTree, emoji: "📂" },
+      { href: "/admin/customers", label: "Customers", icon: Users, emoji: "👥", section: "customers" },
+      { href: "/admin/coupons", label: "Coupons", icon: Tag, emoji: "🏷️", section: "coupons" },
+      { href: "/admin/categories", label: "Categories", icon: FolderTree, emoji: "📂", section: "categories" },
     ],
   },
   {
     label: "Settings",
     items: [
-      { href: "/admin/settings", label: "Settings", icon: Settings, emoji: "⚙️" },
-      { href: "/admin/analytics", label: "Analytics", icon: LineChart, emoji: "📈" },
+      { href: "/admin/settings", label: "Settings", icon: Settings, emoji: "⚙️", section: "settings" },
+      { href: "/admin/analytics", label: "Analytics", icon: LineChart, emoji: "📈", section: "analytics" },
     ],
   },
 ] as const;
+
+/** Roles allowed to open a nav item, straight from the RBAC matrix. */
+export function navItemRoles(item: AdminNavItem): readonly AdminRole[] {
+  return SECTION_ROLES[item.section];
+}
+
+/**
+ * The navigation this role may actually use.
+ *
+ * Items the role can't open are dropped and empty sections disappear, so an
+ * inventory manager never sees a Coupons link and support never sees Settings —
+ * matching what `middleware.ts` and the per-section layouts enforce.
+ */
+export function navForRole(role: AdminRole): AdminNavSection[] {
+  return ADMIN_NAV.map((section) => ({
+    label: section.label,
+    items: section.items.filter((item) => navItemRoles(item).includes(role)),
+  })).filter((section) => section.items.length > 0);
+}
 
 /** Breadcrumb/page-title copy for each console route. */
 export const ADMIN_PAGE_META: Readonly<Record<string, { title: string; subtitle: string }>> = {

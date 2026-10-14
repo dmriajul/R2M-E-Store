@@ -45,6 +45,8 @@ export function StatusBadge({
 
 const ORDER_TONES: Readonly<Record<AdminOrderStatus, BadgeTone>> = {
   pending: "amber",
+  /** A verified manual payment — paid, waiting to be prepared. */
+  confirmed: "gold",
   processing: "blue",
   shipped: "violet",
   delivered: "green",

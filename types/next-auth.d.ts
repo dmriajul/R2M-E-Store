@@ -1,5 +1,5 @@
 import type { DefaultSession } from "next-auth";
-import type { AuthRole } from "@/types";
+import type { AuthRole, SessionRole } from "@/types";
 
 /**
  * Auth.js module augmentation: the session and JWT carry our user id and role,
@@ -9,7 +9,8 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      role: AuthRole;
+      /** Already normalised: never the legacy `ADMIN` value. */
+      role: SessionRole;
       phone?: string;
     } & DefaultSession["user"];
   }
@@ -23,7 +24,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     id?: string;
-    role?: AuthRole;
+    role?: SessionRole;
     phone?: string;
   }
 }

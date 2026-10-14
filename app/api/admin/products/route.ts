@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireActionRole } from "@/lib/auth";
+import { rolesForPermission, type AdminPermission } from "@/lib/rbac";
 import {
   getAdminProducts,
   parseAdminProduct,
@@ -11,18 +12,36 @@ import type { AdminProduct, ApiResponse } from "@/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function authorized() {
-  const session = await auth();
-  return session?.user?.role === "ADMIN";
+/**
+ * Role check against the RBAC matrix. `products:write` covers the inventory
+ * team and super admins; `products:read` additionally covers the SEO manager.
+ * The failure carries the right status: 401 without a session, 403 with one
+ * whose role is too low.
+ */
+async function authorized(
+  permission: AdminPermission,
+): Promise<{ ok: true } | { ok: false; status: 401 | 403 }> {
+  const gate = await requireActionRole(rolesForPermission(permission));
+  if (gate.ok) return { ok: true };
+  return { ok: false, status: gate.reason === "unauthenticated" ? 401 : 403 };
+}
+
+/** Shared denial body. */
+function denied(status: 401 | 403) {
+  return NextResponse.json(
+    {
+      data: null,
+      error:
+        status === 401 ? "Administrator access required" : "Your role can't access this resource",
+      success: false,
+    },
+    { status },
+  );
 }
 
 export async function GET(): Promise<NextResponse<ApiResponse<AdminProduct[]>>> {
-  if (!(await authorized())) {
-    return NextResponse.json(
-      { data: null, error: "Administrator access required", success: false },
-      { status: 403 },
-    );
-  }
+  const read = await authorized("products:read");
+  if (!read.ok) return denied(read.status);
 
   try {
     const products = await getAdminProducts();
@@ -44,12 +63,8 @@ export async function GET(): Promise<NextResponse<ApiResponse<AdminProduct[]>>> 
 export async function POST(
   request: NextRequest,
 ): Promise<NextResponse<ApiResponse<{ product: AdminProduct | null }>>> {
-  if (!(await authorized())) {
-    return NextResponse.json(
-      { data: null, error: "Administrator access required", success: false },
-      { status: 403 },
-    );
-  }
+  const write = await authorized("products:write");
+  if (!write.ok) return denied(write.status);
 
   let input: unknown;
   try {

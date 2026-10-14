@@ -2,6 +2,7 @@ import { AdminDataError } from "@/lib/data/admin-errors";
 import { getPrisma } from "@/lib/prisma";
 import {
   adminProductSchema,
+  type AdminProductSeoValues,
   type AdminProductValues,
 } from "@/lib/validations";
 import {
@@ -218,6 +219,16 @@ export function parseAdminProduct(input: unknown) {
 /*  (Demo installs without DATABASE_URL never reach this code: the action       */
 /*  reports `source: "demo"` and the console applies the change locally.)       */
 
+/** Prisma's unique-constraint violation. */
+function isUniqueConflict(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
+}
+
 /** Prisma's foreign-key violation — a product that appears in an order. */
 function isForeignKeyViolation(error: unknown): boolean {
   return (
@@ -236,6 +247,62 @@ async function requireDatabase() {
     );
   }
   return db;
+}
+
+/**
+ * Applies the SEO manager's slice of a product (slug, metadata, badge,
+ * publication and display placement). Everything else — name, description,
+ * pricing, media, stock — is left untouched, so this action can never
+ * accidentally overwrite an inventory edit.
+ */
+export async function updateAdminProductSeo(
+  id: string,
+  values: AdminProductSeoValues,
+): Promise<AdminProduct> {
+  const db = await requireDatabase();
+
+  const data: Record<string, unknown> = {};
+  if (values.slug !== undefined) data.slug = values.slug;
+  if (values.metaTitle !== undefined) {
+    data.metaTitle = values.metaTitle.trim() || null;
+  }
+  if (values.metaDescription !== undefined) {
+    data.metaDescription = values.metaDescription.trim() || null;
+  }
+  if (values.badge !== undefined) data.badge = values.badge === "none" ? null : values.badge;
+  if (values.categories !== undefined) {
+    data.categories = Array.from(new Set(values.categories));
+  }
+  if (values.active !== undefined) data.active = values.active;
+  if (values.featured !== undefined) data.featured = values.featured;
+  if (values.featuredOrder !== undefined) data.featuredOrder = values.featuredOrder;
+  if (values.virtualBoutique !== undefined) data.virtualBoutique = values.virtualBoutique;
+  if (values.newArrival !== undefined) data.newArrival = values.newArrival;
+  if (values.bestSeller !== undefined) data.bestSeller = values.bestSeller;
+
+  if (Object.keys(data).length === 0) return loadAdminProduct(db, id);
+
+  try {
+    const row = (await db.product.update({
+      where: { id },
+      data,
+      include: productInclude,
+    })) as AdminProductRow;
+
+    return toAdminProduct(row);
+  } catch (error) {
+    if (isUniqueConflict(error)) {
+      throw new AdminDataError("Another product already uses this slug");
+    }
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (code === "P2025") {
+      throw new AdminDataError("That product no longer exists — reload the console");
+    }
+    throw error;
+  }
 }
 
 /** Re-reads one product as the console renders it. */

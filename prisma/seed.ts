@@ -5,10 +5,11 @@
  *   npm run db:seed        # load this file
  *
  * It loads exactly what the storefront shows in demo mode: the 12 catalogue
- * products from `lib/site.ts`, the eight category cards, one admin
- * (`admin@mukra.com / admin123`), three shoppers (`password123`), the four
- * coupons the console lists and five orders — including two wallet payments
- * waiting for an operator to verify.
+ * products from `lib/site.ts`, the eight category cards, the staff accounts for
+ * every console role (`admin@mukra.com / admin123` plus
+ * `inventory@ · seo@ · support@mukra.com` on `password123`), three shoppers
+ * (`password123`), the four coupons the console lists and five orders —
+ * including two wallet payments waiting for an operator to verify.
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -64,14 +65,41 @@ async function main(): Promise<void> {
   await prisma.user.deleteMany();
 
   /* ---------- users ---------- */
+  /* One account per console role, so RBAC can be exercised on a real database. */
   const admin = await prisma.user.create({
     data: {
       name: "Riajul Khandokar",
       email: "admin@mukra.com",
       phone: "+880 1712 345678",
       password: adminPassword,
-      role: "ADMIN",
+      role: "SUPER_ADMIN",
     },
+  });
+
+  await prisma.user.createMany({
+    data: [
+      {
+        name: "Imran Hossain",
+        email: "inventory@mukra.com",
+        phone: "+880 1713 220011",
+        password,
+        role: "INVENTORY_MANAGER",
+      },
+      {
+        name: "Nusrat Jahan",
+        email: "seo@mukra.com",
+        phone: "+880 1714 330022",
+        password,
+        role: "SEO_MANAGER",
+      },
+      {
+        name: "Tanvir Hasan",
+        email: "support@mukra.com",
+        phone: "+880 1715 440033",
+        password,
+        role: "SUPPORT_MANAGER",
+      },
+    ],
   });
 
   const [sarah, priya, fatima] = await Promise.all([

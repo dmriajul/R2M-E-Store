@@ -53,6 +53,7 @@ const DAY = 86_400_000;
 const STATUS_TABS: readonly { id: StatusTab; label: { en: string; bn: string } }[] = [
   { id: "all", label: { en: "All", bn: "সব" } },
   { id: "pending", label: { en: "Pending", bn: "লম্বা" } },
+  { id: "confirmed", label: { en: "Confirmed", bn: "নিশ্চিত" } },
   { id: "processing", label: { en: "Processing", bn: "প্রক্রিয়াকরণ" } },
   { id: "shipped", label: { en: "Shipped", bn: "পাঠানো হয়েছে" } },
   { id: "delivered", label: { en: "Delivered", bn: "বিতরণ" } },
@@ -206,6 +207,7 @@ export default function AdminOrdersPage() {
       language === "bn"
         ? {
             pending: "লম্বা",
+            confirmed: "নিশ্চিত",
             processing: "প্রক্রিয়াকরণ",
             shipped: "পাঠানো হয়েছে",
             delivered: "বিতরণ",
@@ -214,6 +216,7 @@ export default function AdminOrdersPage() {
           }
         : {
             pending: "Pending",
+            confirmed: "Confirmed",
             processing: "Processing",
             shipped: "Shipped",
             delivered: "Delivered",

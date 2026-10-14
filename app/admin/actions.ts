@@ -9,9 +9,12 @@
  *
  * Three rules, in order:
  *
- * 1. **Auth first.** The middleware already blocks `/admin/*` for anyone
- *    without the ADMIN role, but a Server Action is a public POST endpoint —
- *    so each one re-checks the session before touching data.
+ * 1. **Auth first.** The middleware blocks `/admin/*` for anyone without a
+ *    console role, but a Server Action is a public POST endpoint — so each one
+ *    re-checks the session *and* the caller's role before touching data. The
+ *    role matrix lives in `lib/rbac.ts`: `SUPER_ADMIN` can do everything,
+ *    `INVENTORY_MANAGER` owns products/categories, `SEO_MANAGER` owns product
+ *    metadata and settings, `SUPPORT_MANAGER` owns orders/returns/customers.
  * 2. **Validate everything.** Arguments arrive from the browser as `unknown`
  *    and are parsed with the shared Zod schemas in `lib/validations.ts`.
  * 3. **Never fake a write.** With `DATABASE_URL` configured, a failure is
@@ -24,8 +27,12 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { requireActionRole } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/demo-mode";
+import {
+  rolesForPermission,
+  type AdminPermission,
+} from "@/lib/rbac";
 import { describeAdminError } from "@/lib/data/admin-errors";
 import {
   deleteAdminProducts,
@@ -33,6 +40,7 @@ import {
   persistAdminProduct,
   restockAdminProduct,
   setAdminProductsOutOfStock,
+  updateAdminProductSeo,
 } from "@/lib/data/admin-products";
 import {
   appendAdminOrderNote,
@@ -42,12 +50,17 @@ import {
   type PaymentDecision,
 } from "@/lib/data/admin-orders";
 import { deleteAdminCategory, saveAdminCategory } from "@/lib/data/categories";
-import { adminCategorySchema, adminProductSchema } from "@/lib/validations";
+import {
+  adminCategorySchema,
+  adminProductSchema,
+  adminProductSeoSchema,
+} from "@/lib/validations";
 import type {
   AdminCategory,
   AdminOrder,
   AdminOrderStatus,
   AdminProduct,
+  AdminUser,
 } from "@/types";
 
 /* -------------------------------------------------------------------------- */
@@ -73,16 +86,19 @@ function failure<T>(error: unknown, fallback: string): AdminActionResult<T> {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Auth                                                                      */
+/*  RBAC                                                                      */
 /* -------------------------------------------------------------------------- */
 
-const ADMIN_DENIED = "Administrator access required. Sign in with an admin account.";
-
-/** Returns an error message when the caller is not an admin, else `null`. */
-async function adminGuard(): Promise<string | null> {
-  const session = await auth();
-  if (session?.user?.role !== "ADMIN") return ADMIN_DENIED;
-  return null;
+/**
+ * Resolves the session and checks it against the roles that hold `permission`
+ * (`lib/rbac.ts`). Every action calls this before it touches Prisma.
+ */
+async function requirePermission(
+  permission: AdminPermission,
+): Promise<{ ok: true; user: AdminUser } | { ok: false; error: string }> {
+  const gate = await requireActionRole(rolesForPermission(permission));
+  if (!gate.ok) return { ok: false, error: gate.message };
+  return { ok: true, user: gate.user };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -108,6 +124,7 @@ const orderNumberSchema = z
 
 const orderStatusSchema = z.enum([
   "pending",
+  "confirmed",
   "processing",
   "shipped",
   "delivered",
@@ -173,8 +190,8 @@ export async function saveProductAction(
   input: unknown,
   productId?: string,
 ): Promise<AdminActionResult<AdminProduct>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("products:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsed = adminProductSchema.safeParse(input);
   if (!parsed.success) {
@@ -203,8 +220,8 @@ export async function saveProductAction(
 export async function deleteProductsAction(
   ids: string[],
 ): Promise<AdminActionResult<{ deleted: number }>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("products:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsed = idsSchema.safeParse(ids);
   if (!parsed.success) {
@@ -222,12 +239,44 @@ export async function deleteProductsAction(
   }
 }
 
+/**
+ * The SEO manager's write path: slug, metadata, badge, publication and display
+ * placement only (`adminProductSeoSchema`). Inventory fields are never touched,
+ * so an SEO edit can't clobber a stock or pricing change.
+ */
+export async function saveProductSeoAction(
+  productId: string,
+  input: unknown,
+): Promise<AdminActionResult<AdminProduct>> {
+  const gate = await requirePermission("products:seo");
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const parsedId = idSchema.safeParse(productId);
+  if (!parsedId.success) return { ok: false, error: "Invalid product id" };
+
+  const parsed = adminProductSeoSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid product metadata" };
+  }
+
+  if (!isDatabaseConfigured()) return demo();
+
+  try {
+    const product = await updateAdminProductSeo(parsedId.data, parsed.data);
+
+    revalidateProductPaths(product.slug);
+    return { ok: true, source: "database", data: product };
+  } catch (error) {
+    return failure<AdminProduct>(error, "Could not save the product metadata");
+  }
+}
+
 /** Copies a product as an unpublished draft. */
 export async function duplicateProductAction(
   id: string,
 ): Promise<AdminActionResult<AdminProduct>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("products:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { ok: false, error: "Invalid product id" };
@@ -247,8 +296,8 @@ export async function duplicateProductAction(
 export async function setProductsOutOfStockAction(
   ids: string[],
 ): Promise<AdminActionResult<{ updated: number }>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("products:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsed = idsSchema.safeParse(ids);
   if (!parsed.success) {
@@ -271,8 +320,8 @@ export async function restockProductAction(
   id: string,
   units: number,
 ): Promise<AdminActionResult<AdminProduct>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("products:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsedId = idSchema.safeParse(id);
   const parsedUnits = restockSchema.safeParse(units);
@@ -306,8 +355,8 @@ export async function updateOrderStatusAction(
   status: AdminOrderStatus,
   note?: string,
 ): Promise<AdminActionResult<AdminOrder>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("orders:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsedNumber = orderNumberSchema.safeParse(orderNumber);
   const parsedStatus = orderStatusSchema.safeParse(status);
@@ -345,8 +394,8 @@ export async function decidePaymentAction(
   orderNumber: string,
   decision: PaymentDecision,
 ): Promise<AdminActionResult<AdminOrder>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("orders:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsedNumber = orderNumberSchema.safeParse(orderNumber);
   const parsedDecision = paymentDecisionSchema.safeParse(decision);
@@ -372,8 +421,8 @@ export async function addOrderNoteAction(
   orderNumber: string,
   note: string,
 ): Promise<AdminActionResult<AdminOrder>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("orders:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsedNumber = orderNumberSchema.safeParse(orderNumber);
   const parsedNote = orderNoteSchema.safeParse(note);
@@ -401,8 +450,8 @@ export async function refundOrderAction(
   orderNumber: string,
   note?: string,
 ): Promise<AdminActionResult<AdminOrder>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("orders:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsedNumber = orderNumberSchema.safeParse(orderNumber);
   const parsedNote = note === undefined ? null : orderNoteSchema.safeParse(note);
@@ -437,8 +486,8 @@ export async function saveCategoryAction(
   input: unknown,
   categoryId?: string,
 ): Promise<AdminActionResult<AdminCategory>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("categories:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsed = adminCategorySchema.safeParse(input);
   if (!parsed.success) {
@@ -466,8 +515,8 @@ export async function saveCategoryAction(
 export async function deleteCategoryAction(
   id: string,
 ): Promise<AdminActionResult<{ deleted: true }>> {
-  const denied = await adminGuard();
-  if (denied) return { ok: false, error: denied };
+  const gate = await requirePermission("categories:write");
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { ok: false, error: "Invalid category id" };

@@ -1,10 +1,13 @@
 /**
  * Users — database when configured, demo accounts otherwise.
  *
- * Passwords are hashed with bcrypt in the database path. In demo mode two
- * well-known accounts exist (`admin@littleluxe.com / admin123` and
- * `sarah@example.com / password123`) and *any* email works with
- * `password123`, mirroring the mock auth the storefront shipped with.
+ * Passwords are hashed with bcrypt in the database path. In demo mode a set of
+ * well-known accounts exists so **every console role can be tried without a
+ * database**: the super admin (and the legacy `ADMIN` alias), one account per
+ * manager role, and a shopper (`sarah@example.com / password123`). Any other
+ * email also works with `password123`, mirroring the mock auth the storefront
+ * shipped with — those sessions are always `CUSTOMER` unless a demo account
+ * matches, so the extra accounts can't leak console access.
  */
 
 import { compare, hash } from "bcryptjs";
@@ -28,7 +31,10 @@ interface DemoAccount extends UserRecord {
   demo: true;
 }
 
-/** Accounts that always exist so the demo can be signed into. */
+/**
+ * Accounts that always exist so the demo (and each RBAC role) can be signed
+ * into. Every non-admin account uses the shared demo password.
+ */
 export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
     id: "demo-admin",
@@ -36,7 +42,34 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     email: DEMO_ADMIN_EMAIL,
     phone: "+880 1712 345678",
     password: DEMO_ADMIN_PASSWORD,
-    role: "ADMIN",
+    role: "SUPER_ADMIN",
+    demo: true,
+  },
+  {
+    id: "demo-inventory",
+    name: "Imran Hossain",
+    email: "inventory@littleluxe.com",
+    phone: "+880 1713 220011",
+    password: DEMO_PASSWORD,
+    role: "INVENTORY_MANAGER",
+    demo: true,
+  },
+  {
+    id: "demo-seo",
+    name: "Nusrat Jahan",
+    email: "seo@littleluxe.com",
+    phone: "+880 1714 330022",
+    password: DEMO_PASSWORD,
+    role: "SEO_MANAGER",
+    demo: true,
+  },
+  {
+    id: "demo-support",
+    name: "Tanvir Hasan",
+    email: "support@littleluxe.com",
+    phone: "+880 1715 440033",
+    password: DEMO_PASSWORD,
+    role: "SUPPORT_MANAGER",
     demo: true,
   },
   {
