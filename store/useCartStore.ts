@@ -233,7 +233,7 @@ export const useCartStore = create<CartState>()(
     },
     }),
     {
-      name: "little-luxe-cart",
+      name: "mukra-cart",
       storage: createJSONStorage(() => localStorage),
       /** Only the lines persist; totals are recomputed on rehydrate. */
       partialize: (state) => ({ items: state.items }),

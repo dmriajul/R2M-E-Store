@@ -135,7 +135,7 @@ export const FEATURES = {
 export const AUTH_SECRET =
   process.env.AUTH_SECRET ??
   process.env.NEXTAUTH_SECRET ??
-  "little-luxe-demo-secret-change-me-in-production";
+  "mukra-demo-secret-change-me-in-production";
 
 export const AUTH_URL =
   process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
