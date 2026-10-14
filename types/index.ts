@@ -324,6 +324,20 @@ export interface DashboardUser {
   totalSpent: number;
 }
 
+/**
+ * Whose account the in-memory dashboard data belongs to.
+ *
+ * `demo` marks the seeded demo shopper (`sarah@example.com`) — the only identity
+ * the mock orders/addresses/notifications belong to. Every other account starts
+ * with empty collections, so one shopper's records can never surface under
+ * another account.
+ */
+export interface DashboardIdentity {
+  id: string;
+  email: string;
+  demo: boolean;
+}
+
 export type DashboardPreferenceKey =
   | "emailNotifications"
   | "smsNotifications"

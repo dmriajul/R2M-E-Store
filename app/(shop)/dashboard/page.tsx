@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Gift, ShoppingBag, Sparkles, Ticket } from "lucide-react";
+import { ArrowRight, Gift, ShoppingBag, ShieldCheck, Sparkles, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { formatPrice } from "@/lib/utils";
 import {
-  DEMO_USER,
   getActiveOrderCount,
   getLastDeliveredOrder,
   getRecentOrders,
   getRecommendedProducts,
 } from "@/lib/mock-dashboard";
+import { useDashboardSession } from "@/components/dashboard/DashboardSessionProvider";
+import { ADMIN_ROLE_LABEL, isStaff, landingPathFor, normalizeRole } from "@/lib/rbac";
+import type { AdminRole } from "@/types";
 import { useDashboardStore } from "@/store/useDashboardStore";
 import { useWishlistStore } from "@/store/useWishlistStore";
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -20,18 +22,24 @@ import { useReorder } from "@/components/dashboard/useReorder";
 import { Button } from "@/components/ui/button";
 
 export default function DashboardOverviewPage() {
-  const storedProfile = useDashboardStore((state) => state.profile);
-  const profile = storedProfile ?? DEMO_USER;
+  /* Identity is the session's; the store only holds this account's own extras. */
+  const { user, isDemoIdentity } = useDashboardSession();
+  const profile = useDashboardStore((state) => state.profile);
   const seeded = useDashboardStore((state) => state.wishlistSeeded);
   const wishlistCount = useWishlistStore((state) => state.ids?.length ?? 0);
   const reorder = useReorder();
 
-  const recentOrders = getRecentOrders(3) ?? [];
+  /* The mock orders/addresses belong to the demo shopper alone. */
+  const recentOrders = isDemoIdentity ? (getRecentOrders(3) ?? []) : [];
+  const activeOrders = isDemoIdentity ? (getActiveOrderCount() ?? 0) : 0;
   const recommended = getRecommendedProducts(4) ?? [];
-  const activeOrders = getActiveOrderCount() ?? 0;
-  const firstName = profile.name?.trim().split(/\s+/)[0] || "there";
-  const rewardPoints = Number.isFinite(profile.rewardPoints) ? profile.rewardPoints : 0;
-  const totalSpent = Number.isFinite(profile.totalSpent) ? profile.totalSpent : 0;
+  const firstName = user.name.trim().split(/\s+/)[0] || "there";
+  /* Staff (and the demo shopper) get an explicit identity chip, so this page can
+     never be mistaken for someone else's session. */
+  const staffRole = isStaff(user.role) ? (normalizeRole(user.role) as AdminRole) : null;
+  const memberSinceYear = profile.memberSince.slice(0, 4);
+  const rewardPoints = isDemoIdentity && Number.isFinite(profile.rewardPoints) ? profile.rewardPoints : 0;
+  const totalSpent = isDemoIdentity && Number.isFinite(profile.totalSpent) ? profile.totalSpent : 0;
 
   return (
     <>
@@ -60,6 +68,24 @@ export default function DashboardOverviewPage() {
               Here&apos;s what&apos;s happening with your little one&apos;s wardrobe.
             </p>
 
+            {/* Who is signed in — read straight from the session, never a cache. */}
+            <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-glass-border bg-black/25 px-3 py-1.5 backdrop-blur-sm">
+                <span aria-hidden className="size-1.5 rounded-full bg-primary" />
+                Signed in as <span className="font-semibold text-foreground">{user.email}</span>
+              </span>
+              {staffRole ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 font-semibold tracking-[0.14em] text-primary uppercase backdrop-blur-sm">
+                  <ShieldCheck aria-hidden className="size-3.5" />
+                  {ADMIN_ROLE_LABEL[staffRole]}
+                </span>
+              ) : isDemoIdentity ? (
+                <span className="rounded-full border border-glass-border bg-black/25 px-3 py-1.5 backdrop-blur-sm">
+                  Demo account
+                </span>
+              ) : null}
+            </p>
+
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-glass-border bg-black/25 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm">
                 <Ticket aria-hidden className="size-3.5 text-primary" />
@@ -69,10 +95,21 @@ export default function DashboardOverviewPage() {
                 <ShoppingBag aria-hidden className="size-3.5 text-primary" />
                 {activeOrders} active {activeOrders === 1 ? "order" : "orders"}
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-glass-border bg-black/25 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm">
-                <Sparkles aria-hidden className="size-3.5 text-primary" />
-                Member since 2025
-              </span>
+              {memberSinceYear && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-glass-border bg-black/25 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm">
+                  <Sparkles aria-hidden className="size-3.5 text-primary" />
+                  Member since {memberSinceYear}
+                </span>
+              )}
+              {staffRole && (
+                <Link
+                  href={landingPathFor(staffRole)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors duration-300 hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  <ShieldCheck aria-hidden className="size-3.5" />
+                  Open admin console
+                </Link>
+              )}
             </div>
           </div>
         </section>
@@ -135,9 +172,15 @@ export default function DashboardOverviewPage() {
           </header>
 
           <div className="flex flex-col gap-4">
-            {recentOrders.map((order, index) => (
-              <OrderCard key={order.id} order={order} index={index} />
-            ))}
+            {recentOrders.length > 0 ? (
+              recentOrders.map((order, index) => (
+                <OrderCard key={order.id} order={order} index={index} />
+              ))
+            ) : (
+              <p className="glass-soft rounded-3xl border border-glass-border px-6 py-10 text-center text-sm text-muted-foreground">
+                No orders on this account yet. Anything you buy will appear here.
+              </p>
+            )}
           </div>
         </section>
 
@@ -164,7 +207,7 @@ export default function DashboardOverviewPage() {
             type="button"
             variant="outline"
             onClick={() => {
-              const last = getLastDeliveredOrder();
+              const last = isDemoIdentity ? getLastDeliveredOrder() : undefined;
               if (last) reorder(last);
               else
                 toast.info("Nothing to reorder yet", {

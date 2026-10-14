@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Loader2, Mail } from "lucide-react";
+import { ArrowRight, Loader2, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { loginSchema, type LoginValues } from "@/lib/validations";
+import { clearIdentityCaches } from "@/lib/session-cache";
 import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD } from "@/lib/demo-mode";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { PasswordInput } from "@/components/auth/PasswordInput";
@@ -36,6 +37,17 @@ const ERROR_COPY: Readonly<Record<string, { title: string; description: string }
 export default function LoginPage() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  /* Set by `clearSessionCache()` — confirms the debug wipe actually ran. */
+  const [cacheCleared, setCacheCleared] = useState(false);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("cleared") === "1") {
+      setCacheCleared(true);
+      toast.info("Session and caches cleared", {
+        description: "Cookies, localStorage and cached data have been removed for this site.",
+      });
+    }
+  }, []);
 
   const {
     register,
@@ -74,6 +86,11 @@ export default function LoginPage() {
       return;
     }
 
+    /* Drop whatever the previous identity left cached *before* the next page
+       loads — so an admin never opens the console on a shopper's data, and a
+       shopper never inherits an operator's session data. */
+    clearIdentityCaches();
+
     toast.success("Welcome back! 👋", {
       description: `Signed in as ${values.email}`,
     });
@@ -91,6 +108,19 @@ export default function LoginPage() {
       />
 
       <AuthCard>
+        {cacheCleared && (
+          <p
+            role="status"
+            className="mb-6 flex items-start gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-xs text-emerald-200"
+          >
+            <ShieldCheck aria-hidden className="mt-px size-4 shrink-0" />
+            <span>
+              <strong className="font-semibold">Session cleared.</strong> Cookies, localStorage,
+              sessionStorage and cached data were removed. Sign in again to start a clean session.
+            </span>
+          </p>
+        )}
+
         <header className="text-center">
           <h1 className="text-3xl font-bold tracking-tight">Welcome Back! 👋</h1>
           <p className="mt-2 text-sm text-muted-foreground">

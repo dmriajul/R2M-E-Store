@@ -7,6 +7,7 @@ import { signOut, useSession } from "next-auth/react";
 import { ChevronDown, LayoutDashboard, LogOut, Package, ShieldCheck, User } from "lucide-react";
 import { toast } from "sonner";
 import { cn, initials } from "@/lib/utils";
+import { clearIdentityCaches } from "@/lib/session-cache";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -67,6 +68,8 @@ export function AccountMenu() {
   }
 
   const handleSignOut = async () => {
+    /* Forget this account's cached account-area data before the next sign-in. */
+    clearIdentityCaches();
     await signOut({ redirect: false });
     toast.success("Signed out 👋", { description: "See you soon!" });
   };

@@ -8,6 +8,7 @@ import {
   Bell,
   ChevronRight,
   LayoutDashboard,
+  Eraser,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -38,6 +39,8 @@ import { useAdminSession } from "@/components/admin/AdminSessionProvider";
 import { DEMO_NOW } from "@/lib/mock-dashboard";
 import { useAdminStore } from "@/store/useAdminStore";
 import { signOut } from "next-auth/react";
+import { clearIdentityCaches, clearSessionCache } from "@/lib/session-cache";
+import { ConfirmActionDialog } from "@/components/admin/ConfirmActionDialog";
 import type { AdminRole, AdminUser } from "@/types";
 import {
   DropdownMenu,
@@ -220,6 +223,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pendingReturns, setPendingReturns] = useState(0);
+  const [clearSessionOpen, setClearSessionOpen] = useState(false);
 
   /* The operator's real session (resolved on the server by the layout). */
   const { user, can } = useAdminSession();
@@ -289,8 +293,23 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   };
 
   const handleSignOut = async () => {
+    /* Drop the account-area caches too, so the next sign-in starts clean. */
+    clearIdentityCaches();
     toast.success("Signed out of the admin console");
     await signOut({ callbackUrl: "/login" });
+  };
+
+  /**
+   * Debug escape hatch: sign out, wipe cookies, localStorage, sessionStorage,
+   * Cache Storage and service workers, then reload at the login screen. Useful
+   * when a stale session (or a second account in another tab) is suspected.
+   */
+  const handleClearSession = async () => {
+    setClearSessionOpen(false);
+    toast.info("Clearing session and caches…", {
+      description: "Cookies, localStorage and cached bundles are being removed.",
+    });
+    await clearSessionCache();
   };
 
   return (
@@ -448,6 +467,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 )}
                 <DropdownMenuSeparator className="bg-[#242424]" />
                 <DropdownMenuItem
+                  className="text-xs focus:bg-white/5"
+                  onSelect={() => setClearSessionOpen(true)}
+                >
+                  <Eraser aria-hidden /> <span className="text-foreground">Clear session &amp; cache</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   variant="destructive"
                   className="text-xs"
                   onSelect={() => {
@@ -547,6 +572,26 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </>
         )}
       </AnimatePresence>
+
+      {/* Debug: obliterate this browser's session + caches. */}
+      <ConfirmActionDialog
+        open={clearSessionOpen}
+        onOpenChange={setClearSessionOpen}
+        title="Clear session and caches?"
+        description={
+          <>
+            Signs you out and removes <strong>all cookies</strong>, localStorage, sessionStorage,
+            Cache Storage and service workers for this site. Use it when a stale session or a
+            second signed-in account is suspected. The basket is cleared too, so the storefront
+            starts from a blank slate.
+          </>
+        }
+        confirmLabel="Clear everything"
+        destructive
+        onConfirm={() => {
+          void handleClearSession();
+        }}
+      />
     </div>
   );
 }

@@ -97,6 +97,21 @@ npm run db:studio      # browse the database
 `admin@ · inventory@ · seo@ · support@mukra.com`, all with the shared demo
 password `password123`.
 
+**Identity is always the session's.** Every account-area screen reads the signed-in
+person from `auth()` on the server or `useSession()` in the browser — never from a
+store, `localStorage` or a mock record. Switching accounts therefore switches the
+name, email, role and data everywhere at once, and `sarah@example.com` is the only
+identity that renders the seeded demo orders, addresses and notifications; every
+other account (staff included) sees genuine empty states.
+
+**Clearing a stuck session** — if a browser still looks signed in as someone else
+(a stale cookie, or a second account in another tab), open the account menu in the
+admin console and choose **Clear session & cache**. That signs you out and wipes
+all cookies, `localStorage`, `sessionStorage`, Cache Storage and service workers
+before dropping you on `/login?cleared=1`. Signing in and out also flushes the
+in-memory account-area caches, so a new sign-in never inherits the previous
+identity's data.
+
 ---
 
 ## Environment Variables
