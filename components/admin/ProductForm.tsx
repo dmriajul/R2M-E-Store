@@ -42,6 +42,7 @@ import {
   adminSelectClass,
 } from "@/components/admin/Field";
 import { useAdminStore } from "@/store/useAdminStore";
+import { saveProductAction } from "@/app/admin/actions";
 import { MarkdownDescriptionEditor } from "@/components/admin/MarkdownDescriptionEditor";
 import type { AdminProduct, UploadResult } from "@/types";
 
@@ -398,45 +399,36 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
     );
   };
 
+  /**
+   * Save through the Server Action.
+   *
+   * With Postgres configured the action persists the row (including
+   * `featuredOrder`, the display placements and `active`) and hands back the
+   * saved record, which updates the local cache. In demo mode nothing is
+   * persisted, so the same values are applied to the in-session store — the
+   * console behaves exactly as it did before a database existed.
+   */
   const onSubmit = handleSubmit(async (values) => {
     const stock = values.variants.reduce((sum, variant) => sum + variant.stock, 0);
-    const endpoint = product
-      ? `/api/admin/products/${encodeURIComponent(product.id)}`
-      : "/api/admin/products";
+    const result = await saveProductAction({ ...values, stock }, product?.id);
 
-    try {
-      const response = await fetch(endpoint, {
-        method: product ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, stock }),
-      });
-      const payload = (await response.json()) as {
-        data?: { product: AdminProduct | null };
-        error?: string;
-        source?: "database" | "mock";
-      };
-
-      if (!response.ok || !payload.data) {
-        throw new Error(payload.error ?? "Product could not be saved");
-      }
-
-      let id: string;
-      if (payload.source === "database" && payload.data.product) {
-        id = payload.data.product.id;
-        upsertProduct(payload.data.product);
-      } else {
-        id = saveProduct({ ...values, stock }, product?.id);
-      }
-
-      toast.success("Product saved! ✅", {
-        description: product ? `${values.name} updated.` : `${values.name} added as ${id}.`,
-      });
-      onOpenChange(false);
-    } catch (error) {
-      toast.error("Product couldn't be saved", {
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
+    if (!result.ok) {
+      toast.error("Product couldn't be saved", { description: result.error });
+      return;
     }
+
+    let id: string;
+    if (result.source === "database" && result.data) {
+      id = result.data.id;
+      upsertProduct(result.data);
+    } else {
+      id = saveProduct({ ...values, stock }, product?.id);
+    }
+
+    toast.success("Product saved! ✅", {
+      description: product ? `${values.name} updated.` : `${values.name} added as ${id}.`,
+    });
+    onOpenChange(false);
   });
 
   const categoryEmoji = category ? CATEGORY_META[category].emoji : "🧥";

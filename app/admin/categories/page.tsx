@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { countProductsInCategory } from "@/lib/mock-admin";
+import { deleteCategoryAction } from "@/app/admin/actions";
 import { CategoryDialog } from "@/components/admin/CategoryDialog";
 import { ConfirmActionDialog } from "@/components/admin/ConfirmActionDialog";
 import { adminButtonBlue } from "@/components/admin/Field";
@@ -22,6 +23,8 @@ export default function AdminCategoriesPage() {
   const setSearch = useAdminStore((state) => state.setSearch);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  /* True while a delete is in flight, so the confirm button can't double-fire. */
+  const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState<AdminCategory | null>(null);
   const [pendingDelete, setPendingDelete] = useState<AdminCategory | null>(null);
 
@@ -51,6 +54,13 @@ export default function AdminCategoriesPage() {
           New Category
         </button>
       </section>
+
+      {categories.length === 0 && (
+        <p className="rounded-xl border border-[#242424] bg-[#141414] p-5 text-xs text-muted-foreground">
+          No categories yet. Create one here, or run <code>npm run db:seed</code>{" "}
+          to load the eight storefront categories with their emoji and blurbs.
+        </p>
+      )}
 
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <AnimatePresence mode="popLayout" initial={false}>
@@ -149,10 +159,20 @@ export default function AdminCategoriesPage() {
         }
         confirmLabel="Delete category"
         destructive
-        onConfirm={() => {
-          if (!pendingDelete) return;
+        onConfirm={async () => {
+          if (!pendingDelete || deleting) return;
+          setDeleting(true);
+          const result = await deleteCategoryAction(pendingDelete.id);
+          setDeleting(false);
+
+          if (!result.ok) {
+            toast.error("Category couldn't be deleted", { description: result.error });
+            return;
+          }
+
           deleteCategory(pendingDelete.id);
           toast.success(`${pendingDelete.name} deleted 🗑️`);
+          setPendingDelete(null);
         }}
       />
     </div>

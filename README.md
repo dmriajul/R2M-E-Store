@@ -131,7 +131,7 @@ environment variables are present:
 | Catalogue | 12 products from `lib/site.ts` | Prisma `Product` table (seeded identically) |
 | Auth | Any email + `password123`, `demo-<local>` user id | Supabase users, bcrypt hashes, JWT sessions |
 | Orders | In-memory records, `POST /api/orders` still re-prices the cart | Persisted `Order` + `OrderItem` rows |
-| Admin console | Client store seeded from `lib/mock-admin.ts` | Same UI, backed by the API |
+| Admin console | Same UI, in-session Zustand store (not durable) | Postgres through Server Actions + Prisma |
 | Uploads | Written to `.uploads/` and served via `/uploads/…` | Cloudinary (`mukra/products`, `mukra/models`) |
 | Payments | Wallet numbers + manual verification, cards disabled | Same, plus SSLCommerz when enabled |
 | Images | CSS gradients + emoji per category | Cloudinary URLs through `OptimizedImage` |
@@ -143,6 +143,74 @@ exactly which integrations are live:
 ```json
 { "status": "ok", "mode": "demo", "database": "mock", "cloudinary": "local-disk", "sslcommerz": "disabled" }
 ```
+
+## Admin writes (Server Actions + Prisma)
+
+Every mutation in the console goes through **`app/admin/actions.ts`** — Next.js 15
+Server Actions that run on the server, not in the browser:
+
+| Action | What it writes |
+| --- | --- |
+| `saveProductAction` | Create/update a product, including `featuredOrder`, the display placements (`categories`, `virtualBoutique`, `newArrival`, `bestSeller`, `featured`) and `active` |
+| `deleteProductsAction` | Hard-deletes products and their variants |
+| `duplicateProductAction` | Copies a product as an unpublished draft (unique `-copy` slug/SKU) |
+| `setProductsOutOfStockAction` | Zeroes stock on products *and* every variant |
+| `restockProductAction` | Adds units, spread across variants |
+| `updateOrderStatusAction` | Pending → Processing → Shipped → Delivered, or Cancelled / Refunded |
+| `decidePaymentAction` | Manual wallet verification (bKash / Nagad / Rocket): approve → **Confirmed + Paid**, reject → **Cancelled + Failed**, plus COD cash collection → **Delivered + Paid** |
+| `addOrderNoteAction` / `refundOrderAction` | Order notes and full refunds |
+| `saveCategoryAction` / `deleteCategoryAction` | Category metadata (name, slug, emoji, blurb, parent) |
+
+Rules the actions follow:
+
+1. **Role-guarded.** Each action re-checks the Auth.js session (`role === "ADMIN"`)
+   before touching data — middleware guards the pages, but an action is a public
+   POST endpoint. Unauthenticated calls get `{ ok: false, error }`, never data.
+2. **Zod-validated.** Arguments arrive as `unknown` and are parsed with the shared
+   schemas in `lib/validations.ts` before they reach Prisma.
+3. **No silent demo fallback.** With `DATABASE_URL` set, a write either commits or
+   returns `{ ok: false, error }` — `withDatabase()`'s catch-and-serve-mock
+   behaviour is deliberately unused here, so an operator is never told a change
+   was saved when it wasn't. With no database at all the action reports
+   `source: "demo"` and the console updates its in-session store.
+4. **Revalidated.** Successful writes call `revalidatePath` for the console, the
+   storefront (`/`, `/shop`, `/product/[id]`, `/sitemap.xml`) and the shopper's
+   order pages, so both sides reflect the change on the next render.
+
+The console reads live rows too: `app/admin/layout.tsx` loads products, orders and
+categories on the server and seeds the Zustand store through
+`components/admin/AdminDataHydrator.tsx`, so the tables, the dashboard widgets and
+the low-stock alert all show the same records the actions mutate.
+
+### Database change required
+
+The additive Prisma change below has been written to `prisma/schema.prisma`:
+
+```prisma
+/// Console-managed category metadata.
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  emoji       String   @default("🧸")
+  description String   @default("")
+  parent      String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([parent])
+  @@index([sortOrder, name])
+}
+```
+
+Apply it through the approved database-change process (`npm run db:push`, then
+`npm run db:seed` to load the eight storefront categories), and run
+`npx prisma generate` where engine downloads are available. Nothing else in the
+schema changed: products, orders and coupons already had every column the console
+needs.
+
+---
 
 ## Product display placement
 
@@ -193,6 +261,8 @@ app/
 │   └── error.tsx              storefront error boundary
 ├── admin/                     operations console — products, orders, customers,
 │                              coupons, categories, analytics, settings
+│   ├── actions.ts             Server Actions (Zod + ADMIN guard + revalidatePath)
+│   └── layout.tsx             loads products/orders/categories for the console
 ├── api/                       auth, register, orders, products, upload, health
 ├── uploads/[...path]/         local-disk upload streaming (demo mode)
 ├── offline/                   offline fallback destination
@@ -217,6 +287,8 @@ components/
 lib/                           cart maths, config, demo-mode, seo (JSON-LD),
                                image-optimizer, legal-content, payments, prisma,
                                cloudinary, validations, mock data
+lib/data/                      admin-orders · admin-products · categories ·
+                               admin-errors — Prisma reads/writes for the console
 store/                         zustand stores (cart, wishlist, checkout, admin, …)
 prisma/                        schema.prisma + seed.ts
 public/                        manifest.json, icons/, images/, models/, demo/
@@ -287,8 +359,13 @@ verified with `tsc --noEmit`, `eslint`, a production build and a curl sweep:
 ### Known limitations
 
 - SSLCommerz is intentionally parked; cards show "Coming soon".
-- The admin console is a client-side demo: mutations live for the session and are
-  not written back to Postgres (the storefront order API is the wired path).
+- Admin console writes (`app/admin/actions.ts`) are wired to Postgres through
+  Server Actions, so products, orders and categories persist. Demo installs
+  without `DATABASE_URL` keep the old in-session behaviour: the action answers
+  `source: "demo"` and the change is applied to the Zustand store only. Console
+  customers, coupons and store settings are still session-only.
+- Deleting a product that appears in an existing order is refused (order lines
+  are the sales history) — turn `Active` off to hide it from the storefront.
 - `prisma generate` needs to download engine binaries — blocked in offline
   sandboxes. The schema is hand-verified; run `npx prisma generate` once you have
   network access.

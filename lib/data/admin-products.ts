@@ -1,3 +1,4 @@
+import { AdminDataError } from "@/lib/data/admin-errors";
 import { getPrisma } from "@/lib/prisma";
 import {
   adminProductSchema,
@@ -107,6 +108,10 @@ export async function getAdminProducts(): Promise<AdminProduct[] | null> {
   return rows.map(toAdminProduct);
 }
 
+/**
+ * Storefront/API entry point: returns `null` when no database is configured so
+ * `POST /api/admin/products` can answer `source: "mock"`.
+ */
 export async function saveAdminProduct(
   values: AdminProductValues,
   id?: string,
@@ -114,6 +119,27 @@ export async function saveAdminProduct(
   const db = await getPrisma();
   if (!db) return null;
 
+  return writeAdminProduct(db, values, id);
+}
+
+/**
+ * Console entry point for the Server Action: identical write, but a missing
+ * database is an error instead of a silent no-op, so the operator sees why the
+ * product was not saved.
+ */
+export async function persistAdminProduct(
+  values: AdminProductValues,
+  id?: string,
+): Promise<AdminProduct> {
+  const db = await requireDatabase();
+  return writeAdminProduct(db, values, id);
+}
+
+async function writeAdminProduct(
+  db: AdminDatabase,
+  values: AdminProductValues,
+  id?: string,
+): Promise<AdminProduct> {
   const colors = values.colors.map((color) => color.name);
   const data = {
     name: values.name,
@@ -181,4 +207,222 @@ export async function saveAdminProduct(
 
 export function parseAdminProduct(input: unknown) {
   return adminProductSchema.safeParse(input);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Console mutations                                                         */
+/* -------------------------------------------------------------------------- */
+/*  Prisma only — no `withDatabase()` and no mock fallback. When a database is  */
+/*  configured, a console write either commits or throws; the Server Action in  */
+/*  `app/admin/actions.ts` turns the throw into an error the operator can see.  */
+/*  (Demo installs without DATABASE_URL never reach this code: the action       */
+/*  reports `source: "demo"` and the console applies the change locally.)       */
+
+/** Prisma's foreign-key violation — a product that appears in an order. */
+function isForeignKeyViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2003"
+  );
+}
+
+async function requireDatabase() {
+  const db = await getPrisma();
+  if (!db) {
+    throw new AdminDataError(
+      "No database connection — set DATABASE_URL and run `npx prisma generate`",
+    );
+  }
+  return db;
+}
+
+/** Re-reads one product as the console renders it. */
+export async function getAdminProduct(id: string): Promise<AdminProduct> {
+  const db = await requireDatabase();
+  return loadAdminProduct(db, id);
+}
+
+type AdminDatabase = NonNullable<Awaited<ReturnType<typeof getPrisma>>>;
+
+async function loadAdminProduct(
+  db: AdminDatabase,
+  id: string,
+): Promise<AdminProduct> {
+  const row = (await db.product.findUnique({
+    where: { id },
+    include: productInclude,
+  })) as AdminProductRow | null;
+
+  if (!row) {
+    throw new AdminDataError("That product no longer exists — reload the console");
+  }
+  return toAdminProduct(row);
+}
+
+/**
+ * Deletes products (and their variants, via `onDelete: Cascade`).
+ *
+ * Products referenced by an order can't be hard-deleted — the order lines are
+ * the sales history. Those report a friendly message instead; the operator can
+ * switch `Active` off to hide the product from the storefront.
+ */
+export async function deleteAdminProducts(ids: string[]): Promise<number> {
+  const db = await requireDatabase();
+
+  try {
+    const result = await db.product.deleteMany({ where: { id: { in: ids } } });
+    return result.count;
+  } catch (error) {
+    if (isForeignKeyViolation(error)) {
+      throw new AdminDataError(
+        "A product in this selection appears in existing orders, so it can't be deleted. Turn off Active to hide it from the storefront instead.",
+      );
+    }
+    throw error;
+  }
+}
+
+/** Copies a product as an unpublished draft, exactly like the console action. */
+export async function duplicateAdminProduct(id: string): Promise<AdminProduct> {
+  const db = await requireDatabase();
+  const source = (await db.product.findUnique({
+    where: { id },
+    include: productInclude,
+  })) as AdminProductRow | null;
+
+  if (!source) {
+    throw new AdminDataError("That product no longer exists — reload the console");
+  }
+
+  const row = (await db.product.create({
+    data: {
+      name: `${source.name} (Copy)`,
+      slug: await uniqueCopySlug(db, source.slug),
+      sku: await uniqueCopySku(db, source.sku),
+      description: source.description,
+      price: source.price,
+      costPrice: source.costPrice,
+      originalPrice: source.originalPrice,
+      category: source.category,
+      categories: source.categories.length ? source.categories : [source.category],
+      gender: source.gender,
+      ageRange: source.ageRange,
+      material: source.material,
+      colors: source.colors,
+      sizes: source.sizes,
+      images: source.images,
+      stock: source.stock,
+      lowStockThreshold: source.lowStockThreshold,
+      trackInventory: source.trackInventory,
+      badge: source.badge,
+      /* Copies start as drafts — they are never published by accident. */
+      featured: false,
+      featuredOrder: 0,
+      virtualBoutique: false,
+      newArrival: false,
+      bestSeller: false,
+      active: false,
+      metaTitle: source.metaTitle,
+      metaDescription: source.metaDescription,
+      variants: {
+        create: source.variants.map((variant) => ({
+          size: variant.size,
+          color: variant.color,
+          stock: variant.stock,
+          sku: variant.sku,
+        })),
+      },
+    },
+    include: productInclude,
+  })) as AdminProductRow;
+
+  return toAdminProduct(row);
+}
+
+async function uniqueCopySlug(db: AdminDatabase, base: string): Promise<string> {
+  let candidate = `${base}-copy`;
+  let suffix = 2;
+
+  while (await db.product.findFirst({ where: { slug: candidate } })) {
+    candidate = `${base}-copy-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
+async function uniqueCopySku(
+  db: AdminDatabase,
+  sku: string | null,
+): Promise<string | null> {
+  if (!sku) return null;
+
+  let candidate = `${sku}-C1`;
+  let suffix = 2;
+
+  while (await db.product.findFirst({ where: { sku: candidate } })) {
+    candidate = `${sku}-C${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
+/** Bulk "sold out": clears the product and every variant. */
+export async function setAdminProductsOutOfStock(ids: string[]): Promise<number> {
+  const db = await requireDatabase();
+
+  await db.productVariant.updateMany({
+    where: { productId: { in: ids } },
+    data: { stock: 0 },
+  });
+
+  const result = await db.product.updateMany({
+    where: { id: { in: ids } },
+    data: { stock: 0 },
+  });
+
+  return result.count;
+}
+
+/**
+ * Adds `units` to a product, spread as evenly as possible across its variants
+ * (the same maths the console's demo store uses), and returns the fresh record.
+ */
+export async function restockAdminProduct(
+  id: string,
+  units: number,
+): Promise<AdminProduct> {
+  const db = await requireDatabase();
+  const row = (await db.product.findUnique({
+    where: { id },
+    include: productInclude,
+  })) as AdminProductRow | null;
+
+  if (!row) {
+    throw new AdminDataError("That product no longer exists — reload the console");
+  }
+
+  const variantCount = row.variants.length;
+  const variantStock = row.variants.reduce((total, variant) => total + variant.stock, 0);
+  const stock = (variantCount > 0 ? variantStock : row.stock) + units;
+
+  if (variantCount > 0) {
+    const perVariant = Math.floor(units / variantCount);
+    const remainder = units % variantCount;
+
+    await Promise.all(
+      row.variants.map((variant, index) =>
+        db.productVariant.updateMany({
+          where: { productId: id, size: variant.size, color: variant.color },
+          data: { stock: variant.stock + perVariant + (index < remainder ? 1 : 0) },
+        }),
+      ),
+    );
+  }
+
+  await db.product.update({ where: { id }, data: { stock } });
+  return loadAdminProduct(db, id);
 }

@@ -5,14 +5,15 @@
  *   npm run db:seed        # load this file
  *
  * It loads exactly what the storefront shows in demo mode: the 12 catalogue
- * products from `lib/site.ts`, one admin (`admin@mukra.com / admin123`),
- * three shoppers (`password123`), the four coupons the console lists and five
- * orders — including two wallet payments waiting for an operator to verify.
+ * products from `lib/site.ts`, the eight category cards, one admin
+ * (`admin@mukra.com / admin123`), three shoppers (`password123`), the four
+ * coupons the console lists and five orders — including two wallet payments
+ * waiting for an operator to verify.
  */
 
 import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
-import { PRODUCTS } from "../lib/site";
+import { CATEGORY_DESCRIPTIONS, CATEGORY_META, PRODUCTS } from "../lib/site";
 
 const prisma = new PrismaClient();
 
@@ -58,6 +59,7 @@ async function main(): Promise<void> {
   await prisma.wishlistItem.deleteMany();
   await prisma.address.deleteMany();
   await prisma.coupon.deleteMany();
+  await prisma.category.deleteMany();
   await prisma.product.deleteMany();
   await prisma.user.deleteMany();
 
@@ -144,6 +146,22 @@ async function main(): Promise<void> {
       },
     });
   }
+
+  /* ---------- categories (console metadata: emoji, blurb, parent) ---------- */
+  const categoryNames = Object.keys(CATEGORY_META) as Array<
+    keyof typeof CATEGORY_META
+  >;
+
+  await prisma.category.createMany({
+    data: categoryNames.map((name, index) => ({
+      name,
+      slug: CATEGORY_META[name].slug,
+      emoji: CATEGORY_META[name].emoji,
+      description: CATEGORY_DESCRIPTIONS[name],
+      parent: null,
+      sortOrder: index,
+    })),
+  });
 
   /* ---------- addresses ---------- */
   await prisma.address.createMany({
@@ -378,6 +396,7 @@ async function main(): Promise<void> {
     users: await prisma.user.count(),
     products: await prisma.product.count(),
     orders: await prisma.order.count(),
+    categories: await prisma.category.count(),
     coupons: await prisma.coupon.count(),
     admin: admin.email,
   };

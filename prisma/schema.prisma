@@ -289,6 +289,28 @@ model Coupon {
   createdAt   DateTime   @default(now())
 }
 
+/// Console-managed category metadata.
+///
+/// `Product.category` / `Product.categories` stay denormalised strings (the
+/// storefront filters on the fixed names in `lib/validations.ts`), so this table
+/// holds the presentation layer only: the emoji, the blurb and the parent.
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  emoji       String   @default("🧸")
+  description String   @default("")
+  /// Parent category name, or null for a top-level category.
+  parent      String?
+  /// Lower values are listed first in the console.
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([parent])
+  @@index([sortOrder, name])
+}
+
 model SiteSettings {
   id                String  @id @default("global")
   heroTitle         String?

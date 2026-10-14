@@ -8,7 +8,12 @@
  */
 
 import { computeTotals } from "@/lib/cart";
-import { CATEGORY_META, PRODUCTS, getProductById } from "@/lib/site";
+import {
+  CATEGORY_DESCRIPTIONS,
+  CATEGORY_META,
+  PRODUCTS,
+  getProductById,
+} from "@/lib/site";
 import { MOCK_ORDERS, DEMO_NOW } from "@/lib/mock-dashboard";
 import { slugify } from "@/lib/utils";
 import { isManualPayment, paymentMethodFromLabel } from "@/lib/payments";
@@ -700,18 +705,6 @@ export function getCouponStatus(coupon: AdminCoupon, todayIso: string = DEMO_NOW
 /*  Categories                                                                */
 /* -------------------------------------------------------------------------- */
 
-/** One-line descriptions shown on the category cards. */
-const CATEGORY_BLURB: Readonly<Record<ProductCategory, string>> = {
-  "Jackets & Coats": "Warm outer layers for colder adventures.",
-  "Sweatshirts & Hoodies": "Cosy layers for everyday play.",
-  "Sweaters & Cardigans": "Soft knits for comfortable layering.",
-  "Winter Bottoms / Trousers": "Warm trousers made for playground adventures.",
-  "Winter Sets & Tracksuits": "Coordinated sets for comfort and warmth.",
-  "Tops & Tees": "Everyday polos, tees and casual tops.",
-  "Innerwear & Thermals": "Comfortable essentials and warm base layers.",
-  Accessories: "Bags, clips and finishing touches.",
-};
-
 export const ADMIN_CATEGORIES: readonly AdminCategory[] = (
   Object.keys(CATEGORY_META) as ProductCategory[]
 ).map((name) => ({
@@ -719,7 +712,7 @@ export const ADMIN_CATEGORIES: readonly AdminCategory[] = (
   name,
   slug: CATEGORY_META[name].slug,
   emoji: CATEGORY_META[name].emoji,
-  description: CATEGORY_BLURB[name],
+  description: CATEGORY_DESCRIPTIONS[name],
   parent: null,
 }));
 

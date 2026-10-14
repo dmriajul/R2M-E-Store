@@ -6,14 +6,16 @@ import { cn, formatPrice } from "@/lib/utils";
 import { getLowStockProducts } from "@/lib/mock-admin";
 import { ProductArtwork } from "@/components/product/ProductArtwork";
 import { adminButtonBlue } from "@/components/admin/Field";
+import { restockProductAction } from "@/app/admin/actions";
 import { useAdminStore } from "@/store/useAdminStore";
 
-/** Restock shortcut — mock only, but it really does move the local numbers. */
+/** Units added by the one-tap restock. */
 const RESTOCK_UNITS = 25;
 
 export function LowStockPanel({ className }: { className?: string }) {
   const products = useAdminStore((state) => state.products ?? []);
   const restockProduct = useAdminStore((state) => state.restockProduct);
+  const upsertProduct = useAdminStore((state) => state.upsertProduct);
 
   const low = getLowStockProducts(products);
   const outOfStock = products.filter(
@@ -22,8 +24,21 @@ export function LowStockPanel({ className }: { className?: string }) {
   /* Urgent first: empty shelves, then the thinnest stock. */
   const alerts = [...outOfStock, ...low];
 
-  const handleRestock = (id: string, name: string) => {
-    restockProduct(id, RESTOCK_UNITS);
+  /** Server Action first; the local store mirrors the result in demo mode. */
+  const handleRestock = async (id: string, name: string) => {
+    const result = await restockProductAction(id, RESTOCK_UNITS);
+
+    if (!result.ok) {
+      toast.error("Restock failed", { description: result.error });
+      return;
+    }
+
+    if (result.source === "database" && result.data) {
+      upsertProduct(result.data);
+    } else {
+      restockProduct(id, RESTOCK_UNITS);
+    }
+
     toast.success(`Restocked ${name} with ${RESTOCK_UNITS} units ✅`);
   };
 
