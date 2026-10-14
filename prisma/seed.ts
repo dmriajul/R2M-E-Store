@@ -4,10 +4,7 @@
  *   npx prisma db push     # create the tables
  *   npm run db:seed        # load this file
  *
- * It loads exactly what the storefront shows in demo mode: the 12 catalogue
- * products from `lib/site.ts`, one admin (`admin@mukra.com / admin123`),
- * three shoppers (`password123`), the four coupons the console lists and five
- * orders — including two wallet payments waiting for an operator to verify.
+ * Creates 4 staff accounts with RBAC roles + 3 demo customers.
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -20,7 +17,6 @@ const BCRYPT_ROUNDS = 10;
 const DEMO_PASSWORD = "password123";
 const ADMIN_PASSWORD = "admin123";
 
-/** Walks the seeded orders in order, so `at(0)` is the newest. */
 interface SeedOrderItem {
   productId: string;
   color: string;
@@ -42,7 +38,6 @@ interface SeedOrder {
   items: SeedOrderItem[];
 }
 
-/** Shipping is free over $50, matching `lib/cart.ts`. */
 function shippingFor(subtotal: number): number {
   return subtotal >= 50 ? 0 : 4.99;
 }
@@ -61,17 +56,47 @@ async function main(): Promise<void> {
   await prisma.product.deleteMany();
   await prisma.user.deleteMany();
 
-  /* ---------- users ---------- */
-  const admin = await prisma.user.create({
-    data: {
-      name: "Riajul Khandokar",
-      email: "admin@mukra.com",
-      phone: "+880 1712 345678",
-      password: adminPassword,
-      role: "ADMIN",
-    },
-  });
+  /* ---------- STAFF USERS (RBAC) ---------- */
+  const [superAdmin, inventoryManager, seoManager, supportManager] = await Promise.all([
+    prisma.user.create({
+      data: {
+        name: "Super Admin",
+        email: "admin@mukra.com",
+        phone: "+880 1712 345678",
+        password: adminPassword,
+        role: "SUPER_ADMIN",
+      },
+    }),
+    prisma.user.create({
+      data: {
+        name: "Inventory Manager",
+        email: "inventory@mukra.com",
+        phone: "+880 1712 345679",
+        password,
+        role: "INVENTORY_MANAGER",
+      },
+    }),
+    prisma.user.create({
+      data: {
+        name: "SEO Manager",
+        email: "seo@mukra.com",
+        phone: "+880 1712 345680",
+        password,
+        role: "SEO_MANAGER",
+      },
+    }),
+    prisma.user.create({
+      data: {
+        name: "Support Manager",
+        email: "support@mukra.com",
+        phone: "+880 1712 345681",
+        password,
+        role: "SUPPORT_MANAGER",
+      },
+    }),
+  ]);
 
+  /* ---------- CUSTOMER USERS ---------- */
   const [sarah, priya, fatima] = await Promise.all([
     prisma.user.create({
       data: {
@@ -114,7 +139,6 @@ async function main(): Promise<void> {
 
     await prisma.product.create({
       data: {
-        // The catalogue id doubles as the slug, so mock cart lines resolve.
         id: product.id,
         name: product.name,
         slug: product.slug,
@@ -379,10 +403,10 @@ async function main(): Promise<void> {
     products: await prisma.product.count(),
     orders: await prisma.order.count(),
     coupons: await prisma.coupon.count(),
-    admin: admin.email,
+    admin: superAdmin.email,
   };
 
-  console.warn("[seed] Mukra ready 🌟", counts);
+  console.warn("[seed] Mukra ready ", counts);
 }
 
 main()

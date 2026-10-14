@@ -1,4 +1,4 @@
-// LITTLE LUXE — Postgres schema (Supabase-compatible).
+// MUKRA — Postgres schema (Supabase-compatible).
 //
 // The app runs without a database: every query in `lib/data/*` is wrapped in a
 // try/catch and falls back to the mock dataset. Add DATABASE_URL, then run
@@ -27,7 +27,11 @@ datasource db {
 
 enum Role {
   CUSTOMER
-  ADMIN
+  ADMIN           // Legacy alias - maps to SUPER_ADMIN
+  SUPER_ADMIN
+  INVENTORY_MANAGER
+  SEO_MANAGER
+  SUPPORT_MANAGER
 }
 
 enum OrderStatus {
