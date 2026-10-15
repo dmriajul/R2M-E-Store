@@ -110,11 +110,35 @@ model User {
   returnRequests ReturnRequest[]
   wishlist  WishlistItem[]
   reviews   Review[]
+  /// Every recorded move between roles — the "Role history" section of the
+  /// account detail sheet (`getAdminUserRoleHistory()` in lib/data/admin-users.ts).
+  roleChanges RoleChange[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([role])
   @@index([deletedAt])
+}
+
+/// One row per **successful** role change from *Staff & Roles*.
+///
+/// Written by `recordRoleChange()` (`lib/data/admin-users.ts`) after the role
+/// update has committed, and read back newest-first by `getUserDetailAction()`.
+/// Until this table existed the console's history had nothing to read.
+///
+/// `actorEmail` is deliberately a plain column rather than a relation, for the
+/// same reason as `User.deletedById`: deleting (or purging) an operator must
+/// never cascade into the trail of the changes they made.
+model RoleChange {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromRole   Role
+  toRole     Role
+  actorEmail String
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model Product {

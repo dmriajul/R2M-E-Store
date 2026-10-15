@@ -6,7 +6,9 @@ import {
   CalendarClock,
   Check,
   Clock,
+  History,
   KeyRound,
+  Loader2,
   Mail,
   Phone,
   ShieldAlert,
@@ -14,6 +16,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
+import { getUserDetailAction } from "@/app/admin/actions";
 import { cn, formatShortDate, initials } from "@/lib/utils";
 import {
   Sheet,
@@ -32,7 +35,7 @@ import {
   trashDaysRemaining,
   trashExpiresAt,
 } from "@/lib/rbac";
-import type { AdminUserAccount, SessionRole } from "@/types";
+import type { AdminRoleChange, AdminUserAccount, SessionRole } from "@/types";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -120,11 +123,41 @@ export function UserDetailSheet({
   onPurge,
 }: UserDetailSheetProps) {
   const [confirm, setConfirm] = useState<"trash" | "purge" | null>(null);
+  /* `null` = still loading; an array (possibly empty) = what the server said. */
+  const [history, setHistory] = useState<readonly AdminRoleChange[] | null>(null);
+
+  const accountId = account?.id ?? null;
+  const accountRole = account?.role ?? null;
 
   /* A different account always starts with its dialogs closed. */
   useEffect(() => {
     setConfirm(null);
   }, [account?.id]);
+
+  /*
+   * The role trail is not part of the row the directory already holds, so the
+   * sheet plucks it when it opens — and again when `accountRole` changes, which
+   * is exactly what happens after a role change above: the new row appears
+   * without anyone having to reopen the sheet.
+   */
+  useEffect(() => {
+    if (!accountId) {
+      setHistory(null);
+      return;
+    }
+
+    let active = true;
+    setHistory(null);
+
+    void getUserDetailAction(accountId).then((result) => {
+      if (!active) return;
+      setHistory(result.ok ? (result.data?.history ?? []) : []);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [accountId, accountRole]);
 
   const trashed = account ? isTrashed(account) : false;
   const isSelf = Boolean(account) && account?.id === currentUserId;
@@ -262,6 +295,50 @@ export function UserDetailSheet({
                       {account.id}
                     </p>
                   </div>
+                </section>
+
+                {/* ---------- Role history ---------- */}
+                <section className="rounded-xl border border-[#242424] bg-[#101010] p-4">
+                  <h3 className="flex items-center gap-1.5 text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                    <History aria-hidden className="size-3.5" />
+                    Role history
+                  </h3>
+
+                  {history === null ? (
+                    <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <Loader2 aria-hidden className="size-3 animate-spin" />
+                      Loading…
+                    </p>
+                  ) : history.length === 0 ? (
+                    <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                      No role changes recorded yet — the trail starts the first time this
+                      account is moved between roles.
+                    </p>
+                  ) : (
+                    <ol className="mt-3 flex flex-col gap-2">
+                      {history.map((entry) => (
+                        <li
+                          key={entry.id}
+                          className="rounded-lg border border-[#242424] bg-white/[0.02] px-3 py-2"
+                        >
+                          <p className="flex flex-wrap items-center gap-1.5">
+                            <RoleBadge role={entry.fromRole} />
+                            <span aria-hidden className="text-[11px] text-muted-foreground">
+                              →
+                            </span>
+                            <RoleBadge role={entry.toRole} />
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {formatShortDate(entry.createdAt)} · by {entry.actorEmail}
+                          </p>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+
+                  <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+                    Every role change is recorded with the super admin who made it.
+                  </p>
                 </section>
 
                 {/* ---------- Trash ---------- */}

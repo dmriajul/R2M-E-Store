@@ -19,12 +19,18 @@
  *
  * The *policy* (who may change what) lives in `app/admin/actions.ts` and
  * `lib/rbac.ts`; this module only reads and writes rows.
+ *
+ * Role changes additionally leave an **audit trail** (`RoleChange`): every
+ * successful move appends one row, and the account detail sheet reads the last
+ * few back through `getAdminUserRoleHistory()`. The trail is best-effort — the
+ * change has already committed by the time it is written — so a failed insert is
+ * logged rather than turned into a failed action.
  */
 
 import { AdminDataError } from "@/lib/data/admin-errors";
 import { getPrisma, type PrismaLikeClient } from "@/lib/prisma";
 import { TRASH_RETENTION_DAYS, normalizeRole, trashRetentionCutoff } from "@/lib/rbac";
-import type { AdminUserAccount, SessionRole } from "@/types";
+import type { AdminRoleChange, AdminUserAccount, SessionRole } from "@/types";
 
 interface UserRow {
   id: string;
@@ -92,6 +98,36 @@ const USER_SELECT = {
   deletedAt: true,
   deletedById: true,
 } as const;
+
+interface RoleChangeRow {
+  id: string;
+  userId: string;
+  fromRole: string;
+  toRole: string;
+  actorEmail: string;
+  createdAt: Date | string;
+}
+
+const ROLE_CHANGE_SELECT = {
+  id: true,
+  userId: true,
+  fromRole: true,
+  toRole: true,
+  actorEmail: true,
+  createdAt: true,
+} as const;
+
+/** Rows → plain objects; the stored role leaves through `normalizeRole()`. */
+function toAdminRoleChange(row: RoleChangeRow): AdminRoleChange {
+  return {
+    id: row.id,
+    userId: row.userId,
+    fromRole: normalizeRole(row.fromRole),
+    toRole: normalizeRole(row.toRole),
+    actorEmail: row.actorEmail,
+    createdAt: toIso(row.createdAt) ?? String(row.createdAt ?? ""),
+  };
+}
 
 /** The rows behind `ids`, in whatever state they are (live *and* trashed). */
 async function rowsByIds(
@@ -202,6 +238,76 @@ export async function updateAdminUserRole(
       throw new AdminDataError("That account no longer exists — reload the console");
     }
     throw error;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Role-change audit trail                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** How many trail rows the account detail sheet lists. */
+export const ROLE_HISTORY_LIMIT = 20;
+
+/**
+ * Appends one row to the role-change audit trail.
+ *
+ * Called by `updateUserRoleAction` **after** the role update has committed, so
+ * this is deliberately best-effort: the change is already live, and failing the
+ * action here would tell the operator nothing happened when the account really
+ * did move. A failed insert is logged and swallowed — only the trail row is
+ * lost, never the role change.
+ *
+ * A no-op without a database (the demo trail lives in `lib/data/users.ts`), so
+ * callers may await it unconditionally.
+ */
+export async function recordRoleChange(entry: {
+  userId: string;
+  fromRole: SessionRole;
+  toRole: SessionRole;
+  actorEmail: string;
+}): Promise<void> {
+  const db = await getPrisma();
+  if (!db) return;
+
+  try {
+    await db.roleChange.create({
+      data: {
+        userId: entry.userId,
+        fromRole: entry.fromRole,
+        toRole: entry.toRole,
+        actorEmail: entry.actorEmail,
+      },
+    });
+  } catch (error) {
+    console.warn("[admin/users] Could not record the role change", error);
+  }
+}
+
+/**
+ * The audit trail for one account, **newest first**.
+ *
+ * Returns an empty array rather than `null`: "nothing recorded" and "no database"
+ * are the same thing to the detail sheet, which simply renders an empty state.
+ */
+export async function getAdminUserRoleHistory(
+  userId: string,
+  limit: number = ROLE_HISTORY_LIMIT,
+): Promise<AdminRoleChange[]> {
+  const db = await getPrisma();
+  if (!db) return [];
+
+  try {
+    const rows = (await db.roleChange.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: "desc" }],
+      take: limit,
+      select: ROLE_CHANGE_SELECT,
+    })) as RoleChangeRow[];
+
+    return rows.map(toAdminRoleChange);
+  } catch (error) {
+    console.warn("[admin/users] Could not load the role history", error);
+    return [];
   }
 }
 

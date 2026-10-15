@@ -15,6 +15,7 @@ import { withDatabase } from "@/lib/prisma";
 import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD, isDatabaseConfigured } from "@/lib/demo-mode";
 import { isTrashExpired } from "@/lib/rbac";
 import type {
+  AdminRoleChange,
   AdminUserAccount,
   AuthRole,
   AuthUser,
@@ -48,6 +49,8 @@ const demoScope = globalThis as typeof globalThis & {
   __mukraDemoTrashOverrides?: Map<string, DemoTrashEntry>;
   /** Emails deleted for good while no database is connected. */
   __mukraDemoPurged?: Set<string>;
+  /** Role-change audit trail per demo account id, newest first. */
+  __mukraDemoRoleHistory?: Map<string, AdminRoleChange[]>;
 };
 
 /** One demo account sitting in the trash. */
@@ -78,6 +81,17 @@ const demoTrashOverrides: Map<string, DemoTrashEntry> = (demoScope.__mukraDemoTr
   new Map<string, DemoTrashEntry>());
 
 const demoPurged: Set<string> = (demoScope.__mukraDemoPurged ??= new Set<string>());
+
+/**
+ * The demo **role-change audit trail**, keyed by account id and stamped newest
+ * first — the in-memory twin of the `RoleChange` table, kept on `globalThis` for
+ * the same one-map-per-process reason as the overrides above. It is dropped when
+ * the server restarts, exactly like every other demo override, and a purged
+ * account takes its trail with it (the database does that with `onDelete:
+ * Cascade`).
+ */
+const demoRoleHistory: Map<string, AdminRoleChange[]> = (demoScope.__mukraDemoRoleHistory ??=
+  new Map<string, AdminRoleChange[]>());
 
 const normalise = (email: string): string => email.trim().toLowerCase();
 
@@ -384,6 +398,52 @@ export function setDemoUserRole(id: string, role: SessionRole): AdminUserAccount
   return { ...toDemoAccount(account), role };
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Demo role-change audit trail                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Trail rows kept per demo account — enough for the sheet, bounded for the process. */
+export const DEMO_ROLE_HISTORY_LIMIT = 20;
+
+/** Demo rows are never persisted, so a counter is all the id they need. */
+let demoRoleChangeSequence = 0;
+
+/**
+ * Demo-mode twin of `recordRoleChange()` (`lib/data/admin-users.ts`) — called by
+ * `updateUserRoleAction` when no database is connected, so the console's **Role
+ * history** section works identically in both modes.
+ *
+ * The row is written in memory and therefore cannot fail; it returns the row it
+ * recorded (the database path returns `void` and logs its own failures).
+ */
+export function recordDemoRoleChange(entry: {
+  userId: string;
+  fromRole: SessionRole;
+  toRole: SessionRole;
+  actorEmail: string;
+}): AdminRoleChange {
+  demoRoleChangeSequence += 1;
+
+  const row: AdminRoleChange = {
+    id: `demo-role-change-${demoRoleChangeSequence}`,
+    userId: entry.userId,
+    fromRole: entry.fromRole,
+    toRole: entry.toRole,
+    actorEmail: entry.actorEmail,
+    createdAt: new Date().toISOString(),
+  };
+
+  const recorded = demoRoleHistory.get(entry.userId) ?? [];
+  demoRoleHistory.set(entry.userId, [row, ...recorded].slice(0, DEMO_ROLE_HISTORY_LIMIT));
+
+  return row;
+}
+
+/** One demo account's trail, newest first (empty when nothing was recorded). */
+export function getDemoRoleHistory(userId: string): AdminRoleChange[] {
+  return demoRoleHistory.get(userId) ?? [];
+}
+
 /**
  * Moves demo accounts to the trash.
  *
@@ -438,6 +498,8 @@ export function purgeDemoUsers(ids: readonly string[]): number {
     if (!wanted.has(account.id) || demoPurged.has(account.email)) continue;
     demoTrashOverrides.delete(account.email);
     demoPurged.add(account.email);
+    /* Cascade parity: deleting the account deletes its audit trail too. */
+    demoRoleHistory.delete(account.id);
     removed += 1;
   }
 

@@ -59,6 +59,7 @@ and redeploy after each group so you can see exactly what changed:
 | 3 | `CLOUDINARY_*` | Uploads move from local disk to the CDN |
 | 4 | `PAYMENT_*`, `SSLCOMMERZ_*` | Wallet numbers and the card gateway |
 | 5 | `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `MAILJET_SENDER_EMAIL` | Enables authenticated admin receipt emails |
+| 6 | `CRON_SECRET` | Authenticates the daily trash-retention cron (see step 6.7) |
 
 `.env.production.example` in the repo has every key with comments — copy it into
 the Vercel UI field by field.
@@ -127,7 +128,7 @@ when signed out, and `"mode":"demo"` until step 6 is done.
 
 ```bash
 npx prisma generate
-npx prisma db push          # creates all 8 tables + 5 enums
+npx prisma db push          # creates all 13 tables + 7 enums
 npm run db:seed             # 12 products, admin, 3 customers, 4 coupons, 5 orders
 ```
 
@@ -146,6 +147,29 @@ curl -s https://your-domain.com/api/health
    `anon` key can read every order, address and password hash through
    `/rest/v1/…`. The Next.js app is unaffected either way — Prisma connects as
    the table owner, which bypasses RLS.
+
+7. **Authenticate the trash-retention cron (`CRON_SECRET`).** Moving an account
+   to *Staff & Roles → Trash* only stamps `User.deletedAt`; the daily cron at
+   `/api/cron/purge-trash` is what deletes it for good once the retention window
+   has passed. Set `CRON_SECRET` in Vercel (**Project → Settings → Environment
+   Variables**, Production) — generate one with:
+
+```bash
+openssl rand -base64 32
+```
+
+   `vercel.json` holds the schedule (`0 3 * * *`, daily at 03:00) and Vercel Cron
+   sends the secret as `Authorization: Bearer $CRON_SECRET`. **Without it the
+   route answers `401` on every run.** That is fail-closed and safe — nothing is
+   deleted by a stranger — but the trash then never empties on its own, and the
+   401 is visible in Vercel → Deployments → Cron Jobs. Confirm by hand:
+
+```bash
+curl -i -H "Authorization: Bearer $CRON_SECRET" https://mukra.com/api/cron/purge-trash
+```
+
+   A healthy run answers `200` with `{ "ok": true, "purged": …, "skipped": … }`;
+   accounts that still hold an order or a review are counted as `skipped` and kept.
 
 The seeded admin login is `admin@mukra.com` / `password123` — **change it
 immediately** after your first sign-in (Admin → Settings), and rotate the demo
@@ -196,6 +220,10 @@ Final checklist before announcing:
 - [ ] `NEXTAUTH_SECRET` set to a fresh 32-byte random string, `NEXTAUTH_URL`
       points at the real domain
 - [ ] Admin password changed away from `password123`
+- [ ] `CRON_SECRET` set in Vercel and the cron answers `200` — without it
+      `/api/cron/purge-trash` returns `401` on every run and the Trash never
+      empties on its own:
+      `curl -i -H "Authorization: Bearer $CRON_SECRET" https://mukra.com/api/cron/purge-trash`
 - [ ] Cloudinary keys set; one test upload round-trips through the admin console
 - [ ] Wallet numbers in `PAYMENT_*` match the accounts you actually check
 - [ ] `mukra.com` + `www` resolve with a valid certificate

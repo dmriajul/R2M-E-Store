@@ -59,14 +59,18 @@ import {
 import { deleteAdminCategory, saveAdminCategory } from "@/lib/data/categories";
 import {
   getAdminUserAccounts,
+  getAdminUserRoleHistory,
   purgeAdminUsers,
+  recordRoleChange,
   restoreAdminUsers,
   trashAdminUsers,
   updateAdminUserRole,
 } from "@/lib/data/admin-users";
 import {
+  getDemoRoleHistory,
   getDemoUserAccounts,
   purgeDemoUsers,
+  recordDemoRoleChange,
   restoreDemoUsers,
   setDemoUserRole,
   trashDemoUsers,
@@ -83,6 +87,7 @@ import type {
   AdminProduct,
   AdminUser,
   AdminUserAccount,
+  AdminUserDetail,
 } from "@/types";
 
 /* -------------------------------------------------------------------------- */
@@ -629,6 +634,44 @@ function blockedLifecycleChange(params: {
 }
 
 /**
+ * One account **plus its role-change history** — the read behind the account
+ * detail sheet.
+ *
+ * The list rows stay light (they carry no trail), so the sheet plucks this when
+ * it opens: the account, and the `RoleChange` rows written by
+ * `updateUserRoleAction()` below, newest first. In demo mode the same shape comes
+ * from `getDemoRoleHistory()`. A trail that can't be read is not fatal — the
+ * sheet opens with an empty history rather than refusing to show the account.
+ */
+export async function getUserDetailAction(
+  userId: string,
+): Promise<AdminActionResult<AdminUserDetail>> {
+  const gate = await requirePermission("users:manage");
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const parsedId = idSchema.safeParse(userId);
+  if (!parsedId.success) return { ok: false, error: "Invalid account id" };
+
+  const loaded = await loadUserAccounts();
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+
+  const account = loaded.accounts.find((entry) => entry.id === parsedId.data);
+  if (!account) {
+    return { ok: false, error: "That account no longer exists — reload the console" };
+  }
+
+  const history = loaded.database
+    ? await getAdminUserRoleHistory(account.id)
+    : getDemoRoleHistory(account.id);
+
+  return {
+    ok: true,
+    source: loaded.database ? "database" : "demo",
+    data: { ...account, history },
+  };
+}
+
+/**
  * Moves one account to a new role.
  *
  * **Super admin only** (`users:manage`), and the rest of the policy lives in
@@ -636,6 +679,10 @@ function blockedLifecycleChange(params: {
  * nobody may change their own role, and the last super admin may not be demoted.
  * Accounts in the trash are refused too — they are not on the accounts list, and
  * a role can only be changed on a live account (restore it first).
+ *
+ * A successful change also appends one row to the role-change audit trail
+ * (`recordRoleChange()` / `recordDemoRoleChange()`), which is what the detail
+ * sheet's **Role history** section reads.
  *
  * Deletion is deliberately never immediate: `trashUsersAction` below is the
  * reversible step, and only the trash can be emptied.
@@ -690,12 +737,32 @@ export async function updateUserRoleAction(
   if (!database) {
     const updated = setDemoUserRole(target.id, role);
     if (!updated) return { ok: false, error: "That demo account no longer exists" };
+    recordDemoRoleChange({
+      userId: updated.id,
+      fromRole: target.role,
+      toRole: updated.role,
+      actorEmail: gate.user.email,
+    });
     revalidateUserPaths();
     return { ok: true, source: "demo", data: updated };
   }
 
   try {
     const updated = await updateAdminUserRole(target.id, role);
+
+    /*
+     * Audit trail — written *after* the change has committed, so it can never
+     * turn a successful role change into a failed action (`recordRoleChange()`
+     * logs and swallows its own errors). `target.role` is the role the account
+     * held in the list the operator acted on, `updated.role` what is stored now.
+     */
+    await recordRoleChange({
+      userId: updated.id,
+      fromRole: target.role,
+      toRole: updated.role,
+      actorEmail: gate.user.email,
+    });
+
     revalidateUserPaths();
     return { ok: true, source: "database", data: updated };
   } catch (error) {
