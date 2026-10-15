@@ -25,7 +25,9 @@ import {
   adminInputClass,
   adminSelectClass,
 } from "@/components/admin/Field";
+import { ImageUpload } from "@/components/admin/ImageUpload";
 import { saveCategoryAction } from "@/app/admin/actions";
+import { useMediaSession } from "@/hooks/useMediaSession";
 import { useAdminStore } from "@/store/useAdminStore";
 import type { AdminCategory } from "@/types";
 
@@ -36,6 +38,7 @@ function emptyValues(): AdminCategoryValues {
     emoji: CATEGORY_EMOJI_CHOICES[0] ?? "🧸",
     description: "",
     parent: "",
+    image: "",
   };
 }
 
@@ -46,6 +49,7 @@ function valuesFor(category: AdminCategory): AdminCategoryValues {
     emoji: category.emoji,
     description: category.description,
     parent: category.parent ?? "",
+    image: category.image ?? "",
   };
 }
 
@@ -58,7 +62,13 @@ interface CategoryDialogProps {
   parents: readonly AdminCategory[];
 }
 
-/** Create / edit category modal with an emoji picker. */
+/**
+ * Create / edit category modal with an emoji picker and a cover image.
+ *
+ * The cover uploads to Cloudinary's `mukra/categories` folder through
+ * `/api/admin/upload`; cancelling the dialog deletes uploads that were never
+ * saved, and a replaced cover is cleaned up server-side after the save.
+ */
 export function CategoryDialog({
   open,
   onOpenChange,
@@ -68,6 +78,8 @@ export function CategoryDialog({
   const saveCategory = useAdminStore((state) => state.saveCategory);
   const upsertCategory = useAdminStore((state) => state.upsertCategory);
   const [slugTouched, setSlugTouched] = useState(false);
+  const media = useMediaSession();
+  const [uploading, setUploading] = useState(false);
 
   const {
     register,
@@ -75,7 +87,7 @@ export function CategoryDialog({
     reset,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<AdminCategoryValues>({
     resolver: zodResolver(adminCategorySchema),
     defaultValues: emptyValues(),
@@ -89,6 +101,13 @@ export function CategoryDialog({
 
   const name = watch("name");
   const emoji = watch("emoji");
+  const image = watch("image") ?? "";
+
+  /** Closing without saving deletes the uploads made while the dialog was open. */
+  const closeDialog = (nextOpen: boolean) => {
+    if (!nextOpen) media.discard();
+    onOpenChange(nextOpen);
+  };
 
   useEffect(() => {
     if (!open || slugTouched) return;
@@ -114,6 +133,8 @@ export function CategoryDialog({
       saveCategory(values, category?.id);
     }
 
+    // The saved cover belongs to the category now; other uploads are deleted.
+    media.commit([values.image]);
     toast.success(category ? "Category updated! 📂" : "Category created! 📂", {
       description: `${values.emoji} ${values.name}`,
     });
@@ -121,7 +142,7 @@ export function CategoryDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={closeDialog}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto border-[#2A2A2A] bg-[#141414] p-6 sm:max-w-lg">
         <DialogHeader className="gap-1">
           <DialogTitle className="text-sm font-semibold text-foreground">
@@ -193,6 +214,28 @@ export function CategoryDialog({
               </select>
             </AdminField>
 
+            <AdminField
+              label="Cover image"
+              htmlFor="category-image"
+              hint="Shown on the storefront's Shop by Category tiles (4:5). Without one, the bundled photo is used."
+              error={errors.image?.message}
+              className="sm:col-span-2"
+            >
+              <ImageUpload
+                id="category-image"
+                label="Category cover"
+                folder="categories"
+                aspect="portrait"
+                value={image}
+                onChange={(url) => setValue("image", url, { shouldDirty: true, shouldValidate: true })}
+                session={media}
+                onUploadingChange={setUploading}
+                invalid={Boolean(errors.image)}
+                sizes="240px"
+                className="max-w-60"
+              />
+            </AdminField>
+
             <fieldset className="sm:col-span-2">
               <legend className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
                 Emoji
@@ -230,13 +273,17 @@ export function CategoryDialog({
           <div className="flex flex-col-reverse gap-2 border-t border-[#242424] pt-4 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={() => onOpenChange(false)}
+              onClick={() => closeDialog(false)}
               className={cn(adminButtonGhost, "min-h-11 sm:min-h-10")}
             >
               Cancel
             </button>
-            <button type="submit" className={cn(adminButtonBlue, "min-h-11 sm:min-h-10")}>
-              {category ? "Save Category" : "Create Category"}
+            <button
+              type="submit"
+              disabled={isSubmitting || uploading}
+              className={cn(adminButtonBlue, "min-h-11 sm:min-h-10")}
+            >
+              {uploading ? "Uploading…" : category ? "Save Category" : "Create Category"}
             </button>
           </div>
         </form>

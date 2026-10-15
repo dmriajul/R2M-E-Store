@@ -1,19 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
+import { useEffect, useState } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CirclePlus, ImagePlus, Loader2, Trash2, UploadCloud, X } from "lucide-react";
+import { CirclePlus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatPrice, slugify } from "@/lib/utils";
-import {
-  MAX_IMAGE_BYTES,
-  humanFileSize,
-  isRenderableImage,
-  publicIdFromUrl,
-  validateUploadFile,
-} from "@/lib/images";
+import { PRODUCT_GALLERY_LIMIT } from "@/lib/media";
 import { CATEGORY_META, COLOR_HEX, DEFAULT_SWATCH } from "@/lib/site";
 import { PRODUCT_BADGE_CHOICES } from "@/lib/mock-admin";
 import {
@@ -45,13 +38,12 @@ import { useAdminStore } from "@/store/useAdminStore";
 import { saveProductAction, saveProductSeoAction } from "@/app/admin/actions";
 import { useAdminSession } from "@/components/admin/AdminSessionProvider";
 import { MarkdownDescriptionEditor } from "@/components/admin/MarkdownDescriptionEditor";
-import type { AdminProduct, UploadResult } from "@/types";
+import { ImageGalleryUpload } from "@/components/admin/ImageGalleryUpload";
+import { useMediaSession } from "@/hooks/useMediaSession";
+import type { AdminProduct } from "@/types";
 
 /** New products start at 10; existing records keep their own threshold. */
 const NEW_PRODUCT_THRESHOLD = 10;
-const MAX_IMAGES = 5;
-/** Images arrive as Cloudinary URLs or, without Cloudinary, as local uploads. */
-const UPLOAD_HINT = `JPEG, PNG or WebP up to ${humanFileSize(MAX_IMAGE_BYTES)} each`;
 type AgeOption = (typeof AGE_OPTIONS)[number];
 type VariantEntry = {
   size: string;
@@ -202,9 +194,13 @@ interface ProductFormProps {
 }
 
 /**
- * Add / edit sheet. A real shop would upload to storage — here the media zones
- * write placeholder tokens, which is why the same sheet can run without a
- * backend.
+ * Add / edit sheet.
+ *
+ * Product photos upload through `POST /api/admin/upload` into Cloudinary's
+ * `mukra/products` folder (local `.uploads/` in demo mode) and are saved as the
+ * `images` array — first image = cover. Uploads abandoned by cancelling the
+ * sheet are deleted again (`useMediaSession`); photos removed from a saved
+ * product are cleaned up server-side after the save.
  */
 export function ProductForm({ open, onOpenChange, product = null }: ProductFormProps) {
   const saveProduct = useAdminStore((state) => state.saveProduct);
@@ -234,19 +230,13 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
   });
 
   const name = watch("name");
-  const slug = watch("slug");
   const sizes = watch("sizes") ?? [];
   const variants = watch("variants") ?? [];
   const images = watch("images") ?? [];
 
-  /* ---------- Uploads (Cloudinary, or /public/uploads in demo mode) ---------- */
+  /* ---------- Media (Cloudinary mukra/products, or .uploads/ in demo mode) ---------- */
+  const media = useMediaSession();
   const [uploading, setUploading] = useState(false);
-  const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [progress, setProgress] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const imageInput = useRef<HTMLInputElement>(null);
   const category = watch("category");
   const categories = watch("categories") ?? [];
   const active = watch("active");
@@ -301,106 +291,10 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
     syncVariantMatrix(watch("colors") ?? [], next);
   };
 
-  const addImage = () => {
-    if (images.length >= MAX_IMAGES) {
-      toast.error(`Max ${MAX_IMAGES} images per product`);
-      return;
-    }
-    const stem = slugify(slug || name || "product") || "product";
-    setValue("images", [...images, `${stem}-${images.length + 1}`], { shouldDirty: true });
-  };
-
-  /** XHR (not fetch) so the progress bar can show real percentages. */
-  const uploadAsset = (file: File) =>
-    new Promise<UploadResult>((resolve, reject) => {
-      const body = new FormData();
-      body.append("file", file);
-
-      const request = new XMLHttpRequest();
-      request.open("POST", "/api/upload");
-      request.upload.addEventListener("progress", (event) => {
-        if (event.lengthComputable) {
-          setProgress(Math.round((event.loaded / event.total) * 100));
-        }
-      });
-      request.addEventListener("load", () => {
-        try {
-          const payload = JSON.parse(request.responseText) as {
-            data?: UploadResult;
-            error?: string;
-          };
-          if (request.status >= 400 || !payload.data) {
-            reject(new Error(payload.error ?? "Upload failed"));
-            return;
-          }
-          resolve(payload.data);
-        } catch {
-          reject(new Error("Unexpected response from the upload service"));
-        }
-      });
-      request.addEventListener("error", () => reject(new Error("Network error")));
-      request.send(body);
-    });
-
-  const handleImageFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-
-    const room = MAX_IMAGES - images.length;
-    if (room <= 0) {
-      toast.error(`Max ${MAX_IMAGES} images per product`);
-      return;
-    }
-
-    setUploading(true);
-    const uploaded: string[] = [];
-
-    try {
-      for (const file of Array.from(files).slice(0, room)) {
-        const validation = validateUploadFile(file);
-        if (!validation.ok) {
-          toast.error(file.name, { description: validation.error });
-          continue;
-        }
-
-        setProgress(0);
-        try {
-          const asset = await uploadAsset(file);
-          uploaded.push(asset.url);
-        } catch (error) {
-          toast.error(`Couldn't upload ${file.name}`, {
-            description: error instanceof Error ? error.message : undefined,
-          });
-        }
-      }
-
-      if (uploaded.length > 0) {
-        setValue("images", [...images, ...uploaded], { shouldDirty: true });
-        toast.success(uploaded.length === 1 ? "Image uploaded 📸" : `${uploaded.length} images uploaded 📸`);
-      }
-    } finally {
-      setUploading(false);
-      setProgress(0);
-    }
-  };
-
-  /** Deletes a Cloudinary asset when an image is removed from the form. */
-  const discardAsset = async (value: string | undefined) => {
-    if (!value) return;
-    const publicId = publicIdFromUrl(value);
-    if (!publicId) return;
-
-    await fetch(`/api/upload?publicId=${encodeURIComponent(publicId)}`, {
-      method: "DELETE",
-    }).catch(() => null);
-  };
-
-  const removeImage = (index: number) => {
-    void discardAsset(images[index]);
-    setValue(
-      "images",
-      images.filter((_, position) => position !== index),
-      { shouldDirty: true },
-    );
+  /** Closing without saving deletes the uploads made while the sheet was open. */
+  const closeForm = (nextOpen: boolean) => {
+    if (!nextOpen) media.discard();
+    onOpenChange(nextOpen);
   };
 
   /**
@@ -486,6 +380,8 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
       id = saveProduct({ ...values, stock }, product?.id);
     }
 
+    // The saved gallery owns its images now; unsaved leftovers are deleted.
+    media.commit(values.images);
     toast.success("Product saved! ✅", {
       description: product ? `${values.name} updated.` : `${values.name} added as ${id}.`,
     });
@@ -493,9 +389,15 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
   });
 
   const categoryEmoji = category ? CATEGORY_META[category].emoji : "🧥";
+  const imageErrors = errors.images;
+  const imagesError =
+    imageErrors?.message ??
+    (Array.isArray(imageErrors)
+      ? (imageErrors as Array<{ message?: string } | undefined>).find((entry) => entry?.message)?.message
+      : undefined);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={closeForm}>
       <SheetContent
         side="right"
         showCloseButton={false}
@@ -514,7 +416,7 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
           </div>
           <button
             type="button"
-            onClick={() => onOpenChange(false)}
+            onClick={() => closeForm(false)}
             aria-label="Close product form"
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-[#2A2A2A] text-muted-foreground transition-colors duration-200 hover:border-[#3A3A3A] hover:text-foreground focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
           >
@@ -970,127 +872,29 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
               {/* ---------- Media ---------- */}
               <FormSection title="Media">
                 <div className="sm:col-span-2">
-                  <ul className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-                    {images.map((value, index) => (
-                      <li
-                        key={`${value}-${index}`}
-                        className="group relative aspect-square overflow-hidden rounded-lg border border-[#2A2A2A] bg-[#101010]"
-                      >
-                        {isRenderableImage(value) && !failedImageUrls.has(value) ? (
-                          <Image
-                            src={value}
-                            alt={`Product image ${index + 1}`}
-                            fill
-                            sizes="160px"
-                            unoptimized={value.startsWith("/uploads/")}
-                            className="object-cover"
-                            onError={() =>
-                              setFailedImageUrls((current) => {
-                                const next = new Set(current);
-                                next.add(value);
-                                return next;
-                              })
-                            }
-                          />
-                        ) : (
-                          <span className="grid h-full place-items-center bg-linear-to-br from-blue-500/20 to-violet-500/10 text-2xl">
-                            {categoryEmoji}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index)}
-                          aria-label={`Remove image ${index + 1}`}
-                          className="absolute top-1 right-1 inline-flex size-7 items-center justify-center rounded-md border border-[#2A2A2A] bg-[#0D0D0D]/85 text-muted-foreground transition-colors duration-200 hover:text-rose-400 focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
-                        >
-                          <X aria-hidden className="size-3" />
-                        </button>
-                        <span className="absolute inset-x-1 bottom-1 truncate rounded bg-[#0D0D0D]/80 px-1 py-0.5 text-[9px] text-muted-foreground">
-                          {value}
-                        </span>
-                      </li>
-                    ))}
-
-                    <li>
-                      <button
-                        type="button"
-                        disabled={uploading}
-                        onClick={() => imageInput.current?.click()}
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                          setDragging(true);
-                        }}
-                        onDragLeave={() => setDragging(false)}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          setDragging(false);
-                          void handleImageFiles(event.dataTransfer.files);
-                        }}
-                        className={cn(
-                          "flex h-full min-h-24 w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed px-2 py-4 text-center text-[11px] transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none disabled:opacity-60",
-                          dragging
-                            ? "border-blue-500/70 bg-blue-500/8 text-blue-200"
-                            : "border-[#3A3A3A] bg-[#101010] text-muted-foreground hover:border-blue-500/50 hover:text-blue-300",
-                        )}
-                      >
-                        {uploading ? (
-                          <>
-                            <Loader2 aria-hidden className="size-4 animate-spin" />
-                            {progress}%
-                          </>
-                        ) : (
-                          <>
-                            <UploadCloud aria-hidden className="size-4" />
-                            Drop or click
-                          </>
-                        )}
-                      </button>
-                    </li>
-                  </ul>
-
-                  {uploading && (
-                    <div
-                      role="progressbar"
-                      aria-valuenow={progress}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[#242424]"
-                    >
-                      <div
-                        className="h-full rounded-full bg-blue-500 transition-all duration-300"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  )}
-
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[11px] text-muted-foreground">
-                      Max {MAX_IMAGES} images · {UPLOAD_HINT} · Cloudinary when configured,
-                      otherwise /public/uploads.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={addImage}
-                      className={cn(adminButtonGhost, "min-h-9 px-3 text-[11px]")}
-                    >
-                      <ImagePlus aria-hidden className="size-3.5" />
-                      Add placeholder
-                    </button>
-                  </div>
-
-                  <input
-                    ref={imageInput}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    multiple
-                    className="sr-only"
-                    onChange={(event) => {
-                      void handleImageFiles(event.target.files);
-                      event.target.value = "";
-                    }}
+                  <ImageGalleryUpload
+                    id="product-images"
+                    label="Product images"
+                    folder="products"
+                    value={images}
+                    onChange={(next) =>
+                      setValue("images", next, { shouldDirty: true, shouldValidate: true })
+                    }
+                    max={PRODUCT_GALLERY_LIMIT}
+                    session={media}
+                    onUploadingChange={setUploading}
+                    placeholder={
+                      <span className="grid h-full place-items-center bg-linear-to-br from-blue-500/20 to-violet-500/10 text-2xl">
+                        {categoryEmoji}
+                      </span>
+                    }
                   />
+                  {imagesError && (
+                    <p role="alert" className="mt-2 text-[11px] text-rose">
+                      {imagesError}
+                    </p>
+                  )}
                 </div>
-
               </FormSection>
 
                 </>
@@ -1331,17 +1135,17 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
           <div className="flex flex-col-reverse gap-2 border-t border-[#242424] bg-[#101010] px-6 py-5 sm:flex-row sm:justify-end sm:px-8">
             <button
               type="button"
-              onClick={() => onOpenChange(false)}
+              onClick={() => closeForm(false)}
               className={cn(adminButtonGhost, "min-h-11 sm:min-h-10")}
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || uploading}
               className={cn(adminButtonBlue, "min-h-11 sm:min-h-10")}
             >
-              Save Product
+              {uploading ? "Uploading images…" : "Save Product"}
             </button>
           </div>
         </form>

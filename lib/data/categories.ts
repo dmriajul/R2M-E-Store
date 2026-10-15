@@ -15,7 +15,9 @@
  */
 
 import { AdminDataError } from "@/lib/data/admin-errors";
-import { getPrisma } from "@/lib/prisma";
+import { scheduleImageCleanup } from "@/lib/data/media";
+import { isRenderableImage } from "@/lib/images";
+import { getPrisma, type PrismaLikeClient } from "@/lib/prisma";
 import { adminCategorySchema, type AdminCategoryValues } from "@/lib/validations";
 import type { AdminCategory } from "@/types";
 
@@ -26,6 +28,7 @@ interface CategoryRow {
   emoji: string;
   description: string;
   parent: string | null;
+  image: string | null;
 }
 
 function toAdminCategory(row: CategoryRow): AdminCategory {
@@ -36,7 +39,25 @@ function toAdminCategory(row: CategoryRow): AdminCategory {
     emoji: row.emoji,
     description: row.description,
     parent: row.parent && row.parent.length > 0 ? row.parent : null,
+    image: row.image && row.image.length > 0 ? row.image : null,
   };
+}
+
+/**
+ * The cover image a category has right now (for cleanup after a change).
+ * Never throws — a failed read only means no cleanup.
+ */
+async function readCategoryImage(db: PrismaLikeClient, id: string): Promise<string | null> {
+  try {
+    const row = (await db.category.findUnique({
+      where: { id },
+      select: { image: true },
+    })) as { image: string | null } | null;
+    return row?.image ?? null;
+  } catch (error) {
+    console.error("[admin/categories] Could not read the current cover image", error);
+    return null;
+  }
 }
 
 /** Prisma's unique-constraint violation, without importing the generated enums. */
@@ -77,6 +98,7 @@ export async function getAdminCategories(): Promise<AdminCategory[] | null> {
         emoji: true,
         description: true,
         parent: true,
+        image: true,
       },
     })) as CategoryRow[];
 
@@ -106,21 +128,27 @@ export async function saveAdminCategory(
     throw new AdminDataError("Saving a category requires a configured database");
   }
 
+  // `undefined` (field omitted) leaves the stored cover untouched.
+  const image = parsed.image === undefined ? undefined : parsed.image || null;
   const data = {
     name: parsed.name,
     slug: parsed.slug,
     emoji: parsed.emoji,
     description: parsed.description?.trim() ? parsed.description : "New category",
     parent: parsed.parent ? parsed.parent : null,
+    image,
   };
 
   try {
+    const previousImage = id && image !== undefined ? await readCategoryImage(db, id) : null;
     const row = (id
       ? await db.category.update({ where: { id }, data })
       : await db.category.create({
           data: { ...data, sortOrder: await db.category.count() },
         })) as CategoryRow;
 
+    // A replaced or removed cover is deleted once nothing else uses it.
+    scheduleImageCleanup([previousImage], [row.image]);
     return toAdminCategory(row);
   } catch (error) {
     if (isUniqueConflict(error)) {
@@ -141,11 +169,39 @@ export async function deleteAdminCategory(id: string): Promise<void> {
   }
 
   try {
+    const image = await readCategoryImage(db, id);
     await db.category.delete({ where: { id } });
+    scheduleImageCleanup([image]);
   } catch (error) {
     if (isMissingRow(error)) {
       throw new AdminDataError("That category no longer exists — reload the console");
     }
     throw error;
+  }
+}
+
+/**
+ * Storefront: uploaded cover images keyed by category slug (only categories
+ * that have one). Returns `{}` without a database or on any error, so the
+ * "Shop by Category" tiles simply keep their bundled photography.
+ */
+export async function getCategoryImageMap(): Promise<Record<string, string>> {
+  const db = await getPrisma();
+  if (!db) return {};
+
+  try {
+    const rows = (await db.category.findMany({
+      where: { image: { not: null } },
+      select: { slug: true, image: true },
+    })) as Array<{ slug: string; image: string | null }>;
+
+    const images: Record<string, string> = {};
+    for (const row of rows) {
+      if (isRenderableImage(row.image)) images[row.slug] = row.image;
+    }
+    return images;
+  } catch (error) {
+    console.error("[categories] Could not load category cover images", error);
+    return {};
   }
 }

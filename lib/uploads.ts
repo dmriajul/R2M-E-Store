@@ -14,8 +14,24 @@ export const UPLOAD_ROOT = path.join(process.cwd(), ".uploads");
 /** Public URL prefix the stored files are reachable at. */
 export const UPLOAD_URL_PREFIX = "/uploads";
 
-/** Local storage buckets for uploaded assets. */
-export const UPLOAD_BUCKETS = { products: "products", hero: "hero" } as const;
+/**
+ * Local storage buckets for uploaded assets.
+ *
+ * `products` / `categories` / `banners` mirror the console's Cloudinary
+ * folders (`lib/media.ts`); `payments` / `returns` hold customer evidence from
+ * `/api/upload`, kept apart so the console's delete endpoint can never reach it.
+ */
+export const UPLOAD_BUCKETS = {
+  products: "products",
+  categories: "categories",
+  banners: "banners",
+  hero: "hero",
+  payments: "payments",
+  returns: "returns",
+  uploads: "uploads",
+} as const;
+
+export type UploadBucket = (typeof UPLOAD_BUCKETS)[keyof typeof UPLOAD_BUCKETS];
 
 /** Content types we ever store locally. Anything else is refused. */
 export const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
@@ -23,6 +39,7 @@ export const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   webp: "image/webp",
+  avif: "image/avif",
   gif: "image/gif",
   svg: "image/svg+xml",
   mp4: "video/mp4",

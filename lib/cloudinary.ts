@@ -1,42 +1,144 @@
 /**
- * Cloudinary wrapper.
+ * Cloudinary — the configured v2 SDK instance plus upload/delete helpers.
  *
- * Uploads go to Cloudinary when the three env keys are present; otherwise the
- * caller's local-disk fallback takes over (`/public/uploads`). Nothing in this
- * file throws just because Cloudinary is unconfigured.
+ * **Server-only.** This module holds the API secret; the `server-only` import
+ * makes the Next.js build fail if a client component ever imports it. Browser
+ * code uses the pure URL helpers in `lib/images.ts` instead, and every upload
+ * goes through a route handler — the browser never talks to Cloudinary's API.
+ *
+ * Credentials come from `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and
+ * `CLOUDINARY_API_SECRET`. Nothing here throws at import time when they are
+ * missing: `isCloudinaryConfigured()` is `false` and callers fall back to the
+ * local `.uploads/` disk store (demo mode).
+ *
+ * @example
+ * import { cloudinary } from "@/lib/cloudinary";
+ * const result = await cloudinary.uploader.upload(dataUri, { folder: "mukra/products" });
  */
 
+import "server-only";
+import {
+  v2 as cloudinary,
+  type ConfigOptions,
+  type UploadApiOptions,
+  type UploadApiResponse,
+} from "cloudinary";
 import { isCloudinaryConfigured } from "@/lib/demo-mode";
 import { PRODUCT_FOLDER, isCloudinaryUrl, optimizeUrl } from "@/lib/images";
 
+/* -------------------------------------------------------------------------- */
+/*  Configuration                                                             */
+/* -------------------------------------------------------------------------- */
+
 /**
- * The SDK is imported lazily — and only as a *type* up here — because it is
- * Node-only. Keeping it out of the runtime module graph lets client components
- * import the URL helpers above (through `lib/images.ts`) without dragging the
- * SDK into the browser bundle.
+ * Only *defined* values are passed to `config()`: the SDK merges, so an
+ * `undefined` key would wipe a value it already read from `CLOUDINARY_URL`.
+ * Values are trimmed because dashboard copy/paste often brings a newline.
  */
-import type { v2 as CloudinaryV2 } from "cloudinary";
+function configFromEnv(): ConfigOptions {
+  const config: ConfigOptions = { secure: true };
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
+  const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
+  const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
+  if (cloudName) config.cloud_name = cloudName;
+  if (apiKey) config.api_key = apiKey;
+  if (apiSecret) config.api_secret = apiSecret;
+  return config;
+}
 
-type CloudinarySdk = typeof CloudinaryV2;
+cloudinary.config(configFromEnv());
 
-let sdk: CloudinarySdk | null = null;
+/** The configured Cloudinary v2 SDK — ready to use on the server. */
+export { cloudinary, isCloudinaryConfigured };
+export default cloudinary;
 
-async function cloudinarySdk(): Promise<CloudinarySdk | null> {
-  if (sdk) return sdk;
-  try {
-    const mod = await import("cloudinary");
-    sdk = mod.v2;
-    return sdk;
-  } catch {
-    return null;
+/** The cloud name in use (for logs and health output — never the secret). */
+export function cloudinaryCloudName(): string | null {
+  const name = cloudinary.config().cloud_name;
+  return typeof name === "string" && name ? name : null;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Errors                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** A failed Cloudinary call, with the HTTP status Cloudinary reported. */
+export class CloudinaryError extends Error {
+  readonly httpCode: number | null;
+
+  constructor(message: string, httpCode: number | null = null) {
+    super(message);
+    this.name = "CloudinaryError";
+    this.httpCode = httpCode;
   }
 }
 
-/* Re-exported so server callers can keep importing them from here. */
-export { isCloudinaryUrl, optimizeUrl };
+function toCloudinaryError(error: unknown): CloudinaryError {
+  if (error instanceof CloudinaryError) return error;
+  if (error && typeof error === "object") {
+    const record = error as { message?: unknown; http_code?: unknown; error?: unknown };
+    // The SDK sometimes nests the real error: `{ error: { message, http_code } }`.
+    const inner =
+      record.error && typeof record.error === "object"
+        ? (record.error as { message?: unknown; http_code?: unknown })
+        : record;
+    const message = typeof inner.message === "string" ? inner.message : "Cloudinary request failed";
+    const httpCode = typeof inner.http_code === "number" ? inner.http_code : null;
+    return new CloudinaryError(message, httpCode);
+  }
+  return new CloudinaryError(typeof error === "string" ? error : "Cloudinary request failed");
+}
 
-/* Folder constants live in `lib/images.ts`; re-exported for server callers. */
-export { PRODUCT_FOLDER };
+/* -------------------------------------------------------------------------- */
+/*  Upload / delete                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Streams a buffer to Cloudinary (`upload_stream`), resolving with the stored
+ * asset. Rejects with a `CloudinaryError` — callers decide what to tell users.
+ */
+export function uploadBuffer(buffer: Buffer, options: UploadApiOptions): Promise<UploadApiResponse> {
+  return new Promise<UploadApiResponse>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
+      if (error || !result) {
+        reject(toCloudinaryError(error ?? "Cloudinary returned an empty response"));
+        return;
+      }
+      resolve(result);
+    });
+    stream.on("error", (error: unknown) => reject(toCloudinaryError(error)));
+    stream.end(buffer);
+  });
+}
+
+/**
+ * Deletes an image and purges it from the CDN cache.
+ * Resolves `"ok"` or `"not found"` (already gone counts as done); anything
+ * else rejects with a `CloudinaryError`.
+ */
+export async function destroyImage(publicId: string): Promise<"ok" | "not found"> {
+  let response: unknown;
+  try {
+    response = await cloudinary.uploader.destroy(publicId, {
+      resource_type: "image",
+      type: "upload",
+      invalidate: true,
+    });
+  } catch (error) {
+    throw toCloudinaryError(error);
+  }
+
+  const result = (response as { result?: unknown } | null)?.result;
+  if (result === "ok" || result === "not found") return result;
+  throw new CloudinaryError(`Cloudinary could not delete ${publicId} (${String(result ?? "no result")})`);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Legacy helpers — used by `/api/upload` (customer proofs, hero videos)      */
+/* -------------------------------------------------------------------------- */
+
+/* Re-exported so older server callers keep compiling. */
+export { PRODUCT_FOLDER, isCloudinaryUrl, optimizeUrl };
 
 export interface UploadedAsset {
   url: string;
@@ -48,96 +150,57 @@ export interface UploadedAsset {
   provider: "cloudinary" | "local";
 }
 
-let configured = false;
-
-async function configure(): Promise<CloudinarySdk | null> {
-  const instance = await cloudinarySdk();
-  if (!instance || !isCloudinaryConfigured()) return null;
-
-  if (!configured) {
-    instance.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET,
-      secure: true,
-    });
-    configured = true;
-  }
-
-  return instance;
-}
-
 /**
- * Uploads a buffer to Cloudinary.
- * @returns the asset, or `null` when Cloudinary is not configured/failed.
+ * Uploads a buffer to Cloudinary for the legacy `/api/upload` route.
+ * @returns the asset, or `null` when Cloudinary is not configured or failed
+ *          (that route falls back to local disk).
  */
 export async function uploadToCloudinary(
   file: { buffer: Buffer; mimetype: string; originalName: string },
   folder: string = PRODUCT_FOLDER,
   resourceType: "image" | "video" = "image",
 ): Promise<UploadedAsset | null> {
-  const client = await configure();
-  if (!client) return null;
+  if (!isCloudinaryConfigured()) return null;
 
   const safeName = file.originalName
     .replace(/\.[^.]+$/, "")
     .replace(/[^a-zA-Z0-9-_]/g, "-")
     .slice(0, 60);
 
-  return new Promise<UploadedAsset | null>((resolve) => {
-    const stream = client.uploader.upload_stream(
-      {
-        folder,
-        resource_type: resourceType,
-        public_id: `${Date.now()}-${safeName || "asset"}`,
-        ...(resourceType === "image"
-          ? { transformation: [{ width: 1400, height: 1400, crop: "limit", quality: "auto:good" }] }
-          : {}),
-      },
-      (error, result) => {
-        if (error || !result) {
-          if (process.env.NODE_ENV !== "production") {
-            console.warn("[cloudinary] upload failed:", error?.message ?? "unknown error");
-          }
-          resolve(null);
-          return;
-        }
-
-        resolve({
-          url: result.secure_url,
-          publicId: result.public_id,
-          width: result.width,
-          height: result.height,
-          bytes: result.bytes,
-          format: result.format,
-          provider: "cloudinary",
-        });
-      },
-    );
-
-    stream.end(file.buffer);
-  });
-}
-
-/** Removes an asset. Silently returns false when Cloudinary is unavailable. */
-export async function deleteFromCloudinary(
-  publicId: string,
-): Promise<boolean> {
-  const client = await configure();
-  if (!client || !publicId) return false;
-
   try {
-    const result = await client.uploader.destroy(publicId, {
-      resource_type: "image",
-      invalidate: true,
+    const result = await uploadBuffer(file.buffer, {
+      folder,
+      resource_type: resourceType,
+      public_id: `${Date.now()}-${safeName || "asset"}`,
+      ...(resourceType === "image"
+        ? { transformation: [{ width: 1400, height: 1400, crop: "limit", quality: "auto:good" }] }
+        : {}),
     });
-    return result.result === "ok" || result.result === "not found";
+
+    return {
+      url: result.secure_url,
+      publicId: result.public_id,
+      width: result.width,
+      height: result.height,
+      bytes: result.bytes,
+      format: result.format,
+      provider: "cloudinary",
+    };
   } catch (error) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[cloudinary] delete failed:", error instanceof Error ? error.message : error);
-    }
-    return false;
+    console.error("[cloudinary] upload failed:", toCloudinaryError(error).message);
+    return null;
   }
 }
 
-/* URL helpers live in `lib/images.ts` and are re-exported at the top. */
+/** Removes an asset. Returns false when Cloudinary is unavailable or failed. */
+export async function deleteFromCloudinary(publicId: string): Promise<boolean> {
+  if (!isCloudinaryConfigured() || !publicId) return false;
+
+  try {
+    await destroyImage(publicId);
+    return true;
+  } catch (error) {
+    console.error("[cloudinary] delete failed:", toCloudinaryError(error).message);
+    return false;
+  }
+}

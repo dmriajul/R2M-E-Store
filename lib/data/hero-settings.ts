@@ -1,3 +1,4 @@
+import { scheduleImageCleanup } from "@/lib/data/media";
 import { DEFAULT_HERO_SETTINGS, type HeroSettings } from "@/lib/hero-settings";
 import { getPrisma } from "@/lib/prisma";
 
@@ -45,11 +46,30 @@ export async function saveHeroSettings(settings: HeroSettings): Promise<HeroSett
     secondaryCtaLink: settings.secondaryCtaLink || null,
   };
 
+  const previous = await readHeroMediaUrl(db);
   await db.siteSettings.upsert({
     where: { id: SETTINGS_ID },
     create: { id: SETTINGS_ID, ...values },
     update: values,
   });
 
+  // A replaced banner image (mukra/banners) is deleted once nothing uses it.
+  scheduleImageCleanup([previous], [values.heroMediaUrl]);
   return { ...DEFAULT_HERO_SETTINGS, ...values };
+}
+
+/** The banner currently saved (for cleanup). Never throws. */
+async function readHeroMediaUrl(
+  db: NonNullable<Awaited<ReturnType<typeof getPrisma>>>,
+): Promise<string | null> {
+  try {
+    const row = (await db.siteSettings.findUnique({
+      where: { id: SETTINGS_ID },
+      select: { heroMediaUrl: true },
+    })) as { heroMediaUrl: string | null } | null;
+    return row?.heroMediaUrl ?? null;
+  } catch (error) {
+    console.error("[site-settings] Could not read the current hero media", error);
+    return null;
+  }
 }

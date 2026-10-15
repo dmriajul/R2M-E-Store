@@ -177,20 +177,26 @@ customer passwords while you are there.
 
 ---
 
-## 7. Set up Cloudinary (product images)
+## 7. Set up Cloudinary (console images)
 
 1. Create a free account at <https://cloudinary.com>.
-2. **Dashboard → Product Environment Credentials** → copy the cloud name, API
-   key and API secret into `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`,
-   `CLOUDINARY_API_SECRET`.
-3. Redeploy. Product image uploads now go to `mukra/products` (JPEG/PNG/WebP,
-   ≤5 MB) and are delivered through `res.cloudinary.com` with
-   `f_auto,q_auto` image transformations.
-4. Cloudinary → **Settings → Optimization** → enable *Auto format* and
-   *Auto quality* so any legacy asset gets the same treatment.
+2. **Settings → API Keys** (or **Dashboard → Product Environment Credentials**)
+   → copy the cloud name, API key and API secret into `CLOUDINARY_CLOUD_NAME`,
+   `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (server-only — never
+   `NEXT_PUBLIC_`).
+3. Redeploy. Console uploads (`POST /api/admin/upload`) now go to
+   `mukra/products`, `mukra/categories` and `mukra/banners` (JPG/PNG/WebP/AVIF,
+   ≤5 MB, stored ≤1920px wide) and are delivered from `res.cloudinary.com` as
+   `f_auto,q_auto,w_{width},c_limit` srcsets (AVIF/WebP per browser).
+4. Run `npx prisma db push` once — it adds the nullable `Category.image`
+   column (see README → *Image uploads (Cloudinary)*).
+5. Optional: Cloudinary → **Settings → Optimization** → enable *Auto format* and
+   *Auto quality* so assets referenced outside the app get the same treatment.
 
 Without these keys the app stores uploads in `.uploads/` and serves them through
-`/uploads/…` — fine for a preview, not for production (ephemeral filesystem).
+`/uploads/…` — fine for a self-hosted preview, but **Vercel's filesystem is
+read-only**, so console uploads answer 503 there until the keys are set. Vercel
+also caps request bodies at 4.5 MB, slightly below the 5 MB upload limit.
 
 ---
 

@@ -1,24 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { t, translateCategory } from "@/lib/utils";
 import { useLanguageStore } from "@/store/useLanguageStore";
 
 /**
  * Shop-by-category cover tiles.
  *
- * Cover photography lives in `/public/images/categories/<slug>.jpg` and is
- * always a real photographic JPG/PNG — there is deliberately no SVG or vector
- * placeholder artwork: a failed photo simply falls back to the card's dark
- * base surface while the label stays legible.
+ * A cover uploaded in the console (`Category.image`, Cloudinary
+ * `mukra/categories`) wins; otherwise the bundled photography in
+ * `/public/images/categories/<slug>.jpg` is used. Either way it is a real
+ * photo — there is deliberately no SVG or vector placeholder artwork: a failed
+ * photo simply falls back to the card's dark base surface while the label
+ * stays legible.
  */
 interface CategoryTile {
   /** File basename under `/public/images/categories/`. */
   slug: string;
+  /** `Category.slug` whose uploaded cover replaces the bundled photo. */
+  category: string;
   /** English display label; run through `translateCategory` at render time. */
   label: string;
   /** Deep link into the shop catalogue (`?category=` expects a category slug). */
@@ -28,26 +32,31 @@ interface CategoryTile {
 const CATEGORY_TILES: readonly CategoryTile[] = [
   {
     slug: "tops-tees",
+    category: "tops-tees",
     label: "Tops & Tees",
     href: "/shop?category=tops-tees",
   },
   {
     slug: "pants-bottoms",
+    category: "winter-bottoms-trousers",
     label: "Pants & Bottoms",
     href: "/shop?category=winter-bottoms-trousers",
   },
   {
     slug: "frocks-dresses",
+    category: "frocks-dresses",
     label: "Frocks & Dresses",
     href: "/shop?category=frocks-dresses",
   },
   {
     slug: "outerwear",
+    category: "jackets-coats",
     label: "Outerwear",
     href: "/shop?category=jackets-coats",
   },
   {
     slug: "accessories",
+    category: "accessories",
     label: "Accessories",
     href: "/shop?category=accessories",
   },
@@ -72,7 +81,15 @@ const WHEEL_STEP_LOCK_MS = 600;
  * momentum bursts from skipping past cards. Touch/pointer drag stays with
  * Embla's native drag engine, so mobile keeps natural drag-to-scroll.
  */
-export function ShopByCategory() {
+export interface ShopByCategoryProps {
+  /**
+   * Uploaded covers keyed by category slug (`getCategoryImageMap()`); tiles
+   * without one keep their bundled photo.
+   */
+  images?: Readonly<Record<string, string>>;
+}
+
+export function ShopByCategory({ images = {} }: ShopByCategoryProps) {
   const language = useLanguageStore((state) => state.language);
   const [emblaRef, emblaApi] = useEmblaCarousel({
     align: "start",
@@ -185,12 +202,14 @@ export function ShopByCategory() {
                     className={`group relative block aspect-4/5 overflow-hidden rounded-3xl border border-glass-border bg-[#101010] transition-[border-color,box-shadow,transform] duration-500 ${EASE_LUXE} hover:-translate-y-1.5 hover:border-primary/45 hover:shadow-[0_0_46px_-14px_rgba(212,175,55,0.75)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
                   >
                     {/* Real photographic cover — no vector/SVG fallback art. */}
-                    <Image
-                      src={`/images/categories/${tile.slug}.jpg`}
+                    <OptimizedImage
+                      src={images[tile.category] ?? `/images/categories/${tile.slug}.jpg`}
                       alt={label}
                       fill
                       sizes="(min-width: 1024px) 280px, (min-width: 640px) 44vw, 76vw"
-                      className={`object-cover transition-transform duration-700 ${EASE_LUXE} group-hover:scale-[1.06]`}
+                      className="absolute inset-0 rounded-none"
+                      imageClassName={`transition-transform duration-700 ${EASE_LUXE} group-hover:scale-[1.06]`}
+                      fallback={<span aria-hidden />}
                     />
                     {/* Legibility scrim over the photo. */}
                     <span

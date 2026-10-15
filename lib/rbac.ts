@@ -85,6 +85,11 @@ export type AdminPermission =
   | "coupons:write"
   | "categories:write"
   | "settings:write"
+  /**
+   * Upload / delete console media (`/api/admin/upload`). The route also checks
+   * the permission that owns the destination folder — see `lib/media.ts`.
+   */
+  | "media:upload"
   | "analytics:read"
   /** Staff & Roles: listing accounts and moving them between roles. */
   | "users:manage";
@@ -103,6 +108,11 @@ export const PERMISSION_ROLES: Readonly<Record<AdminPermission, readonly AdminRo
   "coupons:write": ["SUPER_ADMIN"],
   "categories:write": ["SUPER_ADMIN", "INVENTORY_MANAGER"],
   "settings:write": ["SUPER_ADMIN", "SEO_MANAGER"],
+  /**
+   * Everyone who owns a media folder: products + categories (inventory) and
+   * banners (SEO). Kept equal to the union of those folders' permissions.
+   */
+  "media:upload": ["SUPER_ADMIN", "INVENTORY_MANAGER", "SEO_MANAGER"],
   "analytics:read": ["SUPER_ADMIN"],
   /** Role management is super-admin only — no manager can grant roles. */
   "users:manage": ["SUPER_ADMIN"],

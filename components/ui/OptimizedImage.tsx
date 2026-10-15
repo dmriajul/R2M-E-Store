@@ -2,94 +2,119 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { imageDeliveryProps, isRenderableImage } from "@/lib/images";
 import { cn } from "@/lib/utils";
 
 /**
- * Responsive Cloudinary image presets.
+ * Rendition presets: the intrinsic box used when the image is not `fill`, and
+ * a default `sizes` hint so the browser picks the right `srcset` candidate.
  */
-export type ImagePreset = "thumbnail" | "card" | "detail" | "zoom" | "blur";
+export type ImagePreset = "thumbnail" | "card" | "detail" | "zoom" | "hero" | "blur";
 
 export const IMAGE_PRESETS = {
-  thumbnail: { width: 100, height: 100, quality: 70 },
-  card: { width: 400, height: 500, quality: 80 },
-  detail: { width: 800, height: 1000, quality: 85 },
-  zoom: { width: 1600, height: 2000, quality: 90 },
-  blur: { width: 40, height: 40, quality: 10 },
+  thumbnail: { width: 160, height: 160, sizes: "96px" },
+  card: {
+    width: 480,
+    height: 600,
+    sizes: "(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw",
+  },
+  detail: { width: 960, height: 1200, sizes: "(min-width: 1024px) 45vw, 100vw" },
+  zoom: { width: 1920, height: 2400, sizes: "(min-width: 1250px) 1200px, 96vw" },
+  hero: { width: 1920, height: 1080, sizes: "100vw" },
+  blur: { width: 40, height: 40, sizes: "40px" },
 } as const;
 
-interface OptimizedImageProps {
+export interface OptimizedImageProps {
+  /**
+   * Cloudinary URL, local `/…` path or any http(s) URL. Empty values and
+   * legacy non-URL tokens render the fallback instead of a broken image.
+   */
   src?: string | null;
   alt: string;
+  /** Intrinsic size + default `sizes` (default `card`). */
   preset?: ImagePreset;
-  className?: string;
+  /** Fill the (positioned) wrapper instead of using an intrinsic width/height. */
+  fill?: boolean;
   width?: number;
   height?: number;
+  /** Overrides the preset's `sizes` hint. */
+  sizes?: string;
+  /** Above-the-fold: eager load + high fetch priority (and a preload hint). */
+  priority?: boolean;
+  objectFit?: "cover" | "contain";
+  /** Wrapper classes (size the wrapper; the image fills it). */
+  className?: string;
+  /** Classes for the `<img>` element itself. */
+  imageClassName?: string;
   style?: React.CSSProperties;
+  /** Rendered instead of the image when `src` is missing or fails to load. */
+  fallback?: React.ReactNode;
   fallbackGradient?: string;
   fallbackEmoji?: string;
-  priority?: boolean;
-  sizes?: string;
-  objectFit?: "cover" | "contain";
+  onLoad?: () => void;
   onError?: () => void;
-  fallback?: React.ReactNode;
 }
 
 /**
- * Optimized image component with Cloudinary integration and CSS gradient
- * placeholder fallback when images are absent or fail to load.
+ * Responsive image with Cloudinary delivery and graceful fallbacks.
+ *
+ * - **Cloudinary URLs** use a custom `next/image` loader, so every `srcset`
+ *   candidate is a direct CDN URL with `f_auto,q_auto,w_{width},c_limit` —
+ *   the browser receives AVIF/WebP at the width it needs, straight from
+ *   Cloudinary (any transformation already in the stored URL is replaced, not
+ *   stacked).
+ * - **Other URLs** keep working: bundled `/public` files and allow-listed
+ *   hosts go through the Next.js optimiser; runtime `/uploads/…` files and
+ *   unknown hosts load as-is (`unoptimized`).
+ * - Below-the-fold images are lazy (`loading="lazy"`); a pulse placeholder
+ *   shows until the image has loaded, and load errors swap in the fallback.
  */
 export function OptimizedImage({
   src,
   alt,
   preset = "card",
-  className,
+  fill = false,
   width,
   height,
+  sizes,
+  priority = false,
+  objectFit = "cover",
+  className,
+  imageClassName,
   style,
+  fallback,
   fallbackGradient = "from-gray-700 to-gray-900",
   fallbackEmoji,
-  priority = false,
-  sizes = "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw",
-  objectFit = "cover",
+  onLoad,
   onError,
-  fallback,
 }: OptimizedImageProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
 
   const presetConfig = IMAGE_PRESETS[preset];
-  const placeholderWidth = presetConfig.width;
-  const placeholderHeight = presetConfig.height;
+  const renderable = isRenderableImage(src);
 
-  const cloudinaryUrl = src ? buildCloudinaryUrl(src, preset) : null;
-  const hasError = Boolean(src && failedSrc === src);
-  const isLoading = Boolean(src && loadedSrc !== src);
-
-  const fallbackClass = cn(
-    "relative overflow-hidden rounded-lg bg-gradient-to-br",
-    fallbackGradient,
-    "aspect-square",
-  );
-
-  if (!src || hasError) {
+  if (!renderable || failedSrc === src) {
     if (fallback) {
       return (
-        <div
-          className={cn("", className)}
-          style={{ width: width, height: height, ...style }}
-        >
+        <div className={className} style={{ width, height, ...style }}>
           {fallback}
         </div>
       );
     }
     return (
       <div
-        className={cn(fallbackClass, className)}
-        style={{ width: width, height: height, ...style }}
-        aria-label={alt}
+        role="img"
+        aria-label={alt || undefined}
+        className={cn(
+          "relative aspect-square overflow-hidden rounded-lg bg-gradient-to-br",
+          fallbackGradient,
+          className,
+        )}
+        style={{ width, height, ...style }}
       >
         {fallbackEmoji && (
-          <span className="absolute inset-0 flex items-center justify-center text-4xl opacity-40">
+          <span aria-hidden className="absolute inset-0 flex items-center justify-center text-4xl opacity-40">
             {fallbackEmoji}
           </span>
         )}
@@ -97,32 +122,37 @@ export function OptimizedImage({
     );
   }
 
+  const delivery = imageDeliveryProps(src);
+  const isLoading = loadedSrc !== src;
+  const dimensions = fill
+    ? { fill: true as const }
+    : { width: width ?? presetConfig.width, height: height ?? presetConfig.height };
+
   return (
     <div className={cn("relative overflow-hidden rounded-lg", className)} style={style}>
-      {/* Blur placeholder */}
-      {isLoading && (
-        <div
-          className="absolute inset-0 bg-gray-900 animate-pulse"
-          style={{ width: "100%", height: "100%" }}
-        />
-      )}
+      {isLoading && <div aria-hidden className="absolute inset-0 animate-pulse bg-gray-900" />}
 
       <Image
-        src={cloudinaryUrl ?? src}
+        src={src}
         alt={alt}
-        width={width ?? placeholderWidth}
-        height={height ?? placeholderHeight}
-        className={cn(
-          "h-full w-full transition-opacity duration-300",
-          objectFit === "contain" ? "object-contain" : "object-cover",
-          isLoading ? "opacity-0" : "opacity-100",
-        )}
+        {...dimensions}
+        sizes={sizes ?? presetConfig.sizes}
         priority={priority}
-        sizes={sizes}
-        loading={priority ? "eager" : "lazy"}
-        onLoad={() => setLoadedSrc(src)}
+        loading={priority ? undefined : "lazy"}
+        loader={delivery.loader}
+        unoptimized={delivery.unoptimized}
+        className={cn(
+          !fill && "h-full w-full",
+          objectFit === "contain" ? "object-contain" : "object-cover",
+          "transition-opacity duration-300",
+          isLoading ? "opacity-0" : "opacity-100",
+          imageClassName,
+        )}
+        onLoad={() => {
+          setLoadedSrc(src);
+          onLoad?.();
+        }}
         onError={() => {
-          if (!src) return;
           setFailedSrc(src);
           setLoadedSrc(src);
           onError?.();
@@ -132,53 +162,7 @@ export function OptimizedImage({
   );
 }
 
-/**
- * Build a Cloudinary transformation URL for the given preset.
- * If Cloudinary is not configured, return the original URL.
- */
-function buildCloudinaryUrl(
-  imageId: string,
-  preset: ImagePreset,
-  options?: {
-    effect?: string;
-    overlay?: string;
-    opacity?: number;
-  },
-): string {
-  const config = IMAGE_PRESETS[preset];
-  const { width, height, quality } = config;
-
-  // Check if we're using Cloudinary
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const useCloudinary = cloudName && cloudName.trim().length > 0;
-
-  if (!useCloudinary) {
-    // Return as-is (local or CDN URL)
-    return imageId;
-  }
-
-  // Build Cloudinary URL with transformations
-  const transformations = [
-    `w_${width}`,
-    `h_${height}`,
-    `c_fill`,
-    `q_${quality}`,
-    "f_auto",
-  ];
-
-  if (options?.effect) {
-    transformations.push(options.effect);
-  }
-
-  const transformString = transformations.join(",");
-  return `https://res.cloudinary.com/${cloudName}/image/upload/${transformString}/${imageId}`;
-}
-
-/**
- * Generate a blur placeholder data URL for lazy loading.
- */
-export function generateBlurPlaceholder(
-  _gradient?: string,
-): string {
+/** A tiny gradient SVG data URL, usable as a `blurDataURL` placeholder. */
+export function generateBlurPlaceholder(): string {
   return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%234B5563'/%3E%3Cstop offset='100%25' stop-color='%231F2937'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='40' height='40' fill='url(%23g)'/%3E%3C/svg%3E`;
 }
