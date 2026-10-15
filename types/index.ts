@@ -642,6 +642,38 @@ export interface AdminUserAccount {
   deletedBy?: string | null;
 }
 
+/**
+ * One row of an account's role-change audit trail (the Prisma `RoleChange`
+ * table).
+ *
+ * Written the moment a super admin moves an account between roles, and listed
+ * under **Role history** in the account detail sheet. `actorEmail` is stored as
+ * a plain string rather than a relation, so deleting (or purging) an operator
+ * never removes the trail of what they did.
+ */
+export interface AdminRoleChange {
+  id: string;
+  /** The account whose role changed. */
+  userId: string;
+  /** The role the account held before the change (always normalised). */
+  fromRole: SessionRole;
+  /** The role the account holds now (always normalised). */
+  toRole: SessionRole;
+  /** Who made the change — the signed-in super admin's email. */
+  actorEmail: string;
+  /** ISO timestamp of the change. */
+  createdAt: string;
+}
+
+/**
+ * An account plus its audit trail — what `getUserDetailAction()` hands the
+ * console's account detail sheet.
+ */
+export interface AdminUserDetail extends AdminUserAccount {
+  /** The role changes recorded for this account, **newest first**. */
+  history: readonly AdminRoleChange[];
+}
+
 /** Mirrors the Prisma `PaymentMethod` enum (card payments map to SSLCOMMERZ). */
 export type PaymentKey = "COD" | "BKASH" | "NAGAD" | "ROCKET" | "SSLCOMMERZ";
 

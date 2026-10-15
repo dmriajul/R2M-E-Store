@@ -29,6 +29,8 @@ export interface PrismaDelegate {
 
 export interface PrismaLikeClient {
   user: PrismaDelegate;
+  /** Role-change audit trail (`RoleChange`) — see lib/data/admin-users.ts. */
+  roleChange: PrismaDelegate;
   product: PrismaDelegate;
   order: PrismaDelegate;
   orderItem: PrismaDelegate;

@@ -51,7 +51,7 @@ Rocket wallet payments, and a bilingual (English + বাংলা) help centre.
 | Forms | React Hook Form + Zod (shared schemas, inline errors) |
 | State | Zustand (`useCartStore` with `persist`, wishlist, checkout, admin, dashboard) |
 | Auth | Auth.js / NextAuth v5 (credentials, JWT, bcryptjs) |
-| Database | PostgreSQL via Supabase + Prisma ORM (8 models, 5 enums) |
+| Database | PostgreSQL via Supabase + Prisma ORM (13 models, 7 enums) |
 | Uploads | Cloudinary (product images), local-disk fallback |
 | Toasts | Sonner (typed icons and colours) |
 | Icons | lucide-react |
@@ -141,6 +141,7 @@ Every value is optional; each integration switches on independently.
 | `NEXT_PUBLIC_CURRENCY` | no | `USD` | `USD` \| `EUR` \| `GBP` \| `BDT` |
 | `NEXT_PUBLIC_FREE_SHIPPING_THRESHOLD` | no | `50` | Order value that unlocks free delivery |
 | `STORE_SUPPORT_EMAIL` | no | `hello@mukra.com` | Support address in emails/legal pages |
+| `CRON_SECRET` | Production (cron) | — | Bearer token Vercel Cron sends to `/api/cron/purge-trash`; without it the route answers `401` in production and the trash never auto-empties |
 
 Templates: [`.env.example`](./.env.example) (local) and
 [`.env.production.example`](./.env.production.example) (Vercel).
