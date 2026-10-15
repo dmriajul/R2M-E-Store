@@ -334,6 +334,74 @@ process, and do not point it at production without explicit approval.
 
 ---
 
+## Database security (Supabase RLS)
+
+Supabase serves the `public` schema over its auto-generated PostgREST API
+(`/rest/v1/...`) using the project's **public `anon` key** — a key that is
+*designed* to ship in browsers and is therefore no secret at all. Any table in
+`public` **without Row Level Security** is fully readable, and often writable,
+by anyone holding that key. That is what the Supabase dashboard's
+**“RLS Disabled in Public”** critical warnings mean for `User`, `Order`,
+`OrderItem`, `Address`, `WishlistItem`, `Review`, `Coupon`, `ProductVariant`,
+`ReturnRequest` and friends: order history, shipping addresses and bcrypt
+password hashes are currently exposed on a public endpoint.
+
+**Row Level Security (RLS)** is Postgres's per-table policy layer: with RLS
+enabled, every row is filtered through SQL policies that say which rows each
+role may read or write — deny by default. The migrations in
+[`supabase/migrations/`](./supabase/migrations/) switch RLS on for every table
+and install policies that mirror the app's `lib/rbac.ts` matrix:
+
+| Table | SELECT | Writes |
+| --- | --- | --- |
+| `User` | own profile, or super admin | super admin updates (never `password`); no delete via client |
+| `Order` / `OrderItem` | own rows, or support & above / staff | support & above update order status; line items immutable |
+| `Address` | own, or staff (shipping) | owner only (CRUD) |
+| `WishlistItem` | own | owner only (CRUD) |
+| `Review` | anyone | verified buyers create; author edits; staff delete |
+| `Coupon` | anyone (active only); super admin sees all | super admin only |
+| `Product` / `ProductVariant` / `Category` / `SiteSettings` | anyone | staff only |
+| `ReturnRequest` | own, or support & above | owner creates; support & above update |
+
+**Why this cannot break the storefront or admin panel:** the app talks to
+Postgres through Prisma using the role that ran `prisma db push` — the *table
+owner* — and Postgres owners bypass RLS. Only the PostgREST roles (`anon`,
+`authenticated`) become subject to the policies. The app's own authorization
+(NextAuth.js sessions + `lib/rbac.ts` + Server Actions) is untouched.
+Do **not** add `FORCE ROW LEVEL SECURITY` — that would apply policies to the
+owner too and break Prisma. Full design notes, including how the policies map
+onto NextAuth (no Supabase Auth required):
+**[supabase/README.md](./supabase/README.md)**.
+
+### Apply the migrations (SQL Editor, in order)
+
+1. Supabase Dashboard → your project → **SQL Editor** → **New query**.
+2. Paste and **Run** each file in this order:
+   `001_enable_rls.sql` → `002_rls_helper_functions.sql` →
+   `003_rls_policies_accounts.sql` → `004_rls_policies_orders.sql` →
+   `005_rls_policies_catalog.sql`
+   (all under `supabase/migrations/`; every file is idempotent).
+3. Or, with the Supabase CLI: `supabase link --project-ref <ref> && supabase db push`.
+
+### Verify it works
+
+- **SQL Editor:** `SELECT relname, relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND relkind = 'r';` → every table `t`. `SELECT tablename, policyname, cmd FROM pg_policies WHERE schemaname = 'public';` → your policy list.
+- **Attack path:** `curl "https://<ref>.supabase.co/rest/v1/Order?select=*" -H "apikey: <anon-key>"` must return `[]` (as must `User`, `Address`, `WishlistItem`); `/rest/v1/Product` must still return the catalogue.
+- **App smoke test:** sign in → shop, cart, checkout, wishlist, reviews, account addresses/orders/returns, then the admin panel (products, orders, returns, coupons, customers, staff). All must behave exactly as before.
+- **Automated:** `node supabase/tests/rls.test.mjs` asserts the whole policy matrix against a throwaway Postgres (see `supabase/README.md` §5).
+
+### Rollback
+
+`supabase/rollback_rls.sql` (kept **outside** `migrations/` so it never
+auto-runs) drops every policy, restores the old grants and switches RLS off —
+paste it into the SQL Editor only if you must. Prefer fixing a policy forward;
+rolling back re-opens the exposure the dashboard warned about.
+
+> **Maintenance:** a destructive `prisma db push` (one that re-creates a table)
+> drops that table's policies — re-run `001`–`005` afterwards (idempotent).
+
+---
+
 ## Deployment
 
 The full runbook lives in **[DEPLOYMENT.md](./DEPLOYMENT.md)** — GitHub → Vercel

@@ -138,6 +138,15 @@ curl -s https://your-domain.com/api/health
 # { "mode": "production", "database": "connected", ... }
 ```
 
+6. **Lock down the database API (RLS).** Run the five migrations in
+   [`supabase/migrations/`](./supabase/migrations/) in the SQL Editor, in
+   order `001` → `005` (full walkthrough in
+   [supabase/README.md](./supabase/README.md)). Until you do, the Supabase
+   dashboard reports **“RLS Disabled in Public”** and anyone with your public
+   `anon` key can read every order, address and password hash through
+   `/rest/v1/…`. The Next.js app is unaffected either way — Prisma connects as
+   the table owner, which bypasses RLS.
+
 The seeded admin login is `admin@mukra.com` / `password123` — **change it
 immediately** after your first sign-in (Admin → Settings), and rotate the demo
 customer passwords while you are there.
