@@ -624,6 +624,22 @@ export interface AdminUserAccount {
   role: SessionRole;
   /** ISO date the account was created (or the demo's fixed join date). */
   joinedAt: string;
+
+  /* ---- Trash (soft delete) ---- */
+
+  /**
+   * ISO timestamp the account was moved to the trash, or `null` while it is
+   * live. **Staff & Roles → Trash** lists exactly the accounts that carry it,
+   * and `isTrashed()` in `lib/rbac.ts` is the predicate the console reads.
+   */
+  deletedAt?: string | null;
+  /** Id of the super admin who moved the account to the trash. */
+  deletedById?: string | null;
+  /**
+   * Display name behind `deletedById`, resolved by the data layer while that
+   * admin still exists — so the trash can say *who* deleted an account.
+   */
+  deletedBy?: string | null;
 }
 
 /** Mirrors the Prisma `PaymentMethod` enum (card payments map to SSLCOMMERZ). */

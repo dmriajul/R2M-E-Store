@@ -16,7 +16,8 @@
  *    `INVENTORY_MANAGER` owns products/categories, `SEO_MANAGER` owns product
  *    metadata and settings, `SUPPORT_MANAGER` owns orders/returns/customers, and
  *    only `SUPER_ADMIN` can move accounts between those roles
- *    (`updateUserRoleAction`).
+ *    (`updateUserRoleAction`) or move them in and out of the trash
+ *    (`trashUsersAction`, `restoreUsersAction`, `purgeUsersAction`).
  * 2. **Validate everything.** Arguments arrive from the browser as `unknown`
  *    and are parsed with the shared Zod schemas in `lib/validations.ts`.
  * 3. **Never fake a write.** With `DATABASE_URL` configured, a failure is
@@ -34,8 +35,10 @@ import { isDatabaseConfigured } from "@/lib/demo-mode";
 import {
   ASSIGNABLE_ROLES,
   checkRoleChange,
+  checkUserLifecycleChange,
   rolesForPermission,
   type AdminPermission,
+  type UserLifecycleAction,
 } from "@/lib/rbac";
 import { describeAdminError } from "@/lib/data/admin-errors";
 import {
@@ -54,8 +57,20 @@ import {
   type PaymentDecision,
 } from "@/lib/data/admin-orders";
 import { deleteAdminCategory, saveAdminCategory } from "@/lib/data/categories";
-import { getAdminUserAccounts, updateAdminUserRole } from "@/lib/data/admin-users";
-import { getDemoUserAccounts, setDemoUserRole } from "@/lib/data/users";
+import {
+  getAdminUserAccounts,
+  purgeAdminUsers,
+  restoreAdminUsers,
+  trashAdminUsers,
+  updateAdminUserRole,
+} from "@/lib/data/admin-users";
+import {
+  getDemoUserAccounts,
+  purgeDemoUsers,
+  restoreDemoUsers,
+  setDemoUserRole,
+  trashDemoUsers,
+} from "@/lib/data/users";
 import {
   adminCategorySchema,
   adminProductSchema,
@@ -546,11 +561,71 @@ export async function deleteCategoryAction(
 /** The five assignable roles — `ADMIN` is a legacy value, never written back. */
 const assignableRoleSchema = z.enum(ASSIGNABLE_ROLES);
 
-/** Everything a role change can visibly affect. */
+/** Everything an account change can visibly affect. */
 function revalidateUserPaths(): void {
   revalidatePath("/admin");
   revalidatePath("/admin/staff");
   revalidatePath("/admin/customers");
+}
+
+/**
+ * The console's account list, trashed rows included.
+ *
+ * `/admin/staff` paints both tabs from one read, so the trash actions can check
+ * the state of exactly the accounts the operator is looking at. Returns a
+ * friendly error instead of an empty list when Postgres is configured but the
+ * read failed — an action must never act on a list it could not load.
+ */
+async function loadUserAccounts(): Promise<
+  { ok: true; accounts: AdminUserAccount[]; database: boolean } | { ok: false; error: string }
+> {
+  const database = isDatabaseConfigured();
+  if (!database) return { ok: true, accounts: getDemoUserAccounts(), database };
+
+  const accounts = await getAdminUserAccounts();
+  if (!accounts) {
+    return { ok: false, error: "Could not load the account list — try again" };
+  }
+
+  return { ok: true, accounts, database };
+}
+
+/** Parses the id list every account action takes. */
+function parseUserIds(ids: unknown): { ok: true; ids: string[] } | { ok: false; error: string } {
+  const parsed = idsSchema.safeParse(ids);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Select at least one account" };
+  }
+  return { ok: true, ids: parsed.data };
+}
+
+/**
+ * Runs the lifecycle policy (`checkUserLifecycleChange()` in `lib/rbac.ts`) over
+ * every selected account and returns the first refusal, or `null` when the whole
+ * selection may go ahead.
+ *
+ * Bulk account actions are all-or-nothing on purpose: half-moved accounts are
+ * far harder to explain than one clear "that one is protected" message.
+ */
+function blockedLifecycleChange(params: {
+  action: UserLifecycleAction;
+  accounts: readonly AdminUserAccount[];
+  actor: AdminUser;
+  ids: readonly string[];
+}): string | null {
+  for (const id of params.ids) {
+    const verdict = checkUserLifecycleChange({
+      action: params.action,
+      accounts: params.accounts,
+      actorId: params.actor.id,
+      actorEmail: params.actor.email,
+      targetId: id,
+    });
+
+    if (!verdict.ok) return verdict.error;
+  }
+
+  return null;
 }
 
 /**
@@ -559,9 +634,11 @@ function revalidateUserPaths(): void {
  * **Super admin only** (`users:manage`), and the rest of the policy lives in
  * `checkRoleChange()` (`lib/rbac.ts`) so it can be read and tested on its own:
  * nobody may change their own role, and the last super admin may not be demoted.
+ * Accounts in the trash are refused too — they are not on the accounts list, and
+ * a role can only be changed on a live account (restore it first).
  *
- * Deletion is deliberately not offered anywhere: a role can always be taken
- * away, but accounts are never removed from the console.
+ * Deletion is deliberately never immediate: `trashUsersAction` below is the
+ * reversible step, and only the trash can be emptied.
  */
 export async function updateUserRoleAction(
   userId: string,
@@ -579,19 +656,20 @@ export async function updateUserRoleAction(
   }
   const role = parsedRole.data;
 
-  const database = isDatabaseConfigured();
-  let accounts: AdminUserAccount[];
-  if (database) {
-    const rows = await getAdminUserAccounts();
-    if (!rows) return { ok: false, error: "Could not load the account list — try again" };
-    accounts = rows;
-  } else {
-    accounts = getDemoUserAccounts();
-  }
+  const loaded = await loadUserAccounts();
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+  const { accounts, database } = loaded;
 
   const target = accounts.find((account) => account.id === parsedId.data);
   if (!target) {
     return { ok: false, error: "That account no longer exists — reload the console" };
+  }
+
+  if (target.deletedAt) {
+    return {
+      ok: false,
+      error: "That account is in the trash — restore it before changing its role.",
+    };
   }
 
   /* Choosing the role the account already has is a no-op, not an error. */
@@ -600,7 +678,8 @@ export async function updateUserRoleAction(
   }
 
   const verdict = checkRoleChange({
-    accounts,
+    /* Only live accounts count as owners — a trashed super admin can't sign in. */
+    accounts: accounts.filter((account) => !account.deletedAt),
     actorId: gate.user.id,
     actorEmail: gate.user.email,
     targetId: target.id,
@@ -621,5 +700,132 @@ export async function updateUserRoleAction(
     return { ok: true, source: "database", data: updated };
   } catch (error) {
     return failure<AdminUserAccount>(error, "Could not update that role");
+  }
+}
+
+/**
+ * Moves accounts to the trash — the reversible half of "delete".
+ *
+ * A trashed account keeps every row it owns, but can no longer sign in (see
+ * `findUserByEmail()`), and the console lists it under **Staff & Roles → Trash**
+ * with a countdown: after `TRASH_RETENTION_DAYS` the purge cron deletes it for
+ * good. Both the account that performs the change and the last live super admin
+ * are protected by `checkUserLifecycleChange()`.
+ */
+export async function trashUsersAction(
+  ids: unknown,
+): Promise<AdminActionResult<{ trashed: AdminUserAccount[] }>> {
+  const gate = await requirePermission("users:manage");
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const parsed = parseUserIds(ids);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+
+  const loaded = await loadUserAccounts();
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+
+  const blocked = blockedLifecycleChange({
+    action: "trash",
+    accounts: loaded.accounts,
+    actor: gate.user,
+    ids: parsed.ids,
+  });
+  if (blocked) return { ok: false, error: blocked };
+
+  if (!loaded.database) {
+    const trashed = trashDemoUsers(parsed.ids, gate.user.id);
+    revalidateUserPaths();
+    return { ok: true, source: "demo", data: { trashed } };
+  }
+
+  try {
+    const trashed = await trashAdminUsers(parsed.ids, gate.user.id);
+    revalidateUserPaths();
+    return { ok: true, source: "database", data: { trashed } };
+  } catch (error) {
+    return failure<{ trashed: AdminUserAccount[] }>(
+      error,
+      "Could not move those accounts to the trash",
+    );
+  }
+}
+
+/** Puts accounts back on the accounts list, permissions and all. */
+export async function restoreUsersAction(
+  ids: unknown,
+): Promise<AdminActionResult<{ restored: AdminUserAccount[] }>> {
+  const gate = await requirePermission("users:manage");
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const parsed = parseUserIds(ids);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+
+  const loaded = await loadUserAccounts();
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+
+  const blocked = blockedLifecycleChange({
+    action: "restore",
+    accounts: loaded.accounts,
+    actor: gate.user,
+    ids: parsed.ids,
+  });
+  if (blocked) return { ok: false, error: blocked };
+
+  if (!loaded.database) {
+    const restored = restoreDemoUsers(parsed.ids);
+    revalidateUserPaths();
+    return { ok: true, source: "demo", data: { restored } };
+  }
+
+  try {
+    const restored = await restoreAdminUsers(parsed.ids);
+    revalidateUserPaths();
+    return { ok: true, source: "database", data: { restored } };
+  } catch (error) {
+    return failure<{ restored: AdminUserAccount[] }>(error, "Could not restore those accounts");
+  }
+}
+
+/**
+ * Empties the trash: deletes trashed accounts for good, after the confirmation
+ * dialog on the console.
+ *
+ * Only accounts that are **already in the trash** can go through here, and an
+ * account that still holds an order (or a review) is refused by the data layer —
+ * an order must keep its customer, so the message explains that restoring is the
+ * only option. The retention cron applies the same rule automatically.
+ */
+export async function purgeUsersAction(
+  ids: unknown,
+): Promise<AdminActionResult<{ purged: number }>> {
+  const gate = await requirePermission("users:manage");
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const parsed = parseUserIds(ids);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+
+  const loaded = await loadUserAccounts();
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+
+  const blocked = blockedLifecycleChange({
+    action: "purge",
+    accounts: loaded.accounts,
+    actor: gate.user,
+    ids: parsed.ids,
+  });
+  if (blocked) return { ok: false, error: blocked };
+
+  if (!loaded.database) {
+    const purged = purgeDemoUsers(parsed.ids);
+    revalidateUserPaths();
+    return { ok: true, source: "demo", data: { purged } };
+  }
+
+  try {
+    const purged = await purgeAdminUsers(parsed.ids);
+    revalidateUserPaths();
+    return { ok: true, source: "database", data: { purged } };
+  } catch (error) {
+    return failure<{ purged: number }>(error, "Could not delete those accounts");
   }
 }

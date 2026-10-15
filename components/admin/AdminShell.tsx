@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatRelative } from "@/lib/utils";
-import { MukraLogo } from "@/components/brand/MukraLogo";
+import { ConsoleBrand } from "@/components/admin/ConsoleBrand";
+import { OperatorAvatar } from "@/components/admin/UserAvatar";
 import {
   adminPageMeta,
   isActiveRoute,
@@ -53,18 +54,13 @@ import {
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-/** "Riajul Khandokar" → "RK"; falls back to the email's first letters. */
-function initialsFor(user: AdminUser): string {
-  const source = user.name.trim() || user.email;
-  const parts = source.split(/[\s@._-]+/).filter(Boolean);
-  const initials = parts
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
-  return initials || "OP";
-}
-
-/** Small gold pill that names the signed-in operator's role. */
+/**
+ * Small gold pill that names the signed-in operator's role.
+ *
+ * (Initials used to be computed here; `UserAvatar`/`OperatorAvatar` now own
+ * that, so the rail, the profile menu and the account sheets all fall back to
+ * the same chip — and can show a real profile picture when one is uploaded.)
+ */
 function RoleBadge({ role, className }: { role: AdminRole; className?: string }) {
   return (
     <span
@@ -78,24 +74,16 @@ function RoleBadge({ role, className }: { role: AdminRole; className?: string })
   );
 }
 
-/** Signature logo shared by the desktop rail and the mobile drawer. */
+/**
+ * Signature logo shared by the desktop rail and the mobile drawer.
+ *
+ * Delegates to `ConsoleBrand`, which bounds the wordmark's height. The old
+ * inline version passed the `lockup` variant to `MukraLogo`, whose wordmark sets
+ * `h-auto w-auto` — with both dimensions on `auto` the 406×190 PNG rendered at
+ * its intrinsic size and blew the rail header apart (the "broken logo").
+ */
 function AdminLogo({ collapsed = false }: { collapsed?: boolean }) {
-  return (
-    <Link
-      href="/admin"
-      aria-label="Mukra admin dashboard"
-      className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors duration-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
-    >
-      <MukraLogo variant={collapsed ? "monogram" : "lockup"} size="sm" priority />
-      {!collapsed && (
-        <span className="min-w-0">
-          <span className="mt-0.5 inline-flex rounded border border-[#2A2A2A] bg-white/5 px-1.5 py-px text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-            Admin
-          </span>
-        </span>
-      )}
-    </Link>
-  );
+  return <ConsoleBrand collapsed={collapsed} size="sm" />;
 }
 
 function NavLink({
@@ -196,9 +184,7 @@ function AdminIdentity({ user, collapsed = false }: { user: AdminUser; collapsed
         collapsed && "lg:justify-center lg:px-2",
       )}
     >
-      <span className="grid size-8 shrink-0 place-items-center rounded-full border border-primary/35 bg-gold-soft text-[11px] font-semibold text-primary">
-        {initialsFor(user)}
-      </span>
+      <OperatorAvatar name={user.name} size="sm" />
       {!collapsed && (
         <span className="min-w-0">
           <span className="block truncate text-xs font-medium text-foreground">{user.name}</span>
@@ -435,9 +421,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   aria-label="Open admin account menu"
                   className="inline-flex items-center gap-2 rounded-lg border border-[#2A2A2A] p-1 pr-2.5 transition-colors duration-200 hover:border-[#3A3A3A] hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none"
                 >
-                  <span className="grid size-8 place-items-center rounded-full border border-primary/35 bg-gold-soft text-[11px] font-semibold text-primary">
-                    {initialsFor(user)}
-                  </span>
+                  <OperatorAvatar name={user.name} size="sm" />
                   <span className="hidden text-xs font-medium text-foreground sm:block">
                     {user.name}
                   </span>

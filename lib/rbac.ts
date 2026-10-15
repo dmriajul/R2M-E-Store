@@ -327,3 +327,204 @@ export function checkRoleChange(params: {
 
   return { ok: true };
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Trash (Staff & Roles → Trash)                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How long a trashed account is kept before the purge cron removes it for good.
+ *
+ * Three months: long enough to undo a mistaken deletion (and to survive a
+ * holiday or a busy season), short enough to honour "delete my account"
+ * requests without holding personal data indefinitely. The consoles count down
+ * to it, the cron enforces it, and the demo layer mirrors it — one number, so
+ * the badge can never disagree with the sweeper.
+ */
+export const TRASH_RETENTION_DAYS = 90;
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+/** Accepts the shapes the data layer and the console hand around. */
+export type TrashStamp = string | Date | null | undefined;
+
+/** `deletedAt` as a `Date`, or `null` when the account is live / unparseable. */
+export function trashDeletedAt(value: TrashStamp): Date | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** True when the account sits in the trash rather than on the accounts list. */
+export function isTrashed(account: { deletedAt?: TrashStamp }): boolean {
+  return trashDeletedAt(account.deletedAt) !== null;
+}
+
+/**
+ * When the account is due to be deleted permanently, or `null` while it is
+ * live. Every retention answer below is derived from this one function, so the
+ * badge, the filter and the cron can never disagree.
+ */
+export function trashExpiresAt(
+  deletedAt: TrashStamp,
+  retentionDays: number = TRASH_RETENTION_DAYS,
+): Date | null {
+  const deleted = trashDeletedAt(deletedAt);
+  if (!deleted) return null;
+  return new Date(deleted.getTime() + retentionDays * DAY_IN_MS);
+}
+
+/**
+ * Whole days left before permanent deletion — `0` on the final day, so the
+ * console can say "Purges today" instead of counting in fractions.
+ */
+export function trashDaysRemaining(
+  deletedAt: TrashStamp,
+  now: Date = new Date(),
+  retentionDays: number = TRASH_RETENTION_DAYS,
+): number {
+  const expires = trashExpiresAt(deletedAt, retentionDays);
+  if (!expires) return retentionDays;
+  return Math.max(0, Math.ceil((expires.getTime() - now.getTime()) / DAY_IN_MS));
+}
+
+/** True once the retention window has closed — the purge cron's own test. */
+export function isTrashExpired(
+  deletedAt: TrashStamp,
+  now: Date = new Date(),
+  retentionDays: number = TRASH_RETENTION_DAYS,
+): boolean {
+  const expires = trashExpiresAt(deletedAt, retentionDays);
+  if (!expires) return false;
+  return expires.getTime() <= now.getTime();
+}
+
+/**
+ * The cutoff an expired-row query filters on: accounts trashed **before** this
+ * instant have outlived the retention window. Lets the cron select, count and
+ * delete in SQL instead of loading every row.
+ */
+export function trashRetentionCutoff(
+  now: Date = new Date(),
+  retentionDays: number = TRASH_RETENTION_DAYS,
+): Date {
+  return new Date(now.getTime() - retentionDays * DAY_IN_MS);
+}
+
+/** The three lifecycle moves the console can make on an account. */
+export type UserLifecycleAction = "trash" | "restore" | "purge";
+
+/** The facts the lifecycle policy needs about one account. */
+export interface UserLifecycleSubject {
+  id: string;
+  email: string;
+  role: SessionRole;
+  deletedAt?: TrashStamp;
+}
+
+export type UserLifecycleVerdict =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: "unknown-account" | "self" | "last-super-admin" | "already-trashed" | "not-trashed";
+      error: string;
+    };
+
+/**
+ * Can `actorId`/`actorEmail` move the account `targetId` to / out of the trash?
+ *
+ * Same shape as `checkRoleChange()` — one testable predicate for the three
+ * lifecycle actions, called per account by the Server Actions before anything
+ * is written:
+ *
+ * 1. the target must be in the list the actor is looking at;
+ * 2. **trashing and purging your own account is refused** — you would lock
+ *    yourself out of the console mid-request (matched by id *and* email, as in
+ *    `checkRoleChange`);
+ * 3. the **last live super admin** can neither be trashed nor purged, so the
+ *    console always keeps an owner. Accounts already in the trash are not
+ *    owners, so purging a trashed super admin stays allowed;
+ * 4. trash/restore/purge only apply to an account in the matching state, which
+ *    turns a double-click or a stale console tab into a clear message instead of
+ *    a silent no-op.
+ */
+export function checkUserLifecycleChange(params: {
+  action: UserLifecycleAction;
+  accounts: readonly UserLifecycleSubject[];
+  actorId: string;
+  actorEmail: string;
+  targetId: string;
+}): UserLifecycleVerdict {
+  const { action, accounts, actorId, actorEmail, targetId } = params;
+
+  const target = accounts.find((account) => account.id === targetId);
+  if (!target) {
+    return {
+      ok: false,
+      reason: "unknown-account",
+      error: "That account no longer exists — reload the console",
+    };
+  }
+
+  const trashed = isTrashed(target);
+  const email = actorEmail.trim().toLowerCase();
+  const isSelf =
+    target.id === actorId || (email.length > 0 && target.email.trim().toLowerCase() === email);
+
+  if (action === "restore") {
+    if (!trashed) {
+      return {
+        ok: false,
+        reason: "not-trashed",
+        error: `${target.email} is already live — nothing to restore`,
+      };
+    }
+    return { ok: true };
+  }
+
+  /* Trashing and purging share the two guard rails below. */
+  if (trashed && action === "trash") {
+    return {
+      ok: false,
+      reason: "already-trashed",
+      error: `${target.email} is already in the trash`,
+    };
+  }
+
+  if (!trashed && action === "purge") {
+    return {
+      ok: false,
+      reason: "not-trashed",
+      error: `${target.email} is not in the trash — move it there first`,
+    };
+  }
+
+  if (isSelf) {
+    return {
+      ok: false,
+      reason: "self",
+      error:
+        action === "trash"
+          ? "You can't move your own account to the trash — ask another super admin."
+          : "You can't delete your own account permanently.",
+    };
+  }
+
+  if (!trashed && target.role === "SUPER_ADMIN") {
+    const liveSuperAdmins = accounts.filter(
+      (account) => account.role === "SUPER_ADMIN" && !isTrashed(account),
+    ).length;
+    if (liveSuperAdmins <= 1) {
+      return {
+        ok: false,
+        reason: "last-super-admin",
+        error:
+          action === "trash"
+            ? "The last super admin can't be trashed — promote another account first."
+            : "The last super admin can't be deleted — promote another account first.",
+      };
+    }
+  }
+
+  return { ok: true };
+}
