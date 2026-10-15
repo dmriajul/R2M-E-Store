@@ -96,6 +96,15 @@ model User {
   password  String
   role      Role     @default(CUSTOMER)
   avatar    String?
+  /// Soft delete — **Staff & Roles → Trash**. `null` means the account is live;
+  /// a timestamp means it is parked in the trash (it can no longer sign in) and
+  /// is deleted for good once the retention window closes
+  /// (`TRASH_RETENTION_DAYS` in lib/rbac.ts, enforced by the purge cron).
+  deletedAt   DateTime?
+  /// The super admin who moved the account to the trash, shown as "Deleted by".
+  /// Deliberately a plain column rather than a relation: purging an admin must
+  /// never cascade into the accounts they trashed.
+  deletedById String?
   addresses Address[]
   orders    Order[]
   returnRequests ReturnRequest[]
@@ -105,6 +114,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@index([role])
+  @@index([deletedAt])
 }
 
 model Product {

@@ -13,6 +13,7 @@
 import { compare, hash } from "bcryptjs";
 import { withDatabase } from "@/lib/prisma";
 import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD, isDatabaseConfigured } from "@/lib/demo-mode";
+import { isTrashExpired } from "@/lib/rbac";
 import type {
   AdminUserAccount,
   AuthRole,
@@ -43,7 +44,18 @@ interface DemoAccount extends UserRecord {
  */
 const demoScope = globalThis as typeof globalThis & {
   __mukraDemoRoleOverrides?: Map<string, SessionRole>;
+  /** Emails parked in the demo trash → when, and by which super admin. */
+  __mukraDemoTrashOverrides?: Map<string, DemoTrashEntry>;
+  /** Emails deleted for good while no database is connected. */
+  __mukraDemoPurged?: Set<string>;
 };
+
+/** One demo account sitting in the trash. */
+interface DemoTrashEntry {
+  /** ISO timestamp — the retention countdown in the console reads it directly. */
+  deletedAt: string;
+  deletedById: string;
+}
 
 /**
  * The map lives on `globalThis` rather than in this module on purpose: Next.js
@@ -55,10 +67,40 @@ const demoScope = globalThis as typeof globalThis & {
 const demoRoleOverrides: Map<string, SessionRole> = (demoScope.__mukraDemoRoleOverrides ??=
   new Map<string, SessionRole>());
 
+/**
+ * Trashed demo accounts and hard-deleted ones, keyed by normalised email and
+ * kept on `globalThis` for the same one-map-per-process reason as the roles
+ * above. Together they mirror the `User.deletedAt` column: an account in
+ * `demoTrashOverrides` is invisible to sign-in and listed under
+ * **Staff & Roles → Trash**, and an email in `demoPurged` is gone entirely.
+ */
+const demoTrashOverrides: Map<string, DemoTrashEntry> = (demoScope.__mukraDemoTrashOverrides ??=
+  new Map<string, DemoTrashEntry>());
+
+const demoPurged: Set<string> = (demoScope.__mukraDemoPurged ??= new Set<string>());
+
+const normalise = (email: string): string => email.trim().toLowerCase();
+
+/** True when sign-in may use this demo account (not trashed, not purged). */
+function isDemoAccountVisible(email: string): boolean {
+  const key = normalise(email);
+  return !demoPurged.has(key) && !demoTrashOverrides.has(key);
+}
+
+/** Demo display name behind a `deletedById`, or `undefined` for an unknown id. */
+function demoAccountName(id: string): string | undefined {
+  return DEMO_ACCOUNTS.find((entry) => entry.id === id)?.name;
+}
+
 /** Applies any pending demo override to an account record. */
 function withDemoRole(account: UserRecord): UserRecord {
   const override = demoRoleOverrides.get(normalise(account.email));
   return override ? { ...account, role: override } : account;
+}
+
+/** The trash state of one demo account, if it is in the trash at all. */
+function demoTrashFor(email: string): DemoTrashEntry | undefined {
+  return demoTrashOverrides.get(normalise(email));
 }
 
 /**
@@ -118,11 +160,17 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   },
 ] as const;
 
-const normalise = (email: string): string => email.trim().toLowerCase();
-
 function demoUserFor(email: string, password: string): UserRecord | null {
   const account = DEMO_ACCOUNTS.find((entry) => entry.email === normalise(email));
-  if (account && password === account.password) return withDemoRole(account);
+
+  /*
+   * A trashed demo account is refused here *and* by `findUserByEmail`, so none
+   * of the sign-in paths (`verifyCredentialsDetailed`, the registration flow)
+   * can hand out a session for an account the console has parked in the trash.
+   */
+  if (account && password === account.password && isDemoAccountVisible(account.email)) {
+    return withDemoRole(account);
+  }
 
   // Any other email works with the shared demo password.
   if (!account && password === DEMO_PASSWORD) {
@@ -145,18 +193,33 @@ function demoUserFor(email: string, password: string): UserRecord | null {
   return null;
 }
 
-/** Looks a user up by email (no password check). */
+/**
+ * Looks a user up by email (no password check).
+ *
+ * **Trashed accounts are not found.** A row with `deletedAt` set (or a demo
+ * account in the trash) is invisible here, which is what makes the soft delete
+ * real: the account can't sign in, and its address is free for a new
+ * registration — the console's trash then reports the clash if someone tries to
+ * restore it.
+ */
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
+  const address = normalise(email);
+
   const { data } = await withDatabase<UserRecord | null>(
     async (db) => {
-      const row = (await db.user.findUnique({ where: { email: normalise(email) } })) as
-        | (AuthUser & { password: string })
+      const row = (await db.user.findUnique({ where: { email: address } })) as
+        | (AuthUser & { password: string; deletedAt?: Date | string | null })
         | null;
-      return row;
+      if (!row || row.deletedAt) return null;
+
+      /* The trash column never leaves this module. */
+      const { deletedAt: _deletedAt, ...rest } = row;
+      void _deletedAt;
+      return rest;
     },
     () => {
-      const account = DEMO_ACCOUNTS.find((entry) => entry.email === normalise(email));
-      return account ? withDemoRole(account) : null;
+      const account = DEMO_ACCOUNTS.find((entry) => entry.email === address);
+      return account && isDemoAccountVisible(account.email) ? withDemoRole(account) : null;
     },
   );
 
@@ -258,16 +321,54 @@ export async function createUser(
 /*  Demo directory (no database)                                              */
 /* -------------------------------------------------------------------------- */
 
-/** The demo accounts as the Staff & Roles console lists them. */
-export function getDemoUserAccounts(): AdminUserAccount[] {
-  return DEMO_ACCOUNTS.map((account) => ({
+/** One demo account as the console reads it, trash state included. */
+function toDemoAccount(account: DemoAccount): AdminUserAccount {
+  const trash = demoTrashFor(account.email);
+
+  return {
     id: account.id,
     name: account.name,
     email: account.email,
     phone: account.phone ?? "",
     role: withDemoRole(account).role as SessionRole,
     joinedAt: account.joinedAt,
-  }));
+    deletedAt: trash?.deletedAt ?? null,
+    deletedById: trash?.deletedById ?? null,
+    deletedBy: trash ? (demoAccountName(trash.deletedById) ?? null) : null,
+  };
+}
+
+/**
+ * The demo trash's stand-in for the purge cron.
+ *
+ * Nothing runs on a schedule without a database, so the retention window is
+ * applied lazily the moment the console reads the list: an entry that outlived
+ * `TRASH_RETENTION_DAYS` is dropped — exactly what the cron would have done to
+ * it. Demo accounts hold no orders, so the "keeps its orders" rule that protects
+ * real customers has nothing to hold on to here.
+ */
+function purgeExpiredDemoTrash(now: Date = new Date()): number {
+  let removed = 0;
+
+  for (const [email, entry] of demoTrashOverrides) {
+    if (!isTrashExpired(entry.deletedAt, now)) continue;
+    demoTrashOverrides.delete(email);
+    demoPurged.add(email);
+    removed += 1;
+  }
+
+  return removed;
+}
+
+/**
+ * Every demo account as the Staff & Roles console lists them — **trashed ones
+ * included**, matching `getAdminUserAccounts()` and the `User.deletedAt`
+ * column, so the same components drive both modes.
+ */
+export function getDemoUserAccounts(): AdminUserAccount[] {
+  purgeExpiredDemoTrash();
+
+  return DEMO_ACCOUNTS.filter((account) => !demoPurged.has(account.email)).map(toDemoAccount);
 }
 
 /**
@@ -280,14 +381,67 @@ export function setDemoUserRole(id: string, role: SessionRole): AdminUserAccount
 
   demoRoleOverrides.set(account.email, role);
 
-  return {
-    id: account.id,
-    name: account.name,
-    email: account.email,
-    phone: account.phone ?? "",
-    role,
-    joinedAt: account.joinedAt,
-  };
+  return { ...toDemoAccount(account), role };
+}
+
+/**
+ * Moves demo accounts to the trash.
+ *
+ * An account that is already trashed keeps its original timestamp — the console
+ * shows a countdown, and a double-click must not restart it. Returns the rows
+ * the caller asked for that are now in the trash.
+ */
+export function trashDemoUsers(
+  ids: readonly string[],
+  deletedById: string,
+  now: Date = new Date(),
+): AdminUserAccount[] {
+  const wanted = new Set(ids);
+
+  for (const account of DEMO_ACCOUNTS) {
+    if (!wanted.has(account.id) || !isDemoAccountVisible(account.email)) continue;
+    demoTrashOverrides.set(account.email, {
+      deletedAt: now.toISOString(),
+      deletedById,
+    });
+  }
+
+  return getDemoUserAccounts().filter(
+    (account) => wanted.has(account.id) && Boolean(account.deletedAt),
+  );
+}
+
+/** Takes demo accounts back out of the trash. Returns the restored rows. */
+export function restoreDemoUsers(ids: readonly string[]): AdminUserAccount[] {
+  const wanted = new Set(ids);
+
+  for (const account of DEMO_ACCOUNTS) {
+    if (!wanted.has(account.id)) continue;
+    demoTrashOverrides.delete(account.email);
+    demoPurged.delete(account.email);
+  }
+
+  return getDemoUserAccounts().filter(
+    (account) => wanted.has(account.id) && !account.deletedAt,
+  );
+}
+
+/**
+ * Deletes demo accounts for good (they vanish from the list and can no longer
+ * sign in). Returns how many were removed; already-purged ids are not counted.
+ */
+export function purgeDemoUsers(ids: readonly string[]): number {
+  const wanted = new Set(ids);
+  let removed = 0;
+
+  for (const account of DEMO_ACCOUNTS) {
+    if (!wanted.has(account.id) || demoPurged.has(account.email)) continue;
+    demoTrashOverrides.delete(account.email);
+    demoPurged.add(account.email);
+    removed += 1;
+  }
+
+  return removed;
 }
 
 export function stripPassword(user: UserRecord): AuthUser {

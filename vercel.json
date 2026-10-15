@@ -5,6 +5,12 @@
   "installCommand": "npm install",
   "outputDirectory": ".next",
   "regions": ["sin1"],
+  "crons": [
+    {
+      "path": "/api/cron/purge-trash",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
