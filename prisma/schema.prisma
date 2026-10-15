@@ -157,7 +157,10 @@ model Product {
   material          String?
   colors            String[] // colour names
   sizes             String[]
-  images            String[] // Cloudinary URLs
+  /// Gallery, in display order — the first entry is the cover. Cloudinary
+  /// delivery URLs (`mukra/products/…`), `/uploads/…` paths in demo mode, or
+  /// legacy single-image values; an empty array falls back to branded artwork.
+  images            String[]
   modelColor        String?        // Legacy column retained for existing database compatibility.
   stock             Int            @default(0)
   variants          ProductVariant[]
@@ -335,13 +338,17 @@ model Coupon {
 ///
 /// `Product.category` / `Product.categories` stay denormalised strings (the
 /// storefront filters on the fixed names in `lib/validations.ts`), so this table
-/// holds the presentation layer only: the emoji, the blurb and the parent.
+/// holds the presentation layer only: the emoji, the blurb, the cover image and
+/// the parent.
 model Category {
   id          String   @id @default(cuid())
   name        String   @unique
   slug        String   @unique
   emoji       String   @default("🧸")
   description String   @default("")
+  /// Cover image: a Cloudinary delivery URL (`mukra/categories/…`), or a
+  /// `/uploads/…` path in demo mode. Null = the storefront's bundled photo.
+  image       String?
   /// Parent category name, or null for a top-level category.
   parent      String?
   /// Lower values are listed first in the console.

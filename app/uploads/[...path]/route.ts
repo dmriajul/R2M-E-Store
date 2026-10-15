@@ -54,6 +54,8 @@ export async function GET(
         "Content-Length": String(info.size),
         "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
         "X-Content-Type-Options": "nosniff",
+        // Files are user-supplied: never let one run as a document (e.g. SVG).
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
       },
     });
   } catch {

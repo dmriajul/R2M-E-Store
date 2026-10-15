@@ -113,6 +113,7 @@ export function ReturnRequestDialog({
       for (const file of files) {
         const form = new FormData();
         form.append("file", file);
+        form.append("folder", "mukra/returns");
         const upload = await fetch("/api/upload", { method: "POST", body: form });
         const uploaded = (await upload.json()) as ApiResponse<UploadResult>;
         if (!upload.ok || !uploaded.success || !uploaded.data?.url) {

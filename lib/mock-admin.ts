@@ -715,6 +715,7 @@ export const ADMIN_CATEGORIES: readonly AdminCategory[] = (
   emoji: CATEGORY_META[name].emoji,
   description: CATEGORY_DESCRIPTIONS[name],
   parent: null,
+  image: null,
 }));
 
 /** Live product counts per category, straight from the catalogue. */

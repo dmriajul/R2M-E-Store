@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { useLanguageStore } from "@/store/useLanguageStore";
 import type { HeroSettings } from "@/lib/hero-settings";
@@ -78,15 +78,17 @@ export function HeroSection({ settings }: { settings: HeroSettings }) {
         className="absolute inset-0 z-0 bg-gradient-to-b from-[#0A3622]/70 via-[#050816] to-[#050816]"
       />
       {showImage ? (
-        <Image
+        // Cloudinary banners get an f_auto,q_auto,w_…,c_limit srcset (AVIF/WebP
+        // from the CDN) plus a preload hint; other URLs keep loading as before.
+        <OptimizedImage
           src={mediaUrl}
           alt=""
+          preset="hero"
           fill
           priority
-          unoptimized
           sizes="100vw"
-          aria-hidden="true"
-          className="absolute inset-0 z-0 object-cover opacity-75"
+          className="absolute inset-0 z-0 rounded-none opacity-75"
+          fallback={<span aria-hidden />}
         />
       ) : (
         <video

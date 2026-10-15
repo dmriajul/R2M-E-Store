@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { isBangladeshDistrict, isBangladeshDivision } from "@/lib/bangladesh-locations";
+import { mediaKindFromUrl } from "@/lib/images";
+import { PRODUCT_IMAGES_MAX } from "@/lib/media";
 
 /**
  * Shared Zod schemas. The client forms and the checkout store use the same
@@ -517,8 +519,19 @@ export const adminProductSchema = z
       .min(1, "Pick at least one size"),
     variants: z.array(adminProductVariantSchema),
 
-    /* Media (mock uploads keep gradient tokens) */
-    images: z.array(z.string()),
+    /*
+     * Media — the gallery in display order (first = cover): uploaded Cloudinary
+     * or `/uploads/…` URLs, external image URLs, or legacy placeholder tokens.
+     */
+    images: z
+      .array(
+        z
+          .string()
+          .trim()
+          .max(2048, "Image URL is too long")
+          .refine(isProductImageEntry, "Each image must be an uploaded image or an http(s) URL"),
+      )
+      .max(PRODUCT_IMAGES_MAX, `Keep it to ${PRODUCT_IMAGES_MAX} images or fewer`),
 
     /* SEO */
     metaTitle: z.string().trim().max(70, "Keep the meta title under 70 characters").optional(),
@@ -645,6 +658,13 @@ export const adminCategorySchema = z.object({
   description: z.string().trim().max(160, "Keep it under 160 characters").optional(),
   /** Empty string means "top level". */
   parent: z.string(),
+  /** Cover image uploaded through `/api/admin/upload`; empty/omitted = none. */
+  image: z
+    .string()
+    .trim()
+    .max(2048, "Image URL is too long")
+    .refine((value) => value === "" || isSafeImageReference(value), "Upload an image or use an http(s) URL")
+    .optional(),
 });
 
 export type AdminCategoryValues = z.infer<typeof adminCategorySchema>;
@@ -713,6 +733,19 @@ const isHttpUrl = (value: string) => {
   }
 };
 
+/** An image reference we are willing to store: a local path or an http(s) URL. */
+function isSafeImageReference(value: string): boolean {
+  return isSafeLocalPath(value) || isHttpUrl(value);
+}
+
+/**
+ * One `Product.images` entry: an image reference, or a legacy placeholder
+ * token (`floral-summer-dress-1`) that renders as branded artwork.
+ */
+function isProductImageEntry(value: string): boolean {
+  return isSafeImageReference(value) || /^[a-z0-9][a-z0-9-]*$/.test(value);
+}
+
 const safeHeroMediaUrl = (value: string) =>
   value === "" || isSafeLocalPath(value) || isHttpUrl(value);
 
@@ -744,6 +777,25 @@ export const settingsHeroSchema = z.object({
     .trim()
     .max(2048, "Link is too long")
     .refine(safeHeroLink, "Use an http(s) URL, local path, or anchor"),
-});
+})
+  .superRefine((values, context) => {
+    // The storefront renders `<img>` or `<video>` from heroMediaType, so a
+    // mismatched URL would show a broken hero. Unknown kinds are allowed.
+    const kind = mediaKindFromUrl(values.heroMediaUrl);
+    if (values.heroMediaType === "image" && kind === "video") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["heroMediaUrl"],
+        message: "This is a video — upload an image, or switch the media type to Video.",
+      });
+    }
+    if (values.heroMediaType === "video" && kind === "image") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["heroMediaUrl"],
+        message: "This is an image — use a video URL, or switch the media type to Image.",
+      });
+    }
+  });
 
 export type SettingsHeroValues = z.infer<typeof settingsHeroSchema>;

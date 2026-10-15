@@ -451,6 +451,11 @@ export interface AdminCategory {
   description: string;
   /** Parent category name, or null for a top-level category. */
   parent: string | null;
+  /**
+   * Cover image — a Cloudinary delivery URL (or `/uploads/…` in demo mode).
+   * `null` falls back to the bundled tile photography on the storefront.
+   */
+  image: string | null;
 }
 
 /** One bar in the revenue chart. */
@@ -762,6 +767,32 @@ export interface OrderRecord {
   createdAt: string;
   /** `database` when the row was persisted, `mock` in demo mode. */
   source: "database" | "mock";
+}
+
+/**
+ * Success body of `POST /api/admin/upload` (flat — not the `ApiResponse`
+ * envelope — because the upload contract is consumed field by field).
+ */
+export interface AdminUploadResult {
+  /**
+   * Delivery URL. Cloudinary: `…/image/upload/f_auto,q_auto,w_1920,c_limit/v…/mukra/<folder>/<id>.<ext>`;
+   * demo mode: `/uploads/<folder>/<file>`.
+   */
+  url: string;
+  /** `mukra/<folder>/<id>` on Cloudinary, `local:<folder>/<file>` on disk. */
+  publicId: string;
+  /** Stored pixel size (after the 1920px cap); `null` if it couldn't be read. */
+  width: number | null;
+  height: number | null;
+  /** Stored format: `jpg` | `png` | `webp` | `avif`. */
+  format: string;
+  /** Stored size in bytes. */
+  size: number;
+}
+
+/** Error body of `/api/admin/upload` (any non-2xx status). */
+export interface AdminUploadErrorBody {
+  error: string;
 }
 
 /** Response of `POST /api/upload`. */

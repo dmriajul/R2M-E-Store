@@ -18,14 +18,18 @@ const nextConfig: NextConfig = {
   /**
    * Prisma ships native engine binaries that must stay outside the bundler, and
    * it is only imported lazily (`lib/prisma.ts`) when DATABASE_URL is set.
+   * The Cloudinary SDK is Node-only (server-side uploads in `lib/cloudinary.ts`)
+   * and is required at runtime rather than bundled.
    */
-  serverExternalPackages: ["@prisma/client"],
+  serverExternalPackages: ["@prisma/client", "cloudinary"],
   // Allow the sandboxed preview proxy (and localhost) to hit the dev server
   // for HMR assets without being treated as cross-origin.
   allowedDevOrigins: ["*.e2b.app", "*.e2b.dev", "localhost", "127.0.0.1"],
   images: {
-    // Product photography + payment screenshots arrive from Cloudinary once the
-    // env keys are set; local uploads are served from /public/uploads.
+    // Cloudinary images are delivered by a custom loader (`cloudinaryLoader` in
+    // lib/images.ts: f_auto,q_auto,w_…,c_limit straight from the CDN); local
+    // demo uploads are served by app/uploads/[...path]. Keep this list in sync
+    // with OPTIMIZED_REMOTE_HOSTS in lib/images.ts.
     remotePatterns: [
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "images.unsplash.com" },

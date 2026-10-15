@@ -1,4 +1,5 @@
 import { AdminDataError } from "@/lib/data/admin-errors";
+import { scheduleImageCleanup } from "@/lib/data/media";
 import { getPrisma } from "@/lib/prisma";
 import {
   adminProductSchema,
@@ -192,6 +193,7 @@ async function writeAdminProduct(
   };
 
   const { material, ...updateData } = data;
+  const previousImages = id ? await readProductImages(db, id) : [];
   const row = (id
     ? await db.product.update({
         where: { id },
@@ -203,7 +205,26 @@ async function writeAdminProduct(
         include: productInclude,
       })) as AdminProductRow;
 
+  // Photos dropped from the gallery are deleted once nothing else uses them.
+  scheduleImageCleanup(previousImages, row.images);
   return toAdminProduct(row);
+}
+
+/**
+ * The gallery a product has right now, read before an update so removed
+ * photos can be cleaned up. Never throws — a failed read only skips cleanup.
+ */
+async function readProductImages(db: AdminDatabase, id: string): Promise<string[]> {
+  try {
+    const row = (await db.product.findUnique({
+      where: { id },
+      select: { images: true },
+    })) as { images: string[] } | null;
+    return row?.images ?? [];
+  } catch (error) {
+    console.error("[admin/products] Could not read the current gallery", error);
+    return [];
+  }
 }
 
 export function parseAdminProduct(input: unknown) {
@@ -339,7 +360,13 @@ export async function deleteAdminProducts(ids: string[]): Promise<number> {
   const db = await requireDatabase();
 
   try {
+    const galleries = (await db.product.findMany({
+      where: { id: { in: ids } },
+      select: { images: true },
+    })) as Array<{ images: string[] }>;
     const result = await db.product.deleteMany({ where: { id: { in: ids } } });
+    // Photos only these products used are deleted from the media library.
+    scheduleImageCleanup(galleries.flatMap((gallery) => gallery.images));
     return result.count;
   } catch (error) {
     if (isForeignKeyViolation(error)) {

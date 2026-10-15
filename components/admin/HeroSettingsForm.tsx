@@ -6,7 +6,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { AdminField, FormSection, adminButtonBlue, adminInputClass, adminSelectClass } from "@/components/admin/Field";
+import { ImageUpload } from "@/components/admin/ImageUpload";
+import { useMediaSession } from "@/hooks/useMediaSession";
 import { DEFAULT_HERO_SETTINGS, type HeroSettings } from "@/lib/hero-settings";
+import { mediaKindFromUrl } from "@/lib/images";
 import { settingsHeroSchema, type SettingsHeroValues } from "@/lib/validations";
 import type { ApiResponse } from "@/types";
 
@@ -36,10 +39,20 @@ function toFormValues(settings: HeroSettings): SettingsHeroValues {
   };
 }
 
+/**
+ * Homepage hero editor.
+ *
+ * Image backgrounds upload through `ImageUpload` into Cloudinary's
+ * `mukra/banners` folder (served as AVIF/WebP by `OptimizedImage`); a replaced
+ * banner is deleted server-side after the save. Video backgrounds keep the URL
+ * field and the hero video uploader (`/api/upload?purpose=hero`).
+ */
 export function HeroSettingsForm() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const media = useMediaSession();
+  const [imageUploading, setImageUploading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadName, setUploadName] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -56,6 +69,9 @@ export function HeroSettingsForm() {
     defaultValues: EMPTY_FORM,
   });
   const mediaType = watch("heroMediaType");
+  const mediaUrl = watch("heroMediaUrl") ?? "";
+  /* A saved video URL can't preview as an image — show an empty picker instead. */
+  const savedVideoInImageMode = mediaType === "image" && mediaKindFromUrl(mediaUrl) === "video";
 
   useEffect(() => {
     setMounted(true);
@@ -97,6 +113,8 @@ export function HeroSettingsForm() {
       if (!response.ok || !result.success || !result.data) {
         throw new Error(result.error ?? "Could not save hero settings");
       }
+      // The saved banner is the hero's now; other uploads from this visit go.
+      media.commit([values.heroMediaUrl]);
       reset(toFormValues(result.data));
       setLoadError(null);
       toast.success("Hero settings saved");
@@ -177,62 +195,92 @@ export function HeroSettingsForm() {
         </AdminField>
       </FormSection>
 
-      <FormSection title="Background media">
+      <FormSection
+        title="Background media"
+        description="Images upload to Cloudinary (mukra/banners) and are served as AVIF/WebP. Videos use a URL or the video uploader."
+      >
         <AdminField label="Media type" htmlFor="hero-media-type" error={errors.heroMediaType?.message}>
           <select suppressHydrationWarning id="hero-media-type" {...register("heroMediaType")} className={adminSelectClass}>
             <option value="video">Video</option>
             <option value="image">Image</option>
           </select>
         </AdminField>
-        <AdminField
-          label="Media URL"
-          htmlFor="hero-media-url"
-          error={errors.heroMediaUrl?.message}
-          hint="Use an http(s) URL or a local public path. Leave blank to use the current hero video."
-        >
-          <input
-            suppressHydrationWarning
-            id="hero-media-url"
-            type="text"
-            {...register("heroMediaUrl")}
-            className={adminInputClass}
-          />
-        </AdminField>
-        <AdminField
-          label="Upload media"
-          htmlFor="hero-media-file"
-          hint={`Select a ${mediaType === "video" ? "MP4 or WebM video (up to 100MB)" : "JPG, PNG, WebP or GIF image (up to 10MB)"}. Uploading replaces the media URL.`}
-        >
-          <input
-            suppressHydrationWarning
-            ref={fileInput}
-            id="hero-media-file"
-            type="file"
-            accept={
-              mediaType === "video"
-                ? "video/mp4,video/webm,.mp4,.webm"
-                : "image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+
+        {mediaType === "image" ? (
+          <AdminField
+            label="Banner image"
+            htmlFor="hero-banner-image"
+            error={errors.heroMediaUrl?.message}
+            hint={
+              savedVideoInImageMode
+                ? "The saved background is a video — upload an image to replace it."
+                : "Wide landscape photos (16:9, 1920px or wider) look best."
             }
-            className="sr-only"
-            disabled={uploading || loading}
-            onChange={(event) => {
-              void uploadMedia(event.target.files?.[0]);
-            }}
-          />
-          <button
-            type="button"
-            disabled={uploading || loading}
-            onClick={() => fileInput.current?.click()}
-            className={`${adminButtonBlue} min-h-10 w-fit px-3`}
+            className="sm:col-span-2"
           >
-            {uploading ? (
-              <LoaderCircle aria-hidden className="size-3.5 animate-spin" />
-            ) : (
-              <Upload aria-hidden className="size-3.5" />
-            )}
-            {uploading ? `Uploading ${uploadName ?? "media"}…` : "Choose file"}
-          </button>
-        </AdminField>
+            <ImageUpload
+              id="hero-banner-image"
+              label="Banner image"
+              folder="banners"
+              aspect="banner"
+              value={savedVideoInImageMode ? "" : mediaUrl}
+              onChange={(url) => setValue("heroMediaUrl", url, { shouldDirty: true, shouldValidate: true })}
+              session={media}
+              onUploadingChange={setImageUploading}
+              invalid={Boolean(errors.heroMediaUrl)}
+              disabled={loading}
+              sizes="(min-width: 1024px) 720px, 100vw"
+            />
+          </AdminField>
+        ) : (
+          <>
+            <AdminField
+              label="Video URL"
+              htmlFor="hero-media-url"
+              error={errors.heroMediaUrl?.message}
+              hint="An http(s) URL or a local public path. Leave blank to use the bundled hero video."
+            >
+              <input
+                suppressHydrationWarning
+                id="hero-media-url"
+                type="text"
+                {...register("heroMediaUrl")}
+                className={adminInputClass}
+              />
+            </AdminField>
+            <AdminField
+              label="Upload video"
+              htmlFor="hero-media-file"
+              hint="MP4 or WebM, up to 100MB. Uploading replaces the video URL."
+            >
+              <input
+                suppressHydrationWarning
+                ref={fileInput}
+                id="hero-media-file"
+                type="file"
+                accept="video/mp4,video/webm,.mp4,.webm"
+                className="sr-only"
+                disabled={uploading || loading}
+                onChange={(event) => {
+                  void uploadMedia(event.target.files?.[0]);
+                }}
+              />
+              <button
+                type="button"
+                disabled={uploading || loading}
+                onClick={() => fileInput.current?.click()}
+                className={`${adminButtonBlue} min-h-10 w-fit px-3`}
+              >
+                {uploading ? (
+                  <LoaderCircle aria-hidden className="size-3.5 animate-spin" />
+                ) : (
+                  <Upload aria-hidden className="size-3.5" />
+                )}
+                {uploading ? `Uploading ${uploadName ?? "video"}…` : "Choose video"}
+              </button>
+            </AdminField>
+          </>
+        )}
       </FormSection>
 
       <FormSection title="Call-to-action buttons">
@@ -285,11 +333,17 @@ export function HeroSettingsForm() {
       <div className="flex justify-end border-t border-[#242424] pt-4">
         <button
           type="submit"
-          disabled={loading || saving || uploading}
+          disabled={loading || saving || uploading || imageUploading}
           className={`${adminButtonBlue} min-h-11 sm:min-h-10`}
         >
           <Save aria-hidden className="size-3.5" />
-          {saving ? "Saving…" : loading ? "Loading…" : "Save Hero Settings"}
+          {saving
+            ? "Saving…"
+            : loading
+              ? "Loading…"
+              : uploading || imageUploading
+                ? "Uploading…"
+                : "Save Hero Settings"}
         </button>
       </div>
     </form>

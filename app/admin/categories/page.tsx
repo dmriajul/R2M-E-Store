@@ -10,6 +10,7 @@ import { deleteCategoryAction } from "@/app/admin/actions";
 import { CategoryDialog } from "@/components/admin/CategoryDialog";
 import { ConfirmActionDialog } from "@/components/admin/ConfirmActionDialog";
 import { adminButtonBlue } from "@/components/admin/Field";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { cn } from "@/lib/utils";
 import { useAdminStore } from "@/store/useAdminStore";
 import type { AdminCategory } from "@/types";
@@ -77,12 +78,30 @@ export default function AdminCategoriesPage() {
                 className="flex flex-col gap-3 rounded-xl border border-[#242424] bg-[#141414] p-5 transition-colors duration-200 hover:border-blue-500/30"
               >
                 <header className="flex items-start gap-3">
-                  <span
-                    aria-hidden
-                    className="grid size-11 shrink-0 place-items-center rounded-lg border border-[#2A2A2A] bg-[#101010] text-xl"
-                  >
-                    {category.emoji}
-                  </span>
+                  {category.image ? (
+                    <OptimizedImage
+                      src={category.image}
+                      alt=""
+                      preset="thumbnail"
+                      sizes="44px"
+                      className="size-11 shrink-0 rounded-lg border border-[#2A2A2A] bg-[#101010]"
+                      fallback={
+                        <span
+                          aria-hidden
+                          className="grid size-11 place-items-center rounded-lg border border-[#2A2A2A] bg-[#101010] text-xl"
+                        >
+                          {category.emoji}
+                        </span>
+                      }
+                    />
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="grid size-11 shrink-0 place-items-center rounded-lg border border-[#2A2A2A] bg-[#101010] text-xl"
+                    >
+                      {category.emoji}
+                    </span>
+                  )}
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate text-sm font-semibold text-foreground">
                       {category.name}

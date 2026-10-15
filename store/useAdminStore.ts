@@ -392,6 +392,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       emoji: values.emoji,
       description: values.description?.trim() ? values.description : "New category",
       parent: values.parent ? values.parent : null,
+      // Omitted = keep the current cover (mirrors lib/data/categories.ts).
+      image: values.image === undefined ? (existing?.image ?? null) : values.image || null,
     };
 
     set((state) => ({

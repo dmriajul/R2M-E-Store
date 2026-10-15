@@ -52,7 +52,7 @@ Rocket wallet payments, and a bilingual (English + বাংলা) help centre.
 | State | Zustand (`useCartStore` with `persist`, wishlist, checkout, admin, dashboard) |
 | Auth | Auth.js / NextAuth v5 (credentials, JWT, bcryptjs) |
 | Database | PostgreSQL via Supabase + Prisma ORM (13 models, 7 enums) |
-| Uploads | Cloudinary (product images), local-disk fallback |
+| Uploads | Cloudinary v2 SDK, server-side only (products, categories, banners), local-disk fallback |
 | Toasts | Sonner (typed icons and colours) |
 | Icons | lucide-react |
 | Fonts | `next/font/local` — Inter variable, latin subset, `display: swap` |
@@ -125,9 +125,9 @@ Every value is optional; each integration switches on independently.
 | `DIRECT_URL` | for migrations | — | Supabase direct URI used by `prisma db push` |
 | `NEXTAUTH_SECRET` | Production | demo secret | JWT signing key — `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | Production | `http://localhost:3000` | Public auth callback origin (no trailing slash) |
-| `CLOUDINARY_CLOUD_NAME` | for CDN uploads | — | Cloudinary cloud name |
-| `CLOUDINARY_API_KEY` | for CDN uploads | — | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | for CDN uploads | — | Cloudinary API secret |
+| `CLOUDINARY_CLOUD_NAME` | for CDN uploads (required on Vercel) | — | Cloudinary cloud name — see [Image uploads](#image-uploads-cloudinary) |
+| `CLOUDINARY_API_KEY` | for CDN uploads (required on Vercel) | — | Cloudinary API key (server-only) |
+| `CLOUDINARY_API_SECRET` | for CDN uploads (required on Vercel) | — | Cloudinary API secret (server-only — never `NEXT_PUBLIC_`) |
 | `PAYMENT_BKASH_NUMBERS` | no | `+8801707302038,+8801954447017` | Wallet numbers shown at checkout |
 | `PAYMENT_NAGAD_NUMBERS` | no | same default | Nagad receiving numbers |
 | `PAYMENT_ROCKET_NUMBERS` | no | same default | Rocket receiving numbers |
@@ -159,9 +159,9 @@ environment variables are present:
 | Auth | Any email + `password123`, `demo-<local>` user id; the four role accounts above | Postgres users, bcrypt hashes, JWT sessions carrying the role |
 | Orders | In-memory records, `POST /api/orders` still re-prices the cart | Persisted `Order` + `OrderItem` rows |
 | Admin console | Same UI, in-session Zustand store (not durable) | Postgres through Server Actions + Prisma |
-| Uploads | Written to `.uploads/` and served via `/uploads/…` | Cloudinary (`mukra/products`, `mukra/models`) |
+| Uploads | Written to `.uploads/` and served via `/uploads/…` | Cloudinary (`mukra/products`, `mukra/categories`, `mukra/banners`) |
 | Payments | Wallet numbers + manual verification, cards disabled | Same, plus SSLCommerz when enabled |
-| Images | CSS gradients + emoji per category | Cloudinary URLs through `OptimizedImage` |
+| Images | Stock photos, branded fallback artwork | Cloudinary `f_auto,q_auto,w_…,c_limit` srcsets via `OptimizedImage` |
 
 Every Prisma call is wrapped in `try/catch` and falls back to the mock data, so
 adding one env var can never take the site down. `GET /api/health` reports
@@ -186,6 +186,7 @@ of sync, and the sidebar only ever shows what the role can actually open.
 | Orders / Returns / Customers | ✅ | — | — | ✅ |
 | Coupons | ✅ | — | — | — |
 | Settings (hero/banners) | ✅ | — | ✅ | — |
+| Media uploads (`/api/admin/upload`) | ✅ | ✅ *(products, categories)* | ✅ *(banners)* | — |
 | Analytics | ✅ | — | — | — |
 | Staff & Roles (assign roles) | ✅ | — | — | — |
 
@@ -316,6 +317,149 @@ needs.
 
 ---
 
+## Image uploads (Cloudinary)
+
+Console images are uploaded **server-side** with the Cloudinary v2 SDK: the
+browser posts the file to `POST /api/admin/upload`, the route checks the role,
+validates the file and streams it to Cloudinary. The API secret never leaves
+the server and the browser never talks to Cloudinary's upload API.
+
+```
+ImageUpload / ImageGalleryUpload ──multipart──▶ /api/admin/upload
+   (drag & drop, preview, progress)               │ RBAC (role + folder) · type/size/magic bytes
+                                                  ▼
+                                   lib/data/media.ts ──▶ lib/cloudinary.ts (v2 SDK, upload_stream)
+                                                  │            └─ local .uploads/ when unconfigured
+                                                  ▼
+   { url, publicId, width, height, format, size } ──▶ saved on Product.images / Category.image /
+                                                      SiteSettings.heroMediaUrl
+```
+
+### Setup
+
+1. Create a free account at <https://cloudinary.com> and open the console.
+2. Go to **Settings (gear icon) → API Keys** — or the **Dashboard → Product
+   Environment Credentials** card — and copy the **Cloud name**, **API Key**
+   and **API Secret**.
+3. Add them to `.env.local` (and to Vercel → Project → Settings → Environment
+   Variables for production):
+
+   ```bash
+   CLOUDINARY_CLOUD_NAME="your-cloud-name"
+   CLOUDINARY_API_KEY="123456789012345"
+   CLOUDINARY_API_SECRET="your-api-secret"   # server-only — never NEXT_PUBLIC_
+   ```
+4. Restart / redeploy. `GET /api/health` now reports `"cloudinary": "configured"`.
+
+No upload preset or folder setup is needed — folders are created on the first
+upload. Without the keys, uploads go to `.uploads/` (demo mode); on Vercel the
+filesystem is read-only, so the console answers **503** until the keys are set.
+
+### Folder structure
+
+| Folder | Holds | Uploaded from | Who may upload / delete |
+| --- | --- | --- | --- |
+| `mukra/products/` | Product galleries (`Product.images`, first = cover) | Products → Add/Edit → Media | Super admin, inventory manager |
+| `mukra/categories/` | Category covers (`Category.image`) | Categories → New/Edit | Super admin, inventory manager |
+| `mukra/banners/` | Homepage hero image (`SiteSettings.heroMediaUrl`) | Settings → Homepage Hero (type *Image*) | Super admin, SEO manager |
+| `mukra/payments/`, `mukra/returns/` | Customer payment screenshots / return photos | Checkout, return requests (`/api/upload`) | Customers; never deletable via the console API |
+| `mukra/hero/` | Hero background videos | Settings → Homepage Hero (type *Video*) | Super admin, SEO manager |
+
+Public ids look like `mukra/products/blue-hoodie-m2k9x1a3f0c2` — a readable
+stem from the file name plus a unique suffix (never overwritten).
+
+### Upload limits
+
+| Rule | Value |
+| --- | --- |
+| Types | JPG, PNG, WebP, AVIF — checked by MIME type **and** magic bytes (a renamed PDF is refused) |
+| Size | 5 MB per file (browser + server). Vercel caps request bodies at **4.5 MB** |
+| Stored size | Capped at 1920px wide on upload (`c_limit`, never upscaled or cropped), `q_auto` |
+| Delivery | `f_auto,q_auto,w_{width},c_limit` per `srcset` width → AVIF/WebP per browser |
+| Product gallery | 5 images in the console (server accepts up to 10) |
+| Rate limit | 30 uploads and 60 deletes per minute per operator (in-memory, per instance) |
+
+`f_auto` is applied in the **delivery URL**, not at upload time: Cloudinary
+rejects `f_auto` as an incoming transformation, so the original keeps its
+format and the CDN negotiates AVIF/WebP per request.
+
+### API
+
+`POST /api/admin/upload` — `multipart/form-data` with `file` and `folder`
+(`products` | `categories` | `banners`). **201**:
+
+```json
+{
+  "url": "https://res.cloudinary.com/<cloud>/image/upload/f_auto,q_auto,w_1920,c_limit/v1712345678/mukra/products/blue-hoodie-m2k9x1a3f0c2.jpg",
+  "publicId": "mukra/products/blue-hoodie-m2k9x1a3f0c2",
+  "width": 1600, "height": 2000, "format": "jpg", "size": 482113
+}
+```
+
+`DELETE /api/admin/upload?publicId=mukra/products/…[&url=…]` (or a JSON body
+`{ "publicId", "url" }`) → **200** `{ "publicId", "result": "deleted" | "not-found" }`.
+Only ids in the three console folders can be deleted, only by the folder's
+owner, and never while a saved product/category/banner, order payment proof or
+return photo still uses the image (**409**).
+
+Errors are `{ "error": "…" }`: 400 bad request · 401 signed out · 403 wrong
+role/folder or cross-origin · 409 still in use · 413 too large · 415 wrong type
+· 429 rate limited · 502/503/504 Cloudinary unavailable.
+
+### Cleanup
+
+Deletion is deferred so a cancelled edit never loses a saved image:
+
+- **Unsaved uploads** — Replace/Remove deletes them immediately; closing the
+  form without saving deletes every upload from that session
+  (`hooks/useMediaSession.ts`).
+- **Saved images** — after a product, category or hero save (or a product /
+  category delete), images the record no longer uses are deleted from
+  Cloudinary *after the response* (`scheduleImageCleanup` in
+  `lib/data/media.ts`), and only when no other record references them. A
+  failed cleanup only logs; it never fails the save.
+
+### Displaying images
+
+`components/ui/OptimizedImage.tsx` renders Cloudinary URLs through a custom
+`next/image` loader, so every `srcset` candidate is a direct CDN URL with
+`f_auto,q_auto,w_{width},c_limit` (existing transformations are replaced, not
+stacked), lazy-loaded unless `priority`. Local `/uploads/…` files and unknown
+hosts load unoptimised; bundled images and allow-listed hosts use the Next.js
+optimiser; empty or legacy values show the fallback. `ProductArtwork`, the hero
+and the *Shop by Category* tiles use the same loader, and legacy Cloudinary URLs
+already in the database get the optimised srcset automatically.
+
+### Database change required
+
+Product galleries already use `Product.images String[]` (a legacy single image
+is simply a one-element array). Categories gain an optional cover:
+
+```diff
+ model Category {
+   id          String   @id @default(cuid())
+   name        String   @unique
+   slug        String   @unique
+   emoji       String   @default("🧸")
+   description String   @default("")
++  image       String?
+   parent      String?
+```
+
+The column is nullable, so the change is additive (no table rewrite, existing
+rows read `null` and keep their bundled storefront photo):
+
+```bash
+npx prisma generate   # refresh the client so it knows Category.image
+npx prisma db push    # add the column (same as `npm run db:push`; also regenerates)
+```
+
+Deploy the code and run the push together: until the column exists, category
+reads fall back to the demo list and category saves fail, while the storefront
+simply keeps the bundled tile photos.
+
+---
+
 ## Product display placement
 
 Admins can manage Virtual Boutique, Homepage Featured, New Arrivals and
@@ -437,7 +581,8 @@ app/
 │   ├── staff/page.tsx         Staff & Roles (super admin) — role assignment
 │   ├── layout.tsx             session + products/orders/categories for the console
 │   └── <section>/layout.tsx   RBAC gate per console section
-├── api/                       auth, register, orders, products, upload, health
+├── api/                       auth, register, orders, products, upload, health,
+│                              admin/upload (console images → Cloudinary)
 ├── uploads/[...path]/         local-disk upload streaming (demo mode)
 ├── offline/                   offline fallback destination
 ├── opengraph-image.tsx        dynamic 1200×630 social card (next/og)
@@ -460,9 +605,12 @@ components/
 
 lib/                           cart maths, config, demo-mode, seo (JSON-LD),
                                image-optimizer, legal-content, payments, prisma,
-                               cloudinary, validations, mock data, rbac (roles)
-lib/data/                      admin-orders · admin-products · categories ·
-                               admin-errors — Prisma reads/writes for the console
+                               cloudinary (server SDK), images (URL helpers),
+                               media (upload rules), admin-upload-client,
+                               rate-limit, validations, mock data, rbac (roles)
+lib/data/                      admin-orders · admin-products · categories · media
+                               · admin-errors — Prisma reads/writes for the console
+hooks/                         useMediaQuery, useMediaSession (upload cleanup)
 store/                         zustand stores (cart, wishlist, checkout, admin, …)
 prisma/                        schema.prisma + seed.ts
 public/                        manifest.json, icons/, images/, models/, demo/

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { IMAGE_SIZES, imageSrc, isRenderableImage } from "@/lib/images";
+import { IMAGE_SIZES, imageDeliveryProps, isRenderableImage } from "@/lib/images";
 import type { Product } from "@/types";
 
 interface ProductArtworkProps {
@@ -22,6 +22,10 @@ interface ProductArtworkProps {
 /**
  * Product photography with a restrained branded fallback when no valid image
  * is available or the remote image cannot be loaded.
+ *
+ * Cloudinary photos are delivered straight from the CDN: the `srcset` is built
+ * by `cloudinaryLoader` (`f_auto,q_auto,w_{width},c_limit`), so browsers get
+ * AVIF/WebP at the width the layout needs.
  */
 export function ProductArtwork({
   product,
@@ -40,18 +44,20 @@ export function ProductArtwork({
       : undefined;
 
   if (photo) {
+    // Cloudinary → CDN srcset via the loader; local uploads and unknown hosts
+    // load as-is; bundled/allow-listed images use the Next.js optimiser.
+    const delivery = imageDeliveryProps(photo);
     return (
       <div className={cn("relative overflow-hidden bg-[#101010]", className)}>
         <Image
-          src={imageSrc(photo, size === "thumb" ? 200 : 900)}
+          src={photo}
           alt={alt ?? product.name}
           fill
           sizes={IMAGE_SIZES[size]}
           priority={priority}
           loading={priority ? "eager" : "lazy"}
-          // Local uploads are served directly; external CDNs serve their own
-          // optimized image variants.
-          unoptimized={photo.startsWith("/uploads/")}
+          loader={delivery.loader}
+          unoptimized={delivery.unoptimized}
           className={cn(
             "object-cover transition-transform duration-700 ease-[var(--ease-luxe)] group-hover:scale-[1.04]",
             imageClassName,

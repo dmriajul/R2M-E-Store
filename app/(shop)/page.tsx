@@ -5,6 +5,7 @@ import { organizationSchema } from "@/lib/seo";
 import { SITE } from "@/lib/site";
 import { FEATURES } from "@/lib/config";
 import { listProducts } from "@/lib/data/products";
+import { getCategoryImageMap } from "@/lib/data/categories";
 import { getHeroSettings } from "@/lib/data/hero-settings";
 /* Section imports below are kept in render order (top → bottom) so the import
    block doubles as a table of contents for the page. */
@@ -71,7 +72,7 @@ export const dynamic = "force-dynamic";
  * self-contained <section> whose height went with it.
  */
 export default async function HomePage() {
-  const [heroSettings, virtualBoutique, featured] = await Promise.all([
+  const [heroSettings, virtualBoutique, featured, categoryImages] = await Promise.all([
     getHeroSettings(),
     // Skip the query entirely while the Virtual Boutique is hidden — there is
     // no point paying for a round-trip whose results nothing renders.
@@ -82,6 +83,8 @@ export default async function HomePage() {
     // scroll at 3-up on desktop once more products get flagged. <NewArrivalsGrid />
     // fetches its own data server-side, so it is not queried here.
     listProducts({ featured: true, limit: 8 }),
+    // Category covers uploaded in the console ({} in demo mode / on error).
+    getCategoryImageMap(),
   ]);
   return (
     /* reducedMotion="user" makes framer-motion honour prefers-reduced-motion
@@ -105,7 +108,7 @@ export default async function HomePage() {
         <BrandMarquee />
 
         <Reveal>
-          <ShopByCategory />
+          <ShopByCategory images={categoryImages} />
         </Reveal>
 
         {/* New Arrivals — server-rendered grid. It owns its own <Reveal>s so
