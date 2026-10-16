@@ -1,6 +1,7 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest, after } from "next/server";
 import { auth } from "@/lib/auth";
 import { createOrder, listOrdersForEmail } from "@/lib/data/orders";
+import { sendOrderConfirmationEmail } from "@/lib/order-email";
 import { findProductsByIds } from "@/lib/data/products";
 import { createOrderSchema } from "@/lib/validations";
 import { getPaymentMethod, isManualPayment, renderInstructions } from "@/lib/payments";
@@ -111,11 +112,39 @@ export async function POST(
   const session = await auth();
   const input: CreateOrderInput = { ...values, items };
 
-  const { order, source } = await createOrder(input, {
-    id: session?.user?.id,
-    name: session?.user?.name ?? values.contact.name,
-    email: session?.user?.email ?? values.contact.email,
-  });
+  let order;
+  let source: "database" | "mock";
+  try {
+    const result = await createOrder(input, {
+      id: session?.user?.id,
+      name: session?.user?.name ?? values.contact.name,
+      email: session?.user?.email ?? values.contact.email,
+    });
+    order = result.order;
+    source = result.source;
+  } catch (error) {
+    return NextResponse.json(
+      {
+        data: null,
+        error: error instanceof Error ? error.message : "Could not create order",
+        success: false,
+      },
+      { status: 500 },
+    );
+  }
+
+  // Fire-and-forget receipt email — must never delay or fail the 201 response.
+  try {
+    after(() => {
+      void sendOrderConfirmationEmail(order).catch(() => {
+        // Email failures are intentionally swallowed.
+      });
+    });
+  } catch {
+    void sendOrderConfirmationEmail(order).catch(() => {
+      // Outside a request scope: run directly.
+    });
+  }
 
   const paymentNumbers =
     isManualPayment(order.paymentMethod) && method.numbers ? [...method.numbers] : undefined;

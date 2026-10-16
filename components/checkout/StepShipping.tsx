@@ -27,6 +27,12 @@ import { useCheckoutStore } from "@/store/useCheckoutStore";
 import { CheckboxRow, Field, checkoutInputClass } from "@/components/checkout/Field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import dynamic from "next/dynamic";
+
+const MapboxLocationPicker = dynamic(
+  () => import("@/components/checkout/MapboxLocationPicker").then((mod) => mod.MapboxLocationPicker),
+  { ssr: false, loading: () => <div className="flex h-[300px] items-center justify-center rounded-2xl border border-glass-border bg-glass"><span className="text-sm text-muted-foreground">Loading map…</span></div> },
+);
 
 const checkoutSelectClass = cn(
   checkoutInputClass,
@@ -124,6 +130,44 @@ export function StepShipping() {
           {...register("fullName")}
         />
       </Field>
+
+      <div className="flex flex-col gap-2">
+        <MapboxLocationPicker
+          onAddressChange={(address) => {
+            if (address.address1) {
+              setValue("address1", address.address1, { shouldDirty: true, shouldValidate: true });
+            }
+            if (address.address2) {
+              setValue("address2", address.address2, { shouldDirty: true, shouldValidate: true });
+            }
+            const divisionMatch =
+              BANGLADESH_DIVISIONS.find(
+                (option) =>
+                  !!address.state &&
+                  option.name.toLowerCase() === address.state.toLowerCase(),
+              ) ??
+              BANGLADESH_DIVISIONS.find(
+                (option) =>
+                  !!address.state &&
+                  address.state.toLowerCase().includes(option.name.toLowerCase()),
+              );
+            if (divisionMatch) {
+              setValue("state", divisionMatch.name, { shouldDirty: true, shouldValidate: true });
+              setValue("city", "", { shouldDirty: true, shouldValidate: true });
+              setValue("postalCode", "", { shouldDirty: true, shouldValidate: true });
+            }
+            if (address.city) {
+              setValue("city", address.city, { shouldDirty: true, shouldValidate: true });
+            }
+            if (address.postalCode) {
+              setValue("postalCode", address.postalCode, { shouldDirty: true, shouldValidate: true });
+            }
+          }}
+        />
+        <p className="text-xs text-muted-foreground">
+          Or type your address manually if map doesn&apos;t load.
+        </p>
+      </div>
 
       <Field label="Address line 1" htmlFor="ship-address1" error={errors.address1?.message}>
         <div className="relative">

@@ -125,39 +125,100 @@ export async function createOrder(
 
   const { data, source } = await withDatabase<OrderRecord>(
     async (db) => {
-      const created = (await db.order.create({
-        data: {
-          orderNumber,
-          userId: user.id ?? "demo-guest",
-          subtotal: totals.subtotal,
-          shipping: totals.shipping,
-          discount: totals.discount,
-          giftWrap: totals.giftWrap,
-          total: totals.total,
-          status,
-          paymentMethod: method,
-          paymentStatus,
-          paymentRef: input.payment.screenshotUrl ?? null,
-          shippingName: input.contact.name,
-          shippingEmail: input.contact.email,
-          shippingPhone: input.contact.phone,
-          shippingAddress: input.shipping.address,
-          shippingCity: input.shipping.city,
-          shippingZip: input.shipping.zip,
-          shippingCountry: input.shipping.country,
-          estimatedDelivery: estimated,
-          items: {
-            create: input.items.map((line) => ({
-              productId: line.productId,
-              name: line.name,
-              color: line.color,
-              size: line.size,
-              quantity: line.quantity,
-              price: line.price,
-            })),
+      // Aggregate requested quantities per product/variant so a single atomic
+      // decrement is issued for each (prevents overselling on duplicate lines).
+      const aggregate = new Map<
+        string,
+        { productId: string; color: string; size: string; quantity: number }
+      >();
+      for (const line of input.items) {
+        const key = `${line.productId}\u0000${line.color}\u0000${line.size}`;
+        const previous = aggregate.get(key);
+        aggregate.set(key, {
+          productId: line.productId,
+          color: line.color,
+          size: line.size,
+          quantity: (previous?.quantity ?? 0) + line.quantity,
+        });
+      }
+
+      const created = await db.$transaction(async (tx) => {
+        // Atomically decrement stock; fail the whole transaction if any line
+        // cannot be satisfied (SELECT ... FOR UPDATE semantics via conditional
+        // updateMany).
+        for (const entry of aggregate.values()) {
+          const product = (await tx.product.findUnique({
+            where: { id: entry.productId },
+            include: { variants: true },
+          })) as
+            | { id: string; name: string; variants: Array<{ id: string; color: string; size: string; stock: number }> }
+            | null;
+
+          if (!product) {
+            throw new Error(`Product not found: ${entry.productId}`);
+          }
+
+          if (product.variants && product.variants.length > 0) {
+            const variant = product.variants.find(
+              (candidate) => candidate.color === entry.color && candidate.size === entry.size,
+            );
+            if (!variant) {
+              throw new Error(`Variant not found for ${product.name}`);
+            }
+            const result = (await tx.productVariant.updateMany({
+              where: { id: variant.id, stock: { gte: entry.quantity } },
+              data: { stock: { decrement: entry.quantity } },
+            })) as { count: number };
+            if (result.count === 0) {
+              throw new Error(`Not enough stock for: ${product.name}`);
+            }
+          } else {
+            const result = (await tx.product.updateMany({
+              where: { id: product.id, stock: { gte: entry.quantity } },
+              data: { stock: { decrement: entry.quantity } },
+            })) as { count: number };
+            if (result.count === 0) {
+              throw new Error(`Not enough stock for: ${product.name}`);
+            }
+          }
+        }
+
+        const row = (await tx.order.create({
+          data: {
+            orderNumber,
+            userId: user.id ?? "demo-guest",
+            subtotal: totals.subtotal,
+            shipping: totals.shipping,
+            discount: totals.discount,
+            giftWrap: totals.giftWrap,
+            total: totals.total,
+            status,
+            paymentMethod: method,
+            paymentStatus,
+            paymentRef: input.payment.screenshotUrl ?? null,
+            shippingName: input.contact.name,
+            shippingEmail: input.contact.email,
+            shippingPhone: input.contact.phone,
+            shippingAddress: input.shipping.address,
+            shippingCity: input.shipping.city,
+            shippingZip: input.shipping.zip,
+            shippingCountry: input.shipping.country,
+            estimatedDelivery: estimated,
+            items: {
+              create: input.items.map((line) => ({
+                productId: line.productId,
+                name: line.name,
+                color: line.color,
+                size: line.size,
+                quantity: line.quantity,
+                price: line.price,
+              })),
+            },
           },
-        },
-      })) as { id: string };
+        })) as { id: string };
+
+        return row;
+      });
 
       return { ...record, id: created.id, source: "database" as const };
     },
