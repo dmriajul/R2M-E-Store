@@ -52,7 +52,7 @@ export const dynamic = "force-dynamic";
  *   6. <FeaturedCarousel /> — #featured, Embla rail (only when featured rows
  *                             exist — an empty rail would repeat the panel above)
  *   7. <FeaturesSection />  — #features + #stats, the always-rendered trust band
- *   …then the single <NewsletterSection /> and <Footer /> from the shop layout.
+ *   …then the single newsletter capture and <Footer /> from the shop layout.
  *
  * Empty-catalogue contract (0 products in the database):
  *   • Hero, brand marquee, category tiles, campaign banner and the features
