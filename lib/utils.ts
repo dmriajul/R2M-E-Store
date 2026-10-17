@@ -267,6 +267,72 @@ export function t(key: string, language?: Language): string {
       en: "Explore the pieces families keep coming back for.",
       bn: "পরিবারগুলোর বারবার পছন্দের পোশাকগুলো দেখুন।",
     },
+    "sections.featuresEyebrow": { en: "Why Mukra", bn: "কেন মুকরা" },
+    "sections.features": {
+      en: "The Mukra Standard",
+      bn: "মুকরার মানক",
+    },
+    "sections.featuresDescription": {
+      en: "Thoughtful details behind every order — the promises we keep, whether the wardrobe is full or just being unpacked.",
+      bn: "প্রতিটি অর্ডারের পেছনে যত্নশীল বিস্তারিত — আমাদের প্রতিশ্রুতি, ওয়ারড্রোব পূর্ণ হোক বা সদ্য খোলা।",
+    },
+    "sections.featuresCloser": {
+      en: "Designed for the few · Built to last",
+      bn: "অল্প প্রিয়জনদের জন্য · টেকসই তৈরি",
+    },
+    "sections.emptyTitle": {
+      en: "The collection is being curated",
+      bn: "সংগ্রহ প্রস্তুত করা হচ্ছে",
+    },
+    "sections.emptyDescription": {
+      en: "Our new pieces are almost ready. Check back soon — or browse the full collection meanwhile.",
+      bn: "আমাদের নতুন পোশাক প্রায় তৈরি। শীঘ্রই ফিরে দেখুন — অথবা এর মধ্যে সম্পূর্ণ সংগ্রহ ঘুরে দেখুন।",
+    },
+    "sections.browseCollection": {
+      en: "Browse the Collection",
+      bn: "সংগ্রহ দেখুন",
+    },
+    "features.freeShipping": {
+      en: "Free Nationwide Shipping",
+      bn: "সারা দেশে ফ্রি ডেলিভারি",
+    },
+    "features.freeShippingBody": {
+      en: "Complimentary delivery across Bangladesh on every order — no minimum, no fine print.",
+      bn: "প্রতিটি অর্ডারে সারা বাংলাদেশে ফ্রি ডেলিভারি — কোনো ন্যূনতম শর্ত নেই।",
+    },
+    "features.easyReturns": {
+      en: "30-Day Easy Returns",
+      bn: "৩০ দিনের সহজ রিটার্ন",
+    },
+    "features.easyReturnsBody": {
+      en: "Changed your mind? Return or exchange within 30 days, effortlessly.",
+      bn: "মন বদলেছে? ৩০ দিনের মধ্যে ঝামেলাহীন রিটার্ন বা এক্সচেঞ্জ করুন।",
+    },
+    "features.secureCheckout": {
+      en: "Secure Checkout",
+      bn: "নিরাপদ চেকআউট",
+    },
+    "features.secureCheckoutBody": {
+      en: "Encrypted payments with bKash, Nagad, Rocket — or cash on delivery.",
+      bn: "বিকাশ, নগদ, রকেট দিয়ে এনক্রিপ্টেড পেমেন্ট — অথবা ক্যাশ অন ডেলিভারি।",
+    },
+    "features.premiumQuality": {
+      en: "Premium Quality",
+      bn: "প্রিমিয়াম মান",
+    },
+    "features.premiumQualityBody": {
+      en: "Small-batch pieces in breathable fabrics, finished and checked by hand.",
+      bn: "শ্বাসপ্রশ্বাসযোগ্য কাপড়ে ছোট ব্যাচে তৈরি, হাতে সম্পন্ন ও যাচাই করা।",
+    },
+    "stats.happyCustomers": {
+      en: "Happy Customers",
+      bn: "সন্তুষ্ট গ্রাহক",
+    },
+    "stats.premiumProducts": {
+      en: "Premium Products",
+      bn: "প্রিমিয়াম পণ্য",
+    },
+    "stats.countries": { en: "Countries", bn: "দেশ" },
 
     // Cart
     "cart.empty": { en: "Your bag is empty", bn: "আপনার কার্ট খালি" },
@@ -442,6 +508,72 @@ export function getTranslations(key: string): Record<Language, string> {
       en: "Explore the pieces families keep coming back for.",
       bn: "পরিবারগুলোর বারবার পছন্দের পোশাকগুলো দেখুন।",
     },
+    "sections.featuresEyebrow": { en: "Why Mukra", bn: "কেন মুকরা" },
+    "sections.features": {
+      en: "The Mukra Standard",
+      bn: "মুকরার মানক",
+    },
+    "sections.featuresDescription": {
+      en: "Thoughtful details behind every order — the promises we keep, whether the wardrobe is full or just being unpacked.",
+      bn: "প্রতিটি অর্ডারের পেছনে যত্নশীল বিস্তারিত — আমাদের প্রতিশ্রুতি, ওয়ারড্রোব পূর্ণ হোক বা সদ্য খোলা।",
+    },
+    "sections.featuresCloser": {
+      en: "Designed for the few · Built to last",
+      bn: "অল্প প্রিয়জনদের জন্য · টেকসই তৈরি",
+    },
+    "sections.emptyTitle": {
+      en: "The collection is being curated",
+      bn: "সংগ্রহ প্রস্তুত করা হচ্ছে",
+    },
+    "sections.emptyDescription": {
+      en: "Our new pieces are almost ready. Check back soon — or browse the full collection meanwhile.",
+      bn: "আমাদের নতুন পোশাক প্রায় তৈরি। শীঘ্রই ফিরে দেখুন — অথবা এর মধ্যে সম্পূর্ণ সংগ্রহ ঘুরে দেখুন।",
+    },
+    "sections.browseCollection": {
+      en: "Browse the Collection",
+      bn: "সংগ্রহ দেখুন",
+    },
+    "features.freeShipping": {
+      en: "Free Nationwide Shipping",
+      bn: "সারা দেশে ফ্রি ডেলিভারি",
+    },
+    "features.freeShippingBody": {
+      en: "Complimentary delivery across Bangladesh on every order — no minimum, no fine print.",
+      bn: "প্রতিটি অর্ডারে সারা বাংলাদেশে ফ্রি ডেলিভারি — কোনো ন্যূনতম শর্ত নেই।",
+    },
+    "features.easyReturns": {
+      en: "30-Day Easy Returns",
+      bn: "৩০ দিনের সহজ রিটার্ন",
+    },
+    "features.easyReturnsBody": {
+      en: "Changed your mind? Return or exchange within 30 days, effortlessly.",
+      bn: "মন বদলেছে? ৩০ দিনের মধ্যে ঝামেলাহীন রিটার্ন বা এক্সচেঞ্জ করুন।",
+    },
+    "features.secureCheckout": {
+      en: "Secure Checkout",
+      bn: "নিরাপদ চেকআউট",
+    },
+    "features.secureCheckoutBody": {
+      en: "Encrypted payments with bKash, Nagad, Rocket — or cash on delivery.",
+      bn: "বিকাশ, নগদ, রকেট দিয়ে এনক্রিপ্টেড পেমেন্ট — অথবা ক্যাশ অন ডেলিভারি।",
+    },
+    "features.premiumQuality": {
+      en: "Premium Quality",
+      bn: "প্রিমিয়াম মান",
+    },
+    "features.premiumQualityBody": {
+      en: "Small-batch pieces in breathable fabrics, finished and checked by hand.",
+      bn: "শ্বাসপ্রশ্বাসযোগ্য কাপড়ে ছোট ব্যাচে তৈরি, হাতে সম্পন্ন ও যাচাই করা।",
+    },
+    "stats.happyCustomers": {
+      en: "Happy Customers",
+      bn: "সন্তুষ্ট গ্রাহক",
+    },
+    "stats.premiumProducts": {
+      en: "Premium Products",
+      bn: "প্রিমিয়াম পণ্য",
+    },
+    "stats.countries": { en: "Countries", bn: "দেশ" },
     "cart.empty": { en: "Your bag is empty", bn: "আপনার কার্ট খালি" },
     "cart.items": { en: "items", bn: "আইটেম" },
     "cart.total": { en: "Total", bn: "মোট" },

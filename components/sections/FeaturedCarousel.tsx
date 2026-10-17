@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 import { cn } from "@/lib/utils";
 import { ProductCard } from "@/components/product/ProductCard";
+import { CatalogueEmptyState } from "@/components/sections/CatalogueEmptyState";
 import { SectionHeading } from "@/components/sections/SectionHeading";
 import type { Product } from "@/types";
 
@@ -65,8 +66,27 @@ export function FeaturedCarousel({ products }: FeaturedCarouselProps) {
     };
   }, [emblaApi, sync]);
 
-  /** Collapse the section when there is nothing curated yet. */
-  if (products.length === 0) return null;
+  /** Nothing curated yet — keep the section's layout with a premium empty
+      state instead of leaving a hole in the page. */
+  if (products.length === 0) {
+    return (
+      <section
+        id="featured"
+        aria-labelledby="featured-title"
+        className="relative py-24 lg:py-32"
+      >
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+          <SectionHeading
+            id="featured-title"
+            eyebrowKey="sections.featuredEyebrow"
+            titleKey="sections.featured"
+            descriptionKey="sections.featuredDescription"
+          />
+          <CatalogueEmptyState />
+        </div>
+      </section>
+    );
+  }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -85,6 +105,7 @@ export function FeaturedCarousel({ products }: FeaturedCarouselProps) {
 
   return (
     <section
+      id="featured"
       aria-labelledby="featured-title"
       className="relative py-24 lg:py-32"
     >
