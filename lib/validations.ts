@@ -2,6 +2,40 @@ import { z } from "zod";
 import { isBangladeshDistrict, isBangladeshDivision } from "@/lib/bangladesh-locations";
 import { mediaKindFromUrl } from "@/lib/images";
 import { PRODUCT_IMAGES_MAX } from "@/lib/media";
+export {
+  AUTH_ERROR_CODES,
+  EMAIL_REGEX,
+  LOGIN_ERROR_MESSAGES,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_RULES,
+  PHONE_REGEX,
+  REGISTER_ERROR_MESSAGES,
+  checkPasswordStrength,
+  constantTimeCompare,
+  forgotPasswordSchema,
+  getLoginErrorMessage,
+  getRegisterErrorMessage,
+  isValidEmail,
+  loginSchema,
+  registerApiSchema,
+  registerSchema,
+  sanitizeEmail,
+  sanitizeInput,
+  sanitizePhone,
+  scorePassword,
+  validateEmail,
+  validateLoginServerInput,
+  validateRegistrationServerInput,
+  type AuthErrorCode,
+  type AuthErrorCopy,
+  type ForgotPasswordValues,
+  type LoginValues,
+  type PasswordStrengthResult,
+  type RegisterApiValues,
+  type RegisterValues,
+  type ServerLoginValidationResult,
+  type ServerRegisterValidationResult,
+} from "@/lib/validations/auth";
 
 /**
  * Shared Zod schemas. The client forms and the checkout store use the same
@@ -148,25 +182,6 @@ export const paymentSchema = z
 
 export type PaymentValues = z.infer<typeof paymentSchema>;
 
-/** Registration payload accepted by `POST /api/auth/register`. */
-export const registerApiSchema = z.object({
-  name: z.string().trim().min(3, "Enter your full name").max(80, "That name is too long"),
-  email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
-  phone: z
-    .string()
-    .trim()
-    .regex(/^[+()\-\s0-9]{7,20}$/, "Enter a valid phone number")
-    .optional()
-    .or(z.literal("")),
-  password: z
-    .string()
-    .min(8, "Use at least 8 characters")
-    .regex(/[A-Z]/, "Add an uppercase letter")
-    .regex(/\d/, "Add a number"),
-});
-
-export type RegisterApiValues = z.infer<typeof registerApiSchema>;
-
 /** `POST /api/orders` payload — prices are re-checked server-side. */
 export const createOrderSchema = z.object({
   items: z
@@ -231,60 +246,8 @@ export function formatExpiry(value: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Auth                                                                      */
+/*  Auth (schemas and helpers re-exported from @/lib/validations/auth)        */
 /* -------------------------------------------------------------------------- */
-
-export const loginSchema = z.object({
-  email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
-  password: z.string().min(1, "Password is required"),
-  remember: z.boolean(),
-});
-
-export type LoginValues = z.infer<typeof loginSchema>;
-
-/** Shared, so the strength meter and the schema agree on the rules. */
-export const PASSWORD_RULES = [
-  { label: "At least 8 characters", test: (value: string) => value.length >= 8 },
-  { label: "One uppercase letter", test: (value: string) => /[A-Z]/.test(value) },
-  { label: "One number", test: (value: string) => /\d/.test(value) },
-  { label: "One special character", test: (value: string) => /[^A-Za-z0-9]/.test(value) },
-] as const;
-
-export function scorePassword(value: string): number {
-  return PASSWORD_RULES.filter((rule) => rule.test(value)).length;
-}
-
-export const registerSchema = z
-  .object({
-    fullName: requiredString("Full name", 3),
-    email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
-    phone: z
-      .string()
-      .trim()
-      .min(1, "Phone number is required")
-      .regex(/^[+()\-\s0-9]{7,20}$/, "Enter a valid phone number"),
-    password: z
-      .string()
-      .min(8, "Use at least 8 characters")
-      .regex(/[A-Z]/, "Add an uppercase letter")
-      .regex(/\d/, "Add a number"),
-    confirmPassword: z.string().min(1, "Confirm your password"),
-    acceptedTerms: z
-      .boolean()
-      .refine((value) => value, { message: "Please accept the Terms & Privacy Policy" }),
-  })
-  .refine((values) => values.password === values.confirmPassword, {
-    path: ["confirmPassword"],
-    message: "Passwords do not match",
-  });
-
-export type RegisterValues = z.infer<typeof registerSchema>;
-
-export const forgotPasswordSchema = z.object({
-  email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
-});
-
-export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 
 /* -------------------------------------------------------------------------- */
 /*  Account area (dashboard)                                                  */
