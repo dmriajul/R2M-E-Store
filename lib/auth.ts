@@ -2,8 +2,17 @@ import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { redirect } from "next/navigation";
 import { authConfig } from "@/lib/auth.config";
-import { verifyCredentialsDetailed, type CredentialFailure } from "@/lib/data/users";
-import { loginSchema } from "@/lib/validations";
+import {
+  isAccountLocked,
+  verifyCredentialsDetailed,
+  type CredentialFailure,
+} from "@/lib/data/users";
+import { clientIp } from "@/lib/rate-limit";
+import {
+  AUTH_ERROR_CODES,
+  sanitizeEmail,
+  validateLoginServerInput,
+} from "@/lib/validations/auth";
 import {
   canAccessSection,
   normalizeRole,
@@ -15,13 +24,10 @@ import type { AdminRole, AdminUser, SessionRole } from "@/types";
 /**
  * Auth.js (NextAuth v5) instance.
  *
- * Credentials + bcrypt against Postgres when `DATABASE_URL` exists, and the
- * demo accounts (`admin@mukra.com`, `sarah@example.com`, or any other email —
- * all on `password123`) when it does not — so the login form behaves identically
- * in both modes.
- *
- * The JWT carries `role`, normalised through `normalizeRole()` so a legacy
- * `ADMIN` row reads as `SUPER_ADMIN` everywhere downstream.
+ * Uses constant-time password comparison, per-account/IP rate limiting, and
+ * generic error codes (`INVALID_CREDENTIALS`, `EMAIL_NOT_VERIFIED`,
+ * `ACCOUNT_LOCKED`, `SERVER_ERROR`) that the client maps to user-friendly
+ * messages without leaking account existence.
  */
 class LoginError extends CredentialsSignin {
   constructor(reason: CredentialFailure) {
@@ -39,19 +45,38 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(raw) {
-        const parsed = loginSchema.safeParse({
+      async authorize(raw, request) {
+        const ip = request?.headers ? clientIp(request.headers) : "anonymous";
+        const rawEmail = sanitizeEmail(raw?.email);
+
+        if (rawEmail && isAccountLocked(rawEmail, ip)) {
+          throw new LoginError(AUTH_ERROR_CODES.ACCOUNT_LOCKED);
+        }
+
+        const validation = validateLoginServerInput({
           email: raw?.email,
           password: raw?.password,
           remember: true,
         });
-        if (!parsed.success) throw new LoginError("wrong-password");
+
+        if (!validation.ok) {
+          throw new LoginError(
+            validation.code === AUTH_ERROR_CODES.MISSING_FIELDS ||
+              validation.code === AUTH_ERROR_CODES.INVALID_EMAIL
+              ? validation.code
+              : AUTH_ERROR_CODES.INVALID_CREDENTIALS,
+          );
+        }
 
         const { user, failure } = await verifyCredentialsDetailed(
-          parsed.data.email,
-          parsed.data.password,
+          validation.data.email,
+          validation.data.password,
+          { ip },
         );
-        if (!user) throw new LoginError(failure ?? "wrong-password");
+
+        if (!user) {
+          throw new LoginError(failure ?? AUTH_ERROR_CODES.INVALID_CREDENTIALS);
+        }
 
         return {
           id: user.id,
