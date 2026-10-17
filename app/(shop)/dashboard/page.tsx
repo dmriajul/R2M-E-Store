@@ -79,10 +79,6 @@ export default function DashboardOverviewPage() {
                   <ShieldCheck aria-hidden className="size-3.5" />
                   {ADMIN_ROLE_LABEL[staffRole]}
                 </span>
-              ) : isDemoIdentity ? (
-                <span className="rounded-full border border-glass-border bg-black/25 px-3 py-1.5 backdrop-blur-sm">
-                  Demo account
-                </span>
               ) : null}
             </p>
 

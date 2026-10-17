@@ -639,7 +639,7 @@ function blockedLifecycleChange(params: {
  *
  * The list rows stay light (they carry no trail), so the sheet plucks this when
  * it opens: the account, and the `RoleChange` rows written by
- * `updateUserRoleAction()` below, newest first. In demo mode the same shape comes
+ * `updateUserRoleAction()` below, newest first. Without a database the same shape comes
  * from `getDemoRoleHistory()`. A trail that can't be read is not fatal — the
  * sheet opens with an empty history rather than refusing to show the account.
  */
@@ -736,7 +736,7 @@ export async function updateUserRoleAction(
 
   if (!database) {
     const updated = setDemoUserRole(target.id, role);
-    if (!updated) return { ok: false, error: "That demo account no longer exists" };
+    if (!updated) return { ok: false, error: "That account no longer exists" };
     recordDemoRoleChange({
       userId: updated.id,
       fromRole: target.role,

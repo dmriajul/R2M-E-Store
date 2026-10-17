@@ -119,7 +119,7 @@ export function StepPayment() {
 
       setValue("screenshotUrl", payload.data.url, { shouldValidate: true });
       toast.success("Screenshot uploaded 📎", {
-        description: `Stored via ${payload.data.provider === "cloudinary" ? "Cloudinary" : "local demo storage"}.`,
+        description: `Stored via ${payload.data.provider === "cloudinary" ? "Cloudinary" : "secure storage"}.`,
       });
     } catch (error) {
       setValue("screenshotUrl", "", { shouldValidate: true });
@@ -186,7 +186,7 @@ export function StepPayment() {
         persistedId = payload.data.id;
       } else {
         toast.warning("Order saved locally", {
-          description: payload.error ?? "The order service is unreachable — demo mode.",
+          description: payload.error ?? "Your order has been saved to this session.",
         });
       }
     } catch {

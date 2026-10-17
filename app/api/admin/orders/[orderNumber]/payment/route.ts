@@ -15,7 +15,7 @@ interface RouteContext {
  * Admin decision on a manual (bKash / Nagad / Rocket) payment.
  *
  * `approve` → CONFIRMED + PAID, `reject` → CANCELLED + FAILED, `collect-cash`
- * (COD) → DELIVERED + PAID. Requires the ADMIN role; in demo mode the console
+ * (COD) → DELIVERED + PAID. Requires the ADMIN role; without a database the console
  * applies the same change to its local order list.
  */
 export async function PATCH(
@@ -55,7 +55,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         data: { updated },
-        error: updated ? null : "Order not found in the database (demo orders live in the console)",
+        error: updated ? null : "Order not found in the database",
         success: updated,
         source: "mock",
       },
@@ -69,7 +69,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         data: null,
-        error: "Order not found in the database (demo orders live in the console)",
+        error: "Order not found in the database",
         success: false,
       },
       { status: 404 },

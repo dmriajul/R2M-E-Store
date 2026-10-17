@@ -242,7 +242,7 @@ export default function AdminCouponsPage() {
           <button
             type="button"
             onClick={() =>
-              toast.info("Coupon import is not part of the demo 🏷️", {
+              toast.info("Bulk coupon import is coming soon 🏷️", {
                 description: "Create codes one at a time from this screen.",
               })
             }

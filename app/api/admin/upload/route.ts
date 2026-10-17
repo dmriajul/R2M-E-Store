@@ -21,7 +21,7 @@
  * `categories:write`, banners need `settings:write`. No session → 401, any
  * other role (customers included) → 403. Errors are `{ "error": string }`.
  *
- * Without Cloudinary credentials (demo mode) files go to `.uploads/<folder>/`
+ * Without Cloudinary credentials files go to `.uploads/<folder>/`
  * and come back as `/uploads/…` URLs with a `local:` public id.
  */
 

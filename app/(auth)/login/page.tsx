@@ -1,103 +1,143 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Loader2, Mail, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
-import { loginSchema, type LoginValues } from "@/lib/validations";
+import {
+  AUTH_ERROR_CODES,
+  getLoginErrorMessage,
+  loginSchema,
+  type AuthErrorCopy,
+  type LoginValues,
+} from "@/lib/validations/auth";
 import { clearIdentityCaches } from "@/lib/session-cache";
-import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD } from "@/lib/demo-mode";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { SocialButtons } from "@/components/auth/SocialButtons";
+import { Toast, authToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 
-/** Friendly copy for each failure code the credentials provider returns. */
-const ERROR_COPY: Readonly<Record<string, { title: string; description: string }>> = {
-  "unknown-email": {
-    title: "We couldn't find that account",
-    description: `No shopper uses that email yet. In demo mode try ${DEMO_ADMIN_EMAIL} — or register in a few seconds.`,
-  },
-  "wrong-password": {
-    title: "That password does not match",
-    description: `For this demo, use “${DEMO_PASSWORD}” — the same password unlocks the admin console accounts.`,
-  },
-  CredentialsSignin: {
-    title: "That password does not match",
-    description: `For this demo, use “${DEMO_PASSWORD}” — or sign in as an admin with ${DEMO_ADMIN_EMAIL}.`,
-  },
-};
-
 export default function LoginPage() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [serverError, setServerError] = useState<AuthErrorCopy | null>(null);
+  const activeToastId = useRef<string | number | undefined>(undefined);
   /* Set by `clearSessionCache()` — confirms the debug wipe actually ran. */
   const [cacheCleared, setCacheCleared] = useState(false);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("cleared") === "1") {
       setCacheCleared(true);
-      toast.info("Session and caches cleared", {
-        description: "Cookies, localStorage and cached data have been removed for this site.",
-      });
+      authToast.info(
+        "Session and caches cleared",
+        "Cookies, localStorage and cached data have been removed for this site.",
+      );
     }
   }, []);
 
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    watch,
+    formState: { errors, isSubmitting, isValid },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "", remember: true },
-    mode: "onTouched",
+    mode: "all",
   });
+
+  // Clear visible server errors as soon as the user starts fixing the inputs.
+  useEffect(() => {
+    const subscription = watch(() => {
+      setServerError((current) => {
+        if (current && activeToastId.current !== undefined) {
+          authToast.dismiss(activeToastId.current);
+          activeToastId.current = undefined;
+        }
+        return null;
+      });
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
+
+  const dismissServerError = () => {
+    setServerError(null);
+    if (activeToastId.current !== undefined) {
+      authToast.dismiss(activeToastId.current);
+      activeToastId.current = undefined;
+    }
+  };
 
   const onSubmit = async (values: LoginValues) => {
     setPending(true);
+    dismissServerError();
 
     /* Where to land after a successful sign-in (middleware adds ?callbackUrl=). */
     const callbackUrl =
       new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get(
         "callbackUrl",
-      ) ?? "/shop";
+      ) ?? "/dashboard";
 
-    const result = await signIn("credentials", {
-      email: values.email,
-      password: values.password,
-      redirect: false,
-    }).catch(() => null);
-
-    if (!result || result.error) {
-      setPending(false);
-
-      const code = result?.code ?? result?.error ?? "CredentialsSignin";
-      const copy = ERROR_COPY[code] ?? ERROR_COPY.CredentialsSignin;
-
-      toast.error(copy?.title ?? "That password does not match", {
-        description: copy?.description,
+    try {
+      const result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
       });
-      return;
+
+      if (!result || result.error) {
+        setPending(false);
+
+        const rawCode = !result
+          ? AUTH_ERROR_CODES.SERVER_ERROR
+          : result.code
+            ? result.code
+            : result.error === "CredentialsSignin"
+              ? AUTH_ERROR_CODES.INVALID_CREDENTIALS
+              : AUTH_ERROR_CODES.SERVER_ERROR;
+
+        const copy = getLoginErrorMessage(rawCode);
+        setServerError(copy);
+
+        activeToastId.current =
+          copy.severity === "warning"
+            ? authToast.warning(copy.title, copy.message)
+            : authToast.error(copy.title, copy.message);
+        return;
+      }
+
+      /* Drop whatever the previous identity left cached *before* the next page
+         loads — so an admin never opens the console on a shopper's data, and a
+         shopper never inherits an operator's session data. */
+      clearIdentityCaches();
+
+      authToast.success("Welcome back! 👋", `Signed in as ${values.email}`);
+
+      router.push(callbackUrl);
+      router.refresh();
+    } catch {
+      setPending(false);
+      const copy = getLoginErrorMessage(AUTH_ERROR_CODES.SERVER_ERROR);
+      setServerError(copy);
+      activeToastId.current = authToast.error(copy.title, copy.message);
     }
-
-    /* Drop whatever the previous identity left cached *before* the next page
-       loads — so an admin never opens the console on a shopper's data, and a
-       shopper never inherits an operator's session data. */
-    clearIdentityCaches();
-
-    toast.success("Welcome back! 👋", {
-      description: `Signed in as ${values.email}`,
-    });
-
-    router.push(callbackUrl);
-    router.refresh();
   };
+
+  const emailInlineError =
+    errors.email?.message ??
+    (serverError?.field === "email" ? serverError.message : undefined);
+
+  const passwordInlineError =
+    errors.password?.message ??
+    (serverError?.code === AUTH_ERROR_CODES.INVALID_CREDENTIALS
+      ? serverError.message
+      : undefined);
 
   return (
     <>
@@ -129,6 +169,15 @@ export default function LoginPage() {
         </header>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
+          {serverError && (
+            <Toast
+              variant={serverError.severity}
+              title={serverError.title}
+              message={serverError.message}
+              onDismiss={dismissServerError}
+            />
+          )}
+
           {/* Email */}
           <div className="flex flex-col gap-2">
             <label
@@ -144,18 +193,26 @@ export default function LoginPage() {
               />
               <Input
                 id="login-email"
-                aria-describedby={errors.email ? "login-email-error" : undefined}
+                aria-describedby={emailInlineError ? "login-email-error" : undefined}
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
-                aria-invalid={Boolean(errors.email)}
+                aria-invalid={Boolean(emailInlineError)}
                 className="h-12 rounded-xl border-glass-border bg-[#1A1A1A] pl-10 text-sm transition-colors duration-300 focus-visible:border-primary/60 focus-visible:ring-primary/25 aria-[invalid=true]:border-rose/60"
                 {...register("email")}
               />
             </div>
-            {errors.email && (
-              <p id="login-email-error" role="alert" className="text-xs text-rose">
-                {errors.email.message}
+            {emailInlineError && (
+              <p
+                id="login-email-error"
+                role="alert"
+                className={
+                  serverError?.field === "email" && serverError.severity === "warning"
+                    ? "text-xs text-amber-400"
+                    : "text-xs text-rose"
+                }
+              >
+                {emailInlineError}
               </p>
             )}
           </div>
@@ -178,15 +235,15 @@ export default function LoginPage() {
             </div>
             <PasswordInput
               id="login-password"
-              aria-describedby={errors.password ? "login-password-error" : undefined}
+              aria-describedby={passwordInlineError ? "login-password-error" : undefined}
               autoComplete="current-password"
               placeholder="••••••••"
-              invalid={Boolean(errors.password)}
+              invalid={Boolean(passwordInlineError)}
               {...register("password")}
             />
-            {errors.password && (
+            {passwordInlineError && (
               <p id="login-password-error" role="alert" className="text-xs text-rose">
-                {errors.password.message}
+                {passwordInlineError}
               </p>
             )}
           </div>
@@ -203,8 +260,8 @@ export default function LoginPage() {
 
           <Button
             type="submit"
-            disabled={pending || isSubmitting}
-            className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:scale-[1.01]"
+            disabled={pending || isSubmitting || !isValid}
+            className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 motion-safe:hover:scale-[1.01]"
           >
             {pending ? (
               <>
@@ -218,10 +275,6 @@ export default function LoginPage() {
               </>
             )}
           </Button>
-
-          <p className="text-center text-[11px] text-muted-foreground">
-            Demo tip: any email with <span className="text-primary">{DEMO_PASSWORD}</span>
-          </p>
         </form>
 
         {/* Divider */}
