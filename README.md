@@ -34,8 +34,8 @@ Rocket wallet payments, and a bilingual (English + বাংলা) help centre.
 - ⚡ **Next.js 15 + a 95+ Lighthouse target** — route-level code splitting, `next/font`
   self-hosted Inter, AVIF/WebP images, route-level code splitting and immutable
   cache headers for static assets.
-- 🗄️ **Supabase + Prisma with a demo mode included** — every integration is
-  optional; with zero environment variables the whole site still works.
+- 🗄️ **Supabase + Prisma, database-driven end to end** — the catalogue, orders
+  and accounts live in Postgres; there is no demo mode and no sample catalogue.
 
 ---
 
@@ -69,40 +69,50 @@ npm install
 npm run dev            # http://localhost:3000
 ```
 
-That is the whole setup — **no `.env` file, no database, no API keys.** The app
-boots in demo mode (see below) and every screen is explorable.
+The app needs a database. Without `DATABASE_URL` the storefront routes render
+their maintenance state and auth answers a real error — nothing is faked. Point
+`DATABASE_URL` at a Postgres database (Supabase or otherwise), push the schema
+and create the first admin, then sign in and add your products:
+
+```bash
+cp .env.example .env.local     # set DATABASE_URL (Supabase pooled URI works)
+npm run db:push                # create the tables
+
+# Bootstrap the one account the seed creates — a SUPER_ADMIN for you:
+ADMIN_NAME="Your Name" \
+ADMIN_EMAIL="you@example.com" \
+ADMIN_PASSWORD="a-long-random-password" \
+npm run db:seed
+```
+
+There are no default credentials: the seed reads `ADMIN_NAME`, `ADMIN_EMAIL`
+and `ADMIN_PASSWORD` from the environment and refuses to run without them.
 
 ```bash
 npm run build          # production build
 npm run start          # serve the production build
 npm run lint           # eslint (zero warnings)
 npx tsc --noEmit       # strict type check
+npm test               # node:test suite (contracts + resilience)
 
 npm run db:push        # prisma db push      (needs DATABASE_URL)
-npm run db:seed        # seed demo data
+npm run db:seed        # create the SUPER_ADMIN from ADMIN_* env vars
 npm run db:studio      # browse the database
 ```
 
-**Demo credentials** — one account per console role, plus a shopper:
-
-| Role | Email | Password | Console access |
-| --- | --- | --- | --- |
-| Super admin | `admin@mukra.com` | `password123` | everything |
-| Inventory manager | `inventory@mukra.com` | `password123` | dashboard, products, categories |
-| SEO manager | `seo@mukra.com` | `password123` | dashboard, products (metadata), settings |
-| Support manager | `support@mukra.com` | `password123` | dashboard, orders, returns, customers |
-| Shopper | `sarah@example.com` (or any email) | `password123` | storefront + account area |
-
-`prisma/seed.ts` creates the same staff accounts once a database is connected:
-`admin@ · inventory@ · seo@ · support@mukra.com`, all with the shared demo
-password `password123`.
+**Adding your real products** — sign in as the super admin at `/login`, open
+**Admin → Products → Add Product** (or press `A` on the console), and fill in the
+name, pricing, variants and images. Products go live the moment **Active** is
+ticked; the storefront, sitemap and search pick them up on the next request.
+Categories and coupons work the same way from their console pages. See
+[docs/PRODUCTION_CATALOGUE.md](docs/PRODUCTION_CATALOGUE.md) for the full
+walkthrough (console, seed and direct SQL).
 
 **Identity is always the session's.** Every account-area screen reads the signed-in
 person from `auth()` on the server or `useSession()` in the browser — never from a
 store, `localStorage` or a mock record. Switching accounts therefore switches the
-name, email, role and data everywhere at once, and `sarah@example.com` is the only
-identity that renders the seeded demo orders, addresses and notifications; every
-other account (staff included) sees genuine empty states.
+name, email, role and data everywhere at once, and every account starts from its
+own genuine, empty history.
 
 **Clearing a stuck session** — if a browser still looks signed in as someone else
 (a stale cookie, or a second account in another tab), open the account menu in the
@@ -123,7 +133,7 @@ Every value is optional; each integration switches on independently.
 | `NEXT_PUBLIC_SITE_URL` | Production | `https://mukra.com` | Canonical origin for metadata, sitemap, robots, OG images |
 | `DATABASE_URL` | for real data | — | Supabase **pooled** Postgres URI (`?pgbouncer=true`) |
 | `DIRECT_URL` | for migrations | — | Supabase direct URI used by `prisma db push` |
-| `NEXTAUTH_SECRET` | Production | demo secret | JWT signing key — `openssl rand -base64 32` |
+| `NEXTAUTH_SECRET` | Production | dev-only fallback | JWT signing key — `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | Production | `http://localhost:3000` | Public auth callback origin (no trailing slash) |
 | `CLOUDINARY_CLOUD_NAME` | for CDN uploads (required on Vercel) | — | Cloudinary cloud name — see [Image uploads](#image-uploads-cloudinary) |
 | `CLOUDINARY_API_KEY` | for CDN uploads (required on Vercel) | — | Cloudinary API key (server-only) |
@@ -148,27 +158,25 @@ Templates: [`.env.example`](./.env.example) (local) and
 
 ---
 
-## Demo Mode
+## Database mode (the only mode)
 
-`lib/demo-mode.ts` exports `IS_DEMO = !process.env.DATABASE_URL`. When no
-environment variables are present:
+There is no demo mode: every product, order, coupon, category and account is a
+Postgres row. When the database is unreachable:
 
-| Area | Demo behaviour | With env vars |
-| --- | --- | --- |
-| Catalogue | 12 products from `lib/site.ts` | Prisma `Product` table (seeded identically) |
-| Auth | Any email + `password123`, `demo-<local>` user id; the four role accounts above | Postgres users, bcrypt hashes, JWT sessions carrying the role |
-| Orders | In-memory records, `POST /api/orders` still re-prices the cart | Persisted `Order` + `OrderItem` rows |
-| Admin console | Same UI, in-session Zustand store (not durable) | Postgres through Server Actions + Prisma |
-| Uploads | Written to `.uploads/` and served via `/uploads/…` | Cloudinary (`mukra/products`, `mukra/categories`, `mukra/banners`) |
-| Payments | Wallet numbers + manual verification, cards disabled | Same, plus SSLCommerz when enabled |
-| Images | Stock photos, branded fallback artwork | Cloudinary `f_auto,q_auto,w_…,c_limit` srcsets via `OptimizedImage` |
+| Area | Behaviour |
+| --- | --- |
+| Catalogue pages | A "We'll be right back" maintenance state — never sample products |
+| `/shop` with an empty catalogue | A friendly "The collection is being curated" empty state |
+| `GET /api/products` | HTTP 503 JSON — "no products" and "catalogue unavailable" stay distinguishable |
+| Auth / orders | Fail closed with a real error; no in-memory success is ever fabricated |
+| Admin console | Empty tables with a connection notice; writes report the failure |
+| Uploads | Cloudinary when the three keys are set, local `.uploads/` disk otherwise |
+| Payments | Wallet numbers + manual verification; SSLCommerz only when enabled |
 
-Every Prisma call is wrapped in `try/catch` and falls back to the mock data, so
-adding one env var can never take the site down. `GET /api/health` reports
-exactly which integrations are live:
+`GET /api/health` reports exactly which integrations are live:
 
 ```json
-{ "status": "ok", "mode": "demo", "database": "mock", "cloudinary": "local-disk", "sslcommerz": "disabled" }
+{ "status": "ok", "mode": "live", "database": "configured", "cloudinary": "local-disk", "sslcommerz": "disabled" }
 ```
 
 ## Roles & permissions (RBAC)
@@ -240,8 +248,8 @@ database keeps working — it simply reads as `SUPER_ADMIN` everywhere:
 ```
 
 Adding enum values is additive in Postgres (`ALTER TYPE … ADD VALUE`) and no
-table is rewritten. Apply with `npm run db:push`, then `npm run db:seed` to write
-the super-admin role and create one account per manager role.
+table is rewritten. Apply with `npm run db:push`, then `npm run db:seed` to
+create your SUPER_ADMIN account (no other rows are seeded).
 
 ---
 
@@ -273,11 +281,10 @@ Rules the actions follow:
    `{ ok: false, error }`, never data.
 2. **Zod-validated.** Arguments arrive as `unknown` and are parsed with the shared
    schemas in `lib/validations.ts` before they reach Prisma.
-3. **No silent demo fallback.** With `DATABASE_URL` set, a write either commits or
-   returns `{ ok: false, error }` — `withDatabase()`'s catch-and-serve-mock
-   behaviour is deliberately unused here, so an operator is never told a change
-   was saved when it wasn't. With no database at all the action reports
-   `source: "demo"` and the console updates its in-session store.
+3. **Never fake a write.** A write either commits to Postgres or returns
+   `{ ok: false, error }`, so an operator is never told a change was saved when
+   it wasn't. Without a database the data layer throws and the action surfaces
+   the error.
 4. **Revalidated.** Successful writes call `revalidatePath` for the console, the
    storefront (`/`, `/shop`, `/product/[id]`, `/sitemap.xml`) and the shopper's
    order pages, so both sides reflect the change on the next render.
@@ -352,7 +359,7 @@ ImageUpload / ImageGalleryUpload ──multipart──▶ /api/admin/upload
 4. Restart / redeploy. `GET /api/health` now reports `"cloudinary": "configured"`.
 
 No upload preset or folder setup is needed — folders are created on the first
-upload. Without the keys, uploads go to `.uploads/` (demo mode); on Vercel the
+upload. Without the keys, uploads go to `.uploads/` (local-disk mode); on Vercel the
 filesystem is read-only, so the console answers **503** until the keys are set.
 
 ### Folder structure
@@ -455,7 +462,7 @@ npx prisma db push    # add the column (same as `npm run db:push`; also regenera
 ```
 
 Deploy the code and run the push together: until the column exists, category
-reads fall back to the demo list and category saves fail, while the storefront
+reads fail with a connection error and category saves fail, while the storefront
 simply keeps the bundled tile photos.
 
 ---
@@ -470,9 +477,8 @@ rows with no additional assignments continue to use their primary category.
 Publication continues to use `Product.active`, and featured ordering uses
 `featuredOrder` (lower values appear first, with newest-first tie breaking).
 
-These settings persist across sessions when the Prisma database is enabled.
-Demo mode keeps the existing in-memory admin catalogue and is not a durable
-storage option. This repository uses `npm run db:push` rather than checked-in
+These settings persist in Postgres — the console has no in-memory catalogue.
+This repository uses `npm run db:push` rather than checked-in
 Prisma migration files. The additive schema changes have not been applied to a
 database; apply `npm run db:push` only through the approved database-change
 process, and do not point it at production without explicit approval.
@@ -583,7 +589,7 @@ app/
 │   └── <section>/layout.tsx   RBAC gate per console section
 ├── api/                       auth, register, orders, products, upload, health,
 │                              admin/upload (console images → Cloudinary)
-├── uploads/[...path]/         local-disk upload streaming (demo mode)
+├── uploads/[...path]/         local-disk upload streaming
 ├── offline/                   offline fallback destination
 ├── opengraph-image.tsx        dynamic 1200×630 social card (next/og)
 ├── sitemap.ts · robots.ts     SEO routes
@@ -603,17 +609,17 @@ components/
 └── ui/                        shadcn primitives + SkipToContent, BackToTop,
                                OptimizedImage, Skeleton
 
-lib/                           cart maths, config, demo-mode, seo (JSON-LD),
+lib/                           cart maths, config, seo (JSON-LD), integrations,
                                image-optimizer, legal-content, payments, prisma,
                                cloudinary (server SDK), images (URL helpers),
                                media (upload rules), admin-upload-client,
-                               rate-limit, validations, mock data, rbac (roles)
+                               rate-limit, validations, rbac (roles)
 lib/data/                      admin-orders · admin-products · categories · media
                                · admin-errors — Prisma reads/writes for the console
 hooks/                         useMediaQuery, useMediaSession (upload cleanup)
 store/                         zustand stores (cart, wishlist, checkout, admin, …)
 prisma/                        schema.prisma + seed.ts
-public/                        manifest.json, icons/, images/, models/, demo/
+public/                        manifest.json, icons/, images/
 scripts/                       make-pwa-icons.py (regenerates the PWA icons)
 ```
 
@@ -682,11 +688,11 @@ verified with `tsc --noEmit`, `eslint`, a production build and a curl sweep:
 
 - SSLCommerz is intentionally parked; cards show "Coming soon".
 - Admin console writes (`app/admin/actions.ts`) are wired to Postgres through
-  Server Actions, so products, orders and categories persist. Demo installs
-  without `DATABASE_URL` keep the old in-session behaviour: the action answers
-  `source: "demo"` and the change is applied to the Zustand store only. Console
-  customers, coupons and store settings are still session-only — their routes and
-  API endpoints are RBAC-guarded, but those mutations have no Server Action yet.
+  Server Actions, so products, orders and categories persist. Without
+  `DATABASE_URL` the actions fail with a visible error instead of pretending.
+  Console customers, coupons and store settings are still session-only — their
+  routes and API endpoints are RBAC-guarded, but those mutations have no Server
+  Action yet.
 - `/unauthorized` is the destination for a role that can't open a section; a
   shopper who opens `/admin` is sent to `/dashboard` instead.
 - Deleting a product that appears in an existing order is refused (order lines

@@ -2,12 +2,12 @@
 
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { getProductById } from "@/lib/site";
 import { useCartStore } from "@/store/useCartStore";
-import type { DashboardOrder } from "@/types";
+import type { ApiResponse, DashboardOrder, Product } from "@/types";
 
 /**
- * Puts a past order back in the bag. Sold-out lines are skipped, so a reorder
+ * Puts a past order back in the bag. The catalogue is re-read from the server
+ * (so prices and stock are current), and sold-out lines are skipped — a reorder
  * of a partly unavailable order still adds what it can and says so.
  *
  * No success toast is raised here — `useCartStore.addItem` already announces
@@ -17,9 +17,19 @@ export function useReorder() {
   const addItem = useCartStore((state) => state.addItem);
 
   return useCallback(
-    (order: DashboardOrder) => {
+    async (order: DashboardOrder) => {
+      let catalogue: Product[] = [];
+      try {
+        const response = await fetch("/api/products", { cache: "no-store" });
+        const result = (await response.json()) as ApiResponse<Product[]>;
+        if (response.ok && result.success && result.data) catalogue = result.data;
+      } catch {
+        // Fall through to the "nothing to reorder" message below.
+      }
+
+      const byId = new Map(catalogue.map((product) => [product.id, product]));
       const runnable = order.items
-        .map((item) => ({ item, product: getProductById(item.productId) }))
+        .map((item) => ({ item, product: byId.get(item.productId) }))
         .filter((entry) => Boolean(entry.product?.inStock));
 
       runnable.forEach(({ item, product }) => {

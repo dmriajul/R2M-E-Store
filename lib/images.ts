@@ -2,7 +2,7 @@
  * Image helpers.
  *
  * Demo catalogue products use stock photography. Admin-managed photos come
- * from Cloudinary (or, in demo installs, the local `/uploads/…` route); legacy
+ * from Cloudinary (or, in local-disk installs, the `/uploads/…` route); legacy
  * non-URL tokens remain supported by the branded artwork fallback.
  *
  * Everything here is pure string maths — no Node APIs, no secrets — so client

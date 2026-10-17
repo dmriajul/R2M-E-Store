@@ -14,10 +14,8 @@ import { cn, formatShortDate } from "@/lib/utils";
 import {
   ADMIN_ORDER_STATUS_LABEL,
   ADMIN_STATUSES,
-  ORDER_STATS,
   ordersToCsv,
-} from "@/lib/mock-admin";
-import { DEMO_NOW } from "@/lib/mock-dashboard";
+} from "@/lib/admin-constants";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { OrderStatusBadge } from "@/components/admin/StatusBadge";
 import { PaymentStatusBadge } from "@/components/admin/PaymentStatusBadge";
@@ -70,7 +68,7 @@ const DATE_RANGES: readonly { id: DateRange; label: { en: string; bn: string } }
 
 export default function AdminOrdersPage() {
   /* Live rows: the admin layout hydrates this list from Postgres, or keeps the
-     in-session demo orders when no database is configured. */
+     database and reports the failure. */
   const orders = useAdminStore((state) => state.orders);
   const updateOrderStatus = useAdminStore((state) => state.updateOrderStatus);
   const verifyPayment = useAdminStore((state) => state.verifyPayment);
@@ -101,7 +99,6 @@ export default function AdminOrdersPage() {
       viewDetails: language === "bn" ? "বিস্তারিত দেখুন" : "View details",
       printInvoice: language === "bn" ? "ইনভয়েস প্রিন্ট করুন" : "Print invoice",
       noOrders: language === "bn" ? "এই ফিল্টারে কোনো অর্ডার নেই।" : "No orders match these filters.",
-      demoDate: language === "bn" ? "তথ্যের তারিখ, " : "Data as of ",
     };
     return translations[key] ?? key;
   };
@@ -111,7 +108,7 @@ export default function AdminOrdersPage() {
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const anchor = new Date(DEMO_NOW).getTime();
+    const anchor = Date.now();
 
     return orders.filter((order) => {
       const matchesTerm =
@@ -143,31 +140,31 @@ export default function AdminOrdersPage() {
       [
         {
           label: language === "bn" ? "মোট অর্ডার" : "Total Orders",
-          value: ORDER_STATS.total,
+          value: orders.length,
           accent: "text-foreground",
         },
         {
           label: language === "bn" ? "লম্বা" : "Pending",
-          value: ORDER_STATS.pending,
+          value: orders.filter((order) => order.status === "pending").length,
           accent: "text-amber-400",
         },
         {
           label: language === "bn" ? "পাঠানো হয়েছে" : "Shipped",
-          value: ORDER_STATS.shipped,
+          value: orders.filter((order) => order.status === "shipped").length,
           accent: "text-violet-400",
         },
         {
           label: language === "bn" ? "বিতরণ" : "Delivered",
-          value: ORDER_STATS.delivered,
+          value: orders.filter((order) => order.status === "delivered").length,
           accent: "text-emerald-400",
         },
         {
           label: language === "bn" ? "বাতিল" : "Cancelled",
-          value: ORDER_STATS.cancelled,
+          value: orders.filter((order) => order.status === "cancelled").length,
           accent: "text-rose-400",
         },
       ] as const,
-    [language],
+    [language, orders],
   );
 
   const handleExport = () => {
@@ -176,7 +173,7 @@ export default function AdminOrdersPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `mukra-orders-${DEMO_NOW.slice(0, 10)}.csv`;
+    link.download = `mukra-orders-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     toast.success(
@@ -186,8 +183,7 @@ export default function AdminOrdersPage() {
 
   /**
    * Server Action first — Postgres commits the status, then the console cache
-   * takes the record the action returns. Without a database the action answers
-   * `source: "demo"` and the change stays in-session.
+   * takes the record the action returns.
    */
   const handleStatusChange = async (order: AdminOrder, next: AdminOrderStatus) => {
     const result = await updateOrderStatusAction(order.number, next);
@@ -588,8 +584,7 @@ export default function AdminOrdersPage() {
       />
 
       <p className="text-[11px] text-muted-foreground">
-        {showingOf(rows.length, orders.length)}{" "}
-        {t("demoDate")}{formatShortDate(DEMO_NOW)}.
+        {showingOf(rows.length, orders.length)} · {formatShortDate(new Date().toISOString())}.
       </p>
 
       <OrderDetailSheet

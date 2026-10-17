@@ -114,7 +114,7 @@ export function formatStamp(iso: string): string {
  * Relative label between two fixed instants: "2 hours ago", "3 days ago",
  * "yesterday", "tomorrow", "in 2 days", "1 week ago".
  *
- * `anchorIso` is the demo's frozen "now" (see `lib/mock-dashboard.ts`), so the
+ * `anchorIso` is the moment the copy is written against, so the
  * copy never drifts between the server and the browser.
  */
 export function formatRelative(iso: string, anchorIso: string): string {

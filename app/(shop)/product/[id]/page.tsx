@@ -9,9 +9,8 @@ import {
   GENDER_EMOJI,
   SITE,
   TRUST_BADGES,
-  getRelatedProducts,
 } from "@/lib/site";
-import { findProduct } from "@/lib/data/products";
+import { findProduct, listRelatedProducts, listProductReviews } from "@/lib/data/products";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema } from "@/lib/seo";
 import { ProductGallery } from "@/components/product/ProductGallery";
@@ -19,6 +18,7 @@ import { ProductActions } from "@/components/product/ProductActions";
 import { ProductAccordion } from "@/components/product/ProductAccordion";
 import { ProductDescription } from "@/components/product/ProductDescription";
 import { ProductCard } from "@/components/product/ProductCard";
+import { CatalogueUnavailable } from "@/components/shop/CatalogueUnavailable";
 import { ReviewSection } from "@/components/product/ReviewSection";
 import { StarRating } from "@/components/product/StarRating";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +35,10 @@ export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
   const { id } = await params;
-  const { product } = await findProduct(id);
+  const { product } = await findProduct(id).catch(() => ({
+    product: null,
+    source: "database" as const,
+  }));
 
   if (!product) {
     return { title: { absolute: "Product not found | Mukra" } };
@@ -60,7 +63,22 @@ export async function generateMetadata({
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { id } = await params;
-  const { product } = await findProduct(id);
+
+  // The product comes from the database only; an unreachable catalogue renders
+  // the maintenance state rather than a 404 (the product may well exist).
+  const { product, unavailable } = await findProduct(id).then(
+    (result) => ({ ...result, unavailable: false }),
+    (error: unknown) => {
+      if (error instanceof Error && error.name === "DatabaseUnavailableError") {
+        return { product: null, source: "database" as const, unavailable: true };
+      }
+      throw error;
+    },
+  );
+
+  if (!product && unavailable) {
+    return <CatalogueUnavailable />;
+  }
 
   if (!product) notFound();
 
@@ -68,7 +86,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const discount = product.originalPrice
     ? Math.round((1 - product.price / product.originalPrice) * 100)
     : null;
-  const related = getRelatedProducts(product, 4);
+  const [related, reviews] = await Promise.all([
+    listRelatedProducts(product, 4),
+    listProductReviews(product.id),
+  ]);
   const isOrganic = product.material.toLowerCase().includes("organic");
 
   /* ---------- Structured data ---------- */
@@ -280,11 +301,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <Separator className="my-16 bg-glass-border" />
 
         {/* ---------- Reviews ---------- */}
-        <ReviewSection product={product} />
+        <ReviewSection product={product} reviews={reviews} />
 
         <Separator className="my-16 bg-glass-border" />
 
         {/* ---------- Related ---------- */}
+        {related.length > 0 && (
         <section aria-labelledby="related-heading">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -319,6 +341,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             ))}
           </div>
         </section>
+        )}
       </div>
     </div>
   );

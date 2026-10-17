@@ -3,7 +3,7 @@
 import { AlertTriangle, PackagePlus } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatPrice } from "@/lib/utils";
-import { getLowStockProducts } from "@/lib/mock-admin";
+import { getLowStockProducts } from "@/lib/admin-constants";
 import { ProductArtwork } from "@/components/product/ProductArtwork";
 import { adminButtonBlue } from "@/components/admin/Field";
 import { restockProductAction } from "@/app/admin/actions";

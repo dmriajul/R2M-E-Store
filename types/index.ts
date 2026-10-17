@@ -335,7 +335,6 @@ export interface DashboardUser {
 export interface DashboardIdentity {
   id: string;
   email: string;
-  demo: boolean;
 }
 
 export type DashboardPreferenceKey =
@@ -773,8 +772,8 @@ export interface OrderRecord {
   trackingNumber?: string;
   estimatedDelivery?: string;
   createdAt: string;
-  /** `database` when the row was persisted, `mock` in demo mode. */
-  source: "database" | "mock";
+  /** Always `database` — orders exist only as persisted rows. */
+  source: "database";
 }
 
 /**

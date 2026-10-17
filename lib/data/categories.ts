@@ -5,19 +5,18 @@
  * fixed category names the storefront filters on (see `lib/validations.ts`), so
  * renaming a category here never orphans the catalogue.
  *
- * Two rules apply to every write in this file:
+ * Two rules apply to every access in this file:
  *
- * 1. **No mock fallback.** Reads return `null` when Postgres is not reachable
- *    (the console then keeps its in-session demo list), and writes throw. They
- *    are never quietly redirected into `lib/mock-admin.ts` — a signed-in
- *    operator must not be told a change was saved when nothing was persisted.
+ * 1. **No fallback list.** Reads and writes throw when Postgres is not
+ *    reachable — a signed-in operator must never be shown a hardcoded category
+ *    list, nor told a change was saved when nothing was persisted.
  * 2. **Rows in, plain objects out.** Prisma types never leak past this module.
  */
 
 import { AdminDataError } from "@/lib/data/admin-errors";
 import { scheduleImageCleanup } from "@/lib/data/media";
 import { isRenderableImage } from "@/lib/images";
-import { getPrisma, type PrismaLikeClient } from "@/lib/prisma";
+import { DatabaseUnavailableError, getPrisma, type PrismaLikeClient } from "@/lib/prisma";
 import { adminCategorySchema, type AdminCategoryValues } from "@/lib/validations";
 import type { AdminCategory } from "@/types";
 
@@ -81,34 +80,33 @@ function isMissingRow(error: unknown): boolean {
 
 /**
  * Every category, ordered the way the console lists them.
- * Returns `null` when no database is configured, so the caller can tell
- * "console has no server data" apart from "the table is empty".
+ * Throws when no database is configured; the console layout catches and
+ * renders the empty tables with a "not connected" notice.
  */
-export async function getAdminCategories(): Promise<AdminCategory[] | null> {
+export async function getAdminCategories(): Promise<AdminCategory[]> {
+  const db = await requirePrisma();
+
+  const rows = (await db.category.findMany({
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      emoji: true,
+      description: true,
+      parent: true,
+      image: true,
+    },
+  })) as CategoryRow[];
+
+  return rows.map(toAdminCategory);
+}
+
+/** Fails closed: the console never falls back to a hardcoded category list. */
+async function requirePrisma() {
   const db = await getPrisma();
-  if (!db) return null;
-
-  try {
-    const rows = (await db.category.findMany({
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        emoji: true,
-        description: true,
-        parent: true,
-        image: true,
-      },
-    })) as CategoryRow[];
-
-    return rows.map(toAdminCategory);
-  } catch (error) {
-    // A read must never take the console down: log it and let the caller fall
-    // back to the in-session list. Writes deliberately do not do this.
-    console.error("[admin/categories] Could not load categories", error);
-    return null;
-  }
+  if (!db) throw new DatabaseUnavailableError();
+  return db;
 }
 
 /**
@@ -123,10 +121,7 @@ export async function saveAdminCategory(
   id?: string,
 ): Promise<AdminCategory> {
   const parsed = adminCategorySchema.parse(values);
-  const db = await getPrisma();
-  if (!db) {
-    throw new AdminDataError("Saving a category requires a configured database");
-  }
+  const db = await requirePrisma();
 
   // `undefined` (field omitted) leaves the stored cover untouched.
   const image = parsed.image === undefined ? undefined : parsed.image || null;
@@ -163,10 +158,7 @@ export async function saveAdminCategory(
 
 /** Deletes a category. Throws when the row has already gone. */
 export async function deleteAdminCategory(id: string): Promise<void> {
-  const db = await getPrisma();
-  if (!db) {
-    throw new AdminDataError("Deleting a category requires a configured database");
-  }
+  const db = await requirePrisma();
 
   try {
     const image = await readCategoryImage(db, id);

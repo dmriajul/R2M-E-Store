@@ -5,16 +5,14 @@
  * status changes, manual-wallet verification and internal notes all persist in
  * Postgres.
  *
- * Deliberately **not** built on `withDatabase()`: that helper swallows failures
- * and serves mock data, which is right for the storefront but wrong for an
- * authenticated admin action. Here a write either commits or throws, and the
- * Server Action turns the throw into an error toast. Reads return `null` when no
- * database is configured so the console can keep its in-session demo list.
+ * Every write either commits or throws, and the Server Action turns the throw
+ * into an error toast. Reads throw when the database is unreachable; the
+ * console layout catches that and renders its empty tables with a notice.
  */
 
 import { AdminDataError } from "@/lib/data/admin-errors";
-import { buildAdminTimeline } from "@/lib/mock-admin";
-import { getPrisma, type PrismaLikeClient } from "@/lib/prisma";
+import { buildAdminTimeline } from "@/lib/admin-constants";
+import { DatabaseUnavailableError, getPrisma, type PrismaLikeClient } from "@/lib/prisma";
 import { getPaymentMethod } from "@/lib/payments";
 import { toProductCategory } from "@/lib/data/products";
 import { CATEGORY_META } from "@/lib/site";
@@ -210,24 +208,18 @@ export function toAdminOrder(row: OrderRow): AdminOrder {
 
 /**
  * Every order in the console's shape, newest first.
- * `null` means "no database configured" — not "no orders".
+ * Throws `AdminDataError` when no database is configured — the console layout
+ * catches it and renders the empty tables.
  */
-export async function getAdminOrders(): Promise<AdminOrder[] | null> {
-  const db = await getPrisma();
-  if (!db) return null;
+export async function getAdminOrders(): Promise<AdminOrder[]> {
+  const db = await requireDatabase();
 
-  try {
-    const rows = (await db.order.findMany({
-      include: orderInclude,
-      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-    })) as unknown as OrderRow[];
+  const rows = (await db.order.findMany({
+    include: orderInclude,
+    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+  })) as unknown as OrderRow[];
 
-    return rows.map(toAdminOrder);
-  } catch (error) {
-    // Reads degrade to the in-session demo list; writes never do.
-    console.error("[admin/orders] Could not load orders", error);
-    return null;
-  }
+  return rows.map(toAdminOrder);
 }
 
 /** A single order, freshly mapped. Throws when the row does not exist. */
@@ -249,9 +241,8 @@ export async function getAdminOrder(orderNumber: string): Promise<AdminOrder> {
 async function requireDatabase(): Promise<PrismaLikeClient> {
   const db = await getPrisma();
   if (!db) {
-    throw new AdminDataError(
-      "No database connection — set DATABASE_URL and run `npx prisma generate`",
-    );
+    // Unconfigured is a 503, not an operator mistake.
+    throw new DatabaseUnavailableError();
   }
   return db;
 }

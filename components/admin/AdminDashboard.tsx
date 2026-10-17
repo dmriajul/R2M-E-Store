@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ADMIN_KPIS } from "@/lib/mock-admin";
-import { DEMO_NOW } from "@/lib/mock-dashboard";
+import { kpisFromOrders } from "@/lib/admin-metrics";
 import { formatLongDate, formatPrice } from "@/lib/utils";
 import { ADMIN_ROLE_HINT, ADMIN_ROLE_LABEL } from "@/lib/rbac";
 import { KpiCard } from "@/components/admin/KpiCard";
@@ -58,9 +57,10 @@ export default function AdminDashboard() {
   const [greeting, setGreeting] = useState("Good morning");
 
   const firstName = user.name.split(/\s+/)[0] || "there";
-  const kpis = Array.isArray(ADMIN_KPIS) ? ADMIN_KPIS.filter(Boolean) : [];
   const products = useAdminStore((state) => state.products);
   const orders = useAdminStore((state) => state.orders);
+  const kpis = useMemo(() => kpisFromOrders(orders), [orders]);
+  const today = useMemo(() => new Date().toISOString(), []);
 
   const costsByProduct = new Map(products.map((product) => [product.id, product.costPrice]));
   const profitTotals = orders
@@ -109,7 +109,7 @@ export default function AdminDashboard() {
             {greeting}, {firstName}! 👋
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {ADMIN_ROLE_HINT[user.role]} — {formatLongDate(DEMO_NOW)}
+            {ADMIN_ROLE_HINT[user.role]} — {formatLongDate(today)}
           </p>
         </div>
         <p className="rounded-lg border border-primary/25 bg-primary/8 px-3 py-1.5 text-[11px] font-medium tracking-[0.1em] text-primary uppercase">

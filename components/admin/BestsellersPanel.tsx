@@ -2,7 +2,8 @@
 
 import { motion } from "framer-motion";
 import { cn, formatPrice } from "@/lib/utils";
-import { ADMIN_BESTSELLERS } from "@/lib/mock-admin";
+import { bestsellersFromOrders } from "@/lib/admin-metrics";
+import { useAdminStore } from "@/store/useAdminStore";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -16,17 +17,24 @@ const MEDALS: Readonly<Record<number, string>> = {
 const MEDAL_EMOJI: Readonly<Record<number, string>> = { 0: "🥇", 1: "🥈", 2: "🥉" };
 
 export function BestsellersPanel({ className }: { className?: string }) {
-  const peak = Math.max(...ADMIN_BESTSELLERS.map((entry) => entry.unitsSold), 1);
+  const orders = useAdminStore((state) => state.orders);
+  const bestsellers = bestsellersFromOrders(orders);
+  const peak = Math.max(...bestsellers.map((entry) => entry.unitsSold), 1);
 
   return (
     <section className={cn("rounded-xl border border-[#242424] bg-[#141414] p-5", className)}>
       <header className="mb-4">
-        <h2 className="text-sm font-semibold text-foreground">Bestsellers This Week 🏆</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Ranked by units sold since Monday</p>
+        <h2 className="text-sm font-semibold text-foreground">Bestsellers 🏆</h2>
+        <p className="mt-1 text-xs text-muted-foreground">Ranked by units sold across your orders</p>
       </header>
 
       <ol className="flex flex-col gap-3.5">
-        {ADMIN_BESTSELLERS.map((entry, index) => (
+        {bestsellers.length === 0 ? (
+          <li className="rounded-lg border border-dashed border-[#2A2A2A] px-4 py-6 text-center text-xs text-muted-foreground">
+            No sales recorded yet — the podium fills in with your first orders.
+          </li>
+        ) : (
+          bestsellers.map((entry, index) => (
           <motion.li
             key={entry.productId}
             initial={{ opacity: 0, x: -8 }}
@@ -66,7 +74,8 @@ export function BestsellersPanel({ className }: { className?: string }) {
               </div>
             </div>
           </motion.li>
-        ))}
+          ))
+        )}
       </ol>
     </section>
   );

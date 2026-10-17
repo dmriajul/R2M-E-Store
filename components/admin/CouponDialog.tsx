@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { COUPON_TYPE_LABEL } from "@/lib/mock-admin";
+import { COUPON_TYPE_LABEL } from "@/lib/admin-constants";
 import {
   COUPON_TYPES,
   adminCouponSchema,

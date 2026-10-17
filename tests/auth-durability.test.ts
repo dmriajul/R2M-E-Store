@@ -5,7 +5,7 @@ import { compare } from "bcryptjs";
 import { GET as readiness } from "../app/api/ready/route";
 import { POST } from "../app/api/auth/register/route";
 import { createUser, verifyCredentialsDetailed } from "../lib/data/users";
-import { DatabaseUnavailableError, withDatabase, withRequiredDatabase } from "../lib/prisma";
+import { DatabaseUnavailableError, requireDatabase } from "../lib/prisma";
 import { newVerificationToken } from "../lib/verification-tokens";
 import { LOGIN_MESSAGES, loginErrorMessage } from "../lib/auth-messages";
 import { installTestDatabase } from "./support/test-database";
@@ -69,26 +69,17 @@ test("missing database never creates accounts or authenticates known demo admins
     assert.equal((await POST(request(`${nodeEnv}@example.com`))).status, 503);
     await assert.rejects(() => verifyCredentialsDetailed("admin@mukra.com", "password123"), DatabaseUnavailableError);
   }
-  await assert.rejects(() => withRequiredDatabase(async () => true, () => false), DatabaseUnavailableError);
-  // Storefront catalogue reads (`withDatabase`) keep their documented mock
-  // fallback when a deployment is unconfigured — including in production — so
-  // a fresh Vercel deploy without env vars renders the demo catalogue instead
-  // of the "Something went wrong" error page. Account flows above stay
-  // fail-closed; `withRequiredDatabase` still rejects everywhere.
-  for (const nodeEnv of ["development", "production"] as const) {
-    process.env = { ...process.env, NODE_ENV: nodeEnv };
-    const result = await withDatabase(async (): Promise<boolean> => true, () => false);
-    assert.equal(result.data, false);
-    assert.equal(result.source, "mock");
-  }
+  await assert.rejects(() => requireDatabase(async () => true), DatabaseUnavailableError);
 });
 
-test("production read outages cannot serve mock catalogue or order data", async () => {
+test("a read outage surfaces as an error — there is no catalogue fallback in any environment", async () => {
   setup();
-  process.env = { ...process.env, NODE_ENV: "production" };
-  let fallback = false;
-  await assert.rejects(() => withDatabase(async () => { throw new Error("read outage"); }, () => { fallback = true; return "fake"; }), /read outage/);
-  assert.equal(fallback, false);
+  for (const nodeEnv of ["development", "production"] as const) {
+    process.env = { ...process.env, NODE_ENV: nodeEnv };
+    await assert.rejects(() => requireDatabase(async () => { throw new Error("read outage"); }), /read outage/);
+  }
+  delete process.env.DATABASE_URL;
+  await assert.rejects(() => requireDatabase(async () => true), DatabaseUnavailableError);
 });
 
 test("login flow: unknown email/wrong password fail safely, correct password and persisted legacy admin succeed", async () => {

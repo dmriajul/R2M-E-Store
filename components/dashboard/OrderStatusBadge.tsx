@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { ORDER_STATUS_META } from "@/lib/mock-dashboard";
+import { ORDER_STATUS_META } from "@/lib/dashboard-constants";
 import type { OrderStatus } from "@/types";
 
 /** Colour-coded pill: delivered = green, shipped = blue, processing = amber, cancelled = rose. */

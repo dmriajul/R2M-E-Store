@@ -31,10 +31,10 @@ export const dynamic = "force-dynamic";
  * middleware enforces the same matrix at the edge; this is the server-side
  * second layer (and the source of the session the UI renders).
  *
- * The three collections the console mutates are loaded here too — from Postgres
- * when `DATABASE_URL` is set, or `null` when unconfigured, in which case the client
- * store keeps its in-session dataset. Load failures also resolve to `null`
- * (logged, not thrown) so a schema problem can't white-screen the console.
+ * The three collections the console mutates are loaded here too — from
+ * Postgres, or `null` when the read fails (logged, not thrown) so a broken
+ * connection renders empty tables with a notice instead of white-screening the
+ * console. There is no demo dataset: an empty database shows empty tables.
  */
 export default async function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireAdminSection("dashboard");
@@ -44,8 +44,14 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
       console.error("[admin] Could not load products", error);
       return null;
     }),
-    getAdminOrders(),
-    getAdminCategories(),
+    getAdminOrders().catch((error: unknown) => {
+      console.error("[admin] Could not load orders", error);
+      return null;
+    }),
+    getAdminCategories().catch((error: unknown) => {
+      console.error("[admin] Could not load categories", error);
+      return null;
+    }),
   ]);
 
   return (

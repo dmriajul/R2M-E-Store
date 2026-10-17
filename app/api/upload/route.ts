@@ -19,7 +19,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { auth, requireActionRole } from "@/lib/auth";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { MediaError, deleteManagedImage } from "@/lib/data/media";
-import { isCloudinaryConfigured } from "@/lib/demo-mode";
+import { isCloudinaryConfigured } from "@/lib/integrations";
 import { validateHeroUploadFile, validateUploadFile } from "@/lib/images";
 import { MEDIA_IMAGE_EXTENSIONS, sniffImageType } from "@/lib/media";
 import { clientIp, createRateLimiter } from "@/lib/rate-limit";
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
   const resourceType = validation.kind === "video" ? "video" : "image";
 
   // Cloudinary when configured (a failure is reported, not hidden on local
-  // disk that may be read-only); local disk otherwise so the demo works.
+  // disk that may be read-only); local disk otherwise so uploads still work.
   let asset: Record<string, unknown>;
   if (isCloudinaryConfigured()) {
     const remote = await uploadToCloudinary(

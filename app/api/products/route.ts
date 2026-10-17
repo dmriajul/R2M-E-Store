@@ -9,9 +9,9 @@ const placements = ["virtualBoutique", "newArrival", "bestSeller"] as const;
 /**
  * Catalogue endpoint.
  *
- * Reads the seeded Postgres catalogue when `DATABASE_URL` is set and the mock
- * catalogue in `lib/site.ts` otherwise — `source` in the response says which
- * one answered. Public requests always exclude drafts.
+ * Reads the Postgres catalogue — there is no baked-in fallback. Public requests
+ * always exclude drafts; when the database is unreachable the route answers
+ * 503 so callers can tell "no products" apart from "catalogue unavailable".
  */
 export async function GET(
   request: NextRequest,
@@ -26,14 +26,32 @@ export async function GET(
     );
   }
 
-  const { products, source } = await listProducts({
-    category: searchParams.get("category") ?? undefined,
-    featured: searchParams.get("featured") === "true",
-    placement,
-  });
+  try {
+    const { products, source } = await listProducts({
+      category: searchParams.get("category") ?? undefined,
+      featured: searchParams.get("featured") === "true",
+      placement,
+    });
 
-  return NextResponse.json(
-    { data: products, error: null, success: true, source },
-    { status: 200 },
-  );
+    return NextResponse.json(
+      { data: products, error: null, success: true, source },
+      { status: 200 },
+    );
+  } catch (error) {
+    if (error instanceof Error && error.name === "DatabaseUnavailableError") {
+      return NextResponse.json(
+        {
+          data: null,
+          error: "The catalogue is temporarily unavailable. Please try again shortly.",
+          success: false,
+        },
+        { status: 503 },
+      );
+    }
+    console.error("[api/products] Failed to load products", error);
+    return NextResponse.json(
+      { data: null, error: "Could not load products", success: false },
+      { status: 500 },
+    );
+  }
 }

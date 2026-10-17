@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Eye, RotateCcw } from "lucide-react";
 import { cn, formatPrice, formatShortDate } from "@/lib/utils";
-import { isTrackable } from "@/lib/mock-dashboard";
+import { isTrackable } from "@/lib/dashboard-constants";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
 import { OrderStatusBadge } from "@/components/dashboard/OrderStatusBadge";
 import { OrderTimeline } from "@/components/dashboard/OrderTimeline";

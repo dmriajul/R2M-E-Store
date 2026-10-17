@@ -1,6 +1,6 @@
 import { formatPrice, formatShortDate } from "@/lib/utils";
 import { MukraLogo } from "@/components/brand/MukraLogo";
-import { ORDER_STATUS_META } from "@/lib/mock-dashboard";
+import { ORDER_STATUS_META } from "@/lib/dashboard-constants";
 import type { DashboardOrder } from "@/types";
 
 /**

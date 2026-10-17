@@ -51,19 +51,44 @@ export async function PATCH(
   }
 
   if (parsed.data.action === "collect-cash") {
-    const updated = await markCashCollected(orderNumber);
-    return NextResponse.json(
-      {
-        data: { updated },
-        error: updated ? null : "Order not found",
-        success: updated,
-        source: "mock",
-      },
-      { status: updated ? 200 : 404 },
-    );
+    try {
+      const updated = await markCashCollected(orderNumber);
+      return NextResponse.json(
+        {
+          data: { updated },
+          error: updated ? null : "Order not found",
+          success: updated,
+          source: "database",
+        },
+        { status: updated ? 200 : 404 },
+      );
+    } catch (error) {
+      console.error("[admin/payment] Failed to mark cash collected", error);
+      return NextResponse.json(
+        {
+          data: null,
+          error: "Could not update the order. Please try again.",
+          success: false,
+        },
+        { status: error instanceof Error && error.name === "DatabaseUnavailableError" ? 503 : 500 },
+      );
+    }
   }
 
-  const { order, source } = await resolveManualPayment(orderNumber, parsed.data.action);
+  let order;
+  try {
+    ({ order } = await resolveManualPayment(orderNumber, parsed.data.action));
+  } catch (error) {
+    console.error("[admin/payment] Failed to resolve the manual payment", error);
+    return NextResponse.json(
+      {
+        data: null,
+        error: "Could not update the order. Please try again.",
+        success: false,
+      },
+      { status: error instanceof Error && error.name === "DatabaseUnavailableError" ? 503 : 500 },
+    );
+  }
 
   if (!order) {
     return NextResponse.json(
@@ -76,5 +101,5 @@ export async function PATCH(
     );
   }
 
-  return NextResponse.json({ data: order, error: null, success: true, source });
+  return NextResponse.json({ data: order, error: null, success: true, source: "database" });
 }

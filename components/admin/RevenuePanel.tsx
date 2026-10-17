@@ -1,22 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { cn, formatPrice } from "@/lib/utils";
-import { REVENUE_30D, REVENUE_7D, summariseRevenue } from "@/lib/mock-admin";
+import { dailyRevenueSeries, summariseRevenue } from "@/lib/admin-metrics";
 import { BarChart } from "@/components/admin/BarChart";
+import { useAdminStore } from "@/store/useAdminStore";
 
 type Range = "7d" | "30d";
 
 const RANGES: readonly { id: Range; label: string; hint: string }[] = [
-  { id: "7d", label: "Last 7 Days", hint: "Mon–Sun" },
-  { id: "30d", label: "Last 30 Days", hint: "Sep 2 – Oct 1" },
+  { id: "7d", label: "Last 7 Days", hint: "Daily takings" },
+  { id: "30d", label: "Last 30 Days", hint: "Daily takings" },
 ];
 
 /** Revenue overview card: range toggle, gold bar chart and totals footer. */
 export function RevenuePanel({ className }: { className?: string }) {
   const [range, setRange] = useState<Range>("7d");
+  const orders = useAdminStore((state) => state.orders);
 
-  const points = range === "7d" ? REVENUE_7D : REVENUE_30D;
+  const points = useMemo(
+    () => dailyRevenueSeries(orders, range === "7d" ? 7 : 30),
+    [orders, range],
+  );
   const summary = summariseRevenue(points);
 
   return (
@@ -57,12 +62,18 @@ export function RevenuePanel({ className }: { className?: string }) {
       </header>
 
       <div className="mt-5">
-        <BarChart
-          data={points}
-          height={210}
-          accent="gold"
-          labelEvery={range === "7d" ? 1 : 5}
-        />
+        {points.every((point) => point.value === 0) ? (
+          <p className="flex min-h-52 items-center justify-center rounded-lg border border-dashed border-[#2A2A2A] text-xs text-muted-foreground">
+            No revenue recorded yet — the chart fills in as orders arrive.
+          </p>
+        ) : (
+          <BarChart
+            data={points}
+            height={210}
+            accent="gold"
+            labelEvery={range === "7d" ? 1 : 5}
+          />
+        )}
       </div>
 
       <footer className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#242424] pt-4 text-xs">

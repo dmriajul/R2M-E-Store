@@ -1,17 +1,14 @@
 /**
  * Prisma singleton.
  *
- * - **Account flows always require a database** (`requireDatabase` /
- *   `withRequiredDatabase`): authentication, registration and order writes fail
- *   closed in every environment.
- * - **Storefront catalogue reads degrade gracefully** (`withDatabase`): when no
- *   `DATABASE_URL` is configured at all — a fresh Vercel deploy in demo mode —
- *   they resolve to the documented mock fallback instead of white-screening the
- *   route. Real query failures on a configured database still propagate in
- *   production so stale mock data can never shadow live data.
+ * **Every read and every write requires a database.** There is no demo mode
+ * and no mock catalogue: when `DATABASE_URL` is missing, or the client cannot
+ * be built, or a query fails, the call throws `DatabaseUnavailableError` and
+ * the route surfaces its error state (500/503) instead of quietly rendering
+ * sample rows.
  */
 
-import { isDatabaseConfigured } from "@/lib/demo-mode";
+import { isDatabaseConfigured } from "@/lib/integrations";
 
 /** The slice of the Prisma client surface the data layer actually uses. */
 export interface PrismaDelegate {
@@ -57,20 +54,21 @@ const globalForPrisma = globalThis as PrismaGlobal;
 let client: PrismaLikeClient | null = null;
 
 /**
- * Resolves the Prisma client, or `null` when no database is configured (in any
- * environment) — callers that treat "unconfigured" as a fallback state (`if
- * (!db) return null`) work exactly as their docs promise. Client
- * initialization failures still throw `DatabaseUnavailableError` in
- * production so a broken install can't silently masquerade as "unconfigured".
+ * Resolves the Prisma client, or `null` when the database is not usable.
+ *
+ * `null` is only ever an *unconfigured* state (`DATABASE_URL` absent, or the
+ * generated client could not be loaded) — a real connection error propagates
+ * from the query itself. Callers that must serve data turn `null` into
+ * `DatabaseUnavailableError` via {@link requireDatabase}; callers that can
+ * legitimately render "nothing here" (the admin console's empty tables) check
+ * it themselves.
+ *
  * Dynamic loading keeps the client out of browser bundles and allows static
  * builds without a live connection.
  */
 export async function getPrisma(): Promise<PrismaLikeClient | null> {
   if (!isDatabaseConfigured()) return null;
-  if (globalForPrisma.prismaUnavailable) {
-    if (process.env.NODE_ENV === "production") throw new DatabaseUnavailableError();
-    return null;
-  }
+  if (globalForPrisma.prismaUnavailable) return null;
   if (client) return client;
   if (globalForPrisma.prisma) return globalForPrisma.prisma;
 
@@ -83,83 +81,49 @@ export async function getPrisma(): Promise<PrismaLikeClient | null> {
     client = new mod.PrismaClient({ log: [] });
     if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;
     return client;
-  } catch {
+  } catch (error) {
     // Do not latch initialization failures forever; a subsequent request may recover.
-    if (process.env.NODE_ENV !== "production") {
-      console.warn(
-        "[prisma] client unavailable:",
-        "Check database configuration and generated client.",
-      );
-    }
-    if (process.env.NODE_ENV === "production") throw new DatabaseUnavailableError();
-    return null;
+    console.warn(
+      "[prisma] client unavailable — check DATABASE_URL and run `npx prisma generate`.",
+    );
+    throw new DatabaseUnavailableError(error);
   }
 }
 
-/**
- * Catalogue/read helper. Falls back to the mock dataset when **no database is
- * configured at all** (demo deploys, `npm run dev` without `.env`) — the
- * storefront contract is "every call resolves, so the storefront never sees an
- * error state it can't render" (see `lib/data/products.ts`). On a configured
- * database, query failures propagate in production and fall back only in
- * development: mock data must never shadow a live database that is merely
- * having a bad day.
- */
-export async function withDatabase<T>(
-  query: (db: PrismaLikeClient) => Promise<T>,
-  fallback: () => T | Promise<T>,
-): Promise<{ data: T; source: "database" | "mock" }> {
-  if (!isDatabaseConfigured()) {
-    return { data: await fallback(), source: "mock" };
-  }
-  const db = await getPrisma();
-  if (!db) {
-    if (process.env.NODE_ENV === "production") throw new DatabaseUnavailableError();
-    return { data: await fallback(), source: "mock" };
-  }
-  try {
-    return { data: await query(db), source: "database" };
-  } catch (error) {
-    if (process.env.NODE_ENV === "production") throw error;
-    console.warn("[prisma] Development query failed; using development-only catalogue fallback.");
-    return { data: await fallback(), source: "mock" };
-  }
-}
+/** Re-exported so callers can import it next to the client it guards. */
+export { isDatabaseConfigured } from "@/lib/integrations";
 
 /**
  * True when a database is configured *and* the client resolved. Callers that
- * only need a yes/no answer (health checks, admin badges) use this instead of
- * importing Prisma themselves.
+ * only need a yes/no answer (health checks, readiness probes) use this instead
+ * of importing Prisma themselves.
  */
 export async function isDatabaseAvailable(): Promise<boolean> {
-  try { return (await getPrisma()) !== null; } catch { return false; }
+  try {
+    return (await getPrisma()) !== null;
+  } catch {
+    return false;
+  }
 }
 
-/** Authentication and transactional writes must never pretend a DB failure succeeded. */
+/**
+ * The single failure mode for "the catalogue is not readable right now".
+ *
+ * Surfaced to operators and visitors as a maintenance error; the storefront
+ * error boundary renders a dedicated message for it (see
+ * `app/(shop)/error.tsx`).
+ */
 export class DatabaseUnavailableError extends Error {
-  constructor() {
-    super("Account service is temporarily unavailable. Please try again later.");
+  constructor(cause?: unknown) {
+    super(
+      "The store's database is unavailable. Set DATABASE_URL, run `npx prisma generate` and `npx prisma db push`, then retry.",
+    );
     this.name = "DatabaseUnavailableError";
+    if (cause !== undefined) this.cause = cause;
   }
 }
 
-export async function withRequiredDatabase<T>(
-  query: (db: PrismaLikeClient) => Promise<T>,
-  demo: () => T | Promise<T>,
-): Promise<{ data: T; source: "database" | "mock" }> {
-  if (!isDatabaseConfigured()) {
-    // Production must not silently enable well-known demo administrator accounts.
-    if (process.env.NODE_ENV === "production") {
-      throw new DatabaseUnavailableError();
-    }
-    return { data: await demo(), source: "mock" };
-  }
-  const db = await getPrisma();
-  if (!db) throw new DatabaseUnavailableError();
-  return { data: await query(db), source: "database" };
-}
-
-/** Durable operations have NO development/demo fallback, including when ALLOW_DEMO_MODE is set. */
+/** Runs a query against a live client, or fails closed. */
 export async function requireDatabase<T>(query: (db: PrismaLikeClient) => Promise<T>): Promise<T> {
   const db = await getPrisma();
   if (!db) throw new DatabaseUnavailableError();

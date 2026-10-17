@@ -9,7 +9,7 @@ import {
   Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ADMIN_PAGE_SIZE } from "@/lib/mock-admin";
+import { ADMIN_PAGE_SIZE } from "@/lib/admin-constants";
 
 export interface DataTableColumn<T> {
   key: string;

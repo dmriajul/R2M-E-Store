@@ -6,7 +6,14 @@ export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = SITE.url;
-  const { products } = await listProducts();
+  // An unreachable catalogue yields the static pages only — the sitemap is
+  // regenerated on the next request once the database is back.
+  const { products } = await listProducts().catch((error: unknown) => {
+    if (error instanceof Error && error.name === "DatabaseUnavailableError") {
+      return { products: [] as Awaited<ReturnType<typeof listProducts>>["products"], source: "database" as const };
+    }
+    throw error;
+  });
 
   // Static pages
   const staticPages: MetadataRoute.Sitemap = [

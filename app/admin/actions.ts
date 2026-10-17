@@ -20,18 +20,16 @@
  *    (`trashUsersAction`, `restoreUsersAction`, `purgeUsersAction`).
  * 2. **Validate everything.** Arguments arrive from the browser as `unknown`
  *    and are parsed with the shared Zod schemas in `lib/validations.ts`.
- * 3. **Never fake a write.** With `DATABASE_URL` configured, a failure is
- *    returned as `{ ok: false, error }` and the console shows a toast — the
- *    demo fallback in `lib/prisma.ts` (`withDatabase`) is never used here, so an
- *    authenticated admin can't be told a change was saved when it wasn't. With
- *    no database at all the action answers `source: "demo"` and the console
- *    applies the change to its in-session Zustand store, exactly as before.
+ * 3. **Never fake a write.** Every action writes to Postgres or fails. A
+ *    failure is returned as `{ ok: false, error }` and the console shows a
+ *    toast — an authenticated admin can never be told a change was saved when
+ *    it wasn't, and there is no demo fallback: without `DATABASE_URL` the data
+ *    layer throws and the action reports the error.
  */
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireActionRole } from "@/lib/auth";
-import { isDatabaseConfigured } from "@/lib/demo-mode";
 import {
   ASSIGNABLE_ROLES,
   checkRoleChange,
@@ -67,15 +65,6 @@ import {
   updateAdminUserRole,
 } from "@/lib/data/admin-users";
 import {
-  getDemoRoleHistory,
-  getDemoUserAccounts,
-  purgeDemoUsers,
-  recordDemoRoleChange,
-  restoreDemoUsers,
-  setDemoUserRole,
-  trashDemoUsers,
-} from "@/lib/data/users";
-import {
   adminCategorySchema,
   adminProductSchema,
   adminProductSeoSchema,
@@ -96,17 +85,11 @@ import type {
 
 /**
  * `source: "database"` — the write committed; `data` is the saved record.
- * `source: "demo"` — no database is configured, nothing was persisted and the
- * console applies the change to its in-session store.
+ * There is no other source: without a database the action fails with an error.
  */
 export type AdminActionResult<T> =
-  | { ok: true; source: "database" | "demo"; data: T | null }
+  | { ok: true; source: "database"; data: T | null }
   | { ok: false; error: string };
-
-/** Shared "demo install" answer: the client keeps its in-session behaviour. */
-function demo<T>(): AdminActionResult<T> {
-  return { ok: true, source: "demo", data: null };
-}
 
 function failure<T>(error: unknown, fallback: string): AdminActionResult<T> {
   return { ok: false, error: describeAdminError(error, fallback) };
@@ -228,8 +211,6 @@ export async function saveProductAction(
   const id = productId === undefined ? null : idSchema.safeParse(productId);
   if (id && !id.success) return { ok: false, error: "Invalid product id" };
 
-  if (!isDatabaseConfigured()) return demo();
-
   try {
     const product = await persistAdminProduct(
       parsed.data,
@@ -254,8 +235,6 @@ export async function deleteProductsAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Nothing selected" };
   }
-
-  if (!isDatabaseConfigured()) return demo();
 
   try {
     const deleted = await deleteAdminProducts(parsed.data);
@@ -286,8 +265,6 @@ export async function saveProductSeoAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid product metadata" };
   }
 
-  if (!isDatabaseConfigured()) return demo();
-
   try {
     const product = await updateAdminProductSeo(parsedId.data, parsed.data);
 
@@ -307,8 +284,6 @@ export async function duplicateProductAction(
 
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { ok: false, error: "Invalid product id" };
-
-  if (!isDatabaseConfigured()) return demo();
 
   try {
     const product = await duplicateAdminProduct(parsed.data);
@@ -330,8 +305,6 @@ export async function setProductsOutOfStockAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Nothing selected" };
   }
-
-  if (!isDatabaseConfigured()) return demo();
 
   try {
     const updated = await setAdminProductsOutOfStock(parsed.data);
@@ -356,8 +329,6 @@ export async function restockProductAction(
   if (!parsedUnits.success) {
     return { ok: false, error: parsedUnits.error.issues[0]?.message ?? "Invalid quantity" };
   }
-
-  if (!isDatabaseConfigured()) return demo();
 
   try {
     const product = await restockAdminProduct(parsedId.data, parsedUnits.data);
@@ -397,8 +368,6 @@ export async function updateOrderStatusAction(
     return { ok: false, error: parsedNote.error.issues[0]?.message ?? "Invalid note" };
   }
 
-  if (!isDatabaseConfigured()) return demo();
-
   try {
     const order = await updateAdminOrderStatus(
       parsedNumber.data,
@@ -432,8 +401,6 @@ export async function decidePaymentAction(
   }
   if (!parsedDecision.success) return { ok: false, error: "Unknown payment decision" };
 
-  if (!isDatabaseConfigured()) return demo();
-
   try {
     const order = await decideAdminManualPayment(parsedNumber.data, parsedDecision.data);
     revalidateOrderPaths(parsedNumber.data);
@@ -461,8 +428,6 @@ export async function addOrderNoteAction(
     return { ok: false, error: parsedNote.error.issues[0]?.message ?? "Invalid note" };
   }
 
-  if (!isDatabaseConfigured()) return demo();
-
   try {
     const order = await appendAdminOrderNote(parsedNumber.data, parsedNote.data);
     revalidateOrderPaths(parsedNumber.data);
@@ -489,8 +454,6 @@ export async function refundOrderAction(
   if (parsedNote && !parsedNote.success) {
     return { ok: false, error: parsedNote.error.issues[0]?.message ?? "Invalid note" };
   }
-
-  if (!isDatabaseConfigured()) return demo();
 
   try {
     const order = await refundAdminOrder(
@@ -524,8 +487,6 @@ export async function saveCategoryAction(
   const id = categoryId === undefined ? null : idSchema.safeParse(categoryId);
   if (id && !id.success) return { ok: false, error: "Invalid category id" };
 
-  if (!isDatabaseConfigured()) return demo();
-
   try {
     const category = await saveAdminCategory(
       parsed.data,
@@ -547,8 +508,6 @@ export async function deleteCategoryAction(
 
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { ok: false, error: "Invalid category id" };
-
-  if (!isDatabaseConfigured()) return demo();
 
   try {
     await deleteAdminCategory(parsed.data);
@@ -582,17 +541,14 @@ function revalidateUserPaths(): void {
  * read failed — an action must never act on a list it could not load.
  */
 async function loadUserAccounts(): Promise<
-  { ok: true; accounts: AdminUserAccount[]; database: boolean } | { ok: false; error: string }
+  { ok: true; accounts: AdminUserAccount[] } | { ok: false; error: string }
 > {
-  const database = isDatabaseConfigured();
-  if (!database) return { ok: true, accounts: getDemoUserAccounts(), database };
-
-  const accounts = await getAdminUserAccounts();
-  if (!accounts) {
-    return { ok: false, error: "Could not load the account list — try again" };
+  try {
+    const accounts = await getAdminUserAccounts();
+    return { ok: true, accounts };
+  } catch (error) {
+    return { ok: false, error: describeAdminError(error, "Could not load the account list — try again") };
   }
-
-  return { ok: true, accounts, database };
 }
 
 /** Parses the id list every account action takes. */
@@ -660,13 +616,11 @@ export async function getUserDetailAction(
     return { ok: false, error: "That account no longer exists — reload the console" };
   }
 
-  const history = loaded.database
-    ? await getAdminUserRoleHistory(account.id)
-    : getDemoRoleHistory(account.id);
+  const history = await getAdminUserRoleHistory(account.id).catch(() => []);
 
   return {
     ok: true,
-    source: loaded.database ? "database" : "demo",
+    source: "database",
     data: { ...account, history },
   };
 }
@@ -681,8 +635,8 @@ export async function getUserDetailAction(
  * a role can only be changed on a live account (restore it first).
  *
  * A successful change also appends one row to the role-change audit trail
- * (`recordRoleChange()` / `recordDemoRoleChange()`), which is what the detail
- * sheet's **Role history** section reads.
+ * (`recordRoleChange()`), which is what the detail sheet's **Role history**
+ * section reads.
  *
  * Deletion is deliberately never immediate: `trashUsersAction` below is the
  * reversible step, and only the trash can be emptied.
@@ -705,7 +659,7 @@ export async function updateUserRoleAction(
 
   const loaded = await loadUserAccounts();
   if (!loaded.ok) return { ok: false, error: loaded.error };
-  const { accounts, database } = loaded;
+  const { accounts } = loaded;
 
   const target = accounts.find((account) => account.id === parsedId.data);
   if (!target) {
@@ -721,7 +675,7 @@ export async function updateUserRoleAction(
 
   /* Choosing the role the account already has is a no-op, not an error. */
   if (target.role === role) {
-    return { ok: true, source: database ? "database" : "demo", data: target };
+    return { ok: true, source: "database", data: target };
   }
 
   const verdict = checkRoleChange({
@@ -733,19 +687,6 @@ export async function updateUserRoleAction(
     newRole: role,
   });
   if (!verdict.ok) return { ok: false, error: verdict.error };
-
-  if (!database) {
-    const updated = setDemoUserRole(target.id, role);
-    if (!updated) return { ok: false, error: "That account no longer exists" };
-    recordDemoRoleChange({
-      userId: updated.id,
-      fromRole: target.role,
-      toRole: updated.role,
-      actorEmail: gate.user.email,
-    });
-    revalidateUserPaths();
-    return { ok: true, source: "demo", data: updated };
-  }
 
   try {
     const updated = await updateAdminUserRole(target.id, role);
@@ -799,12 +740,6 @@ export async function trashUsersAction(
   });
   if (blocked) return { ok: false, error: blocked };
 
-  if (!loaded.database) {
-    const trashed = trashDemoUsers(parsed.ids, gate.user.id);
-    revalidateUserPaths();
-    return { ok: true, source: "demo", data: { trashed } };
-  }
-
   try {
     const trashed = await trashAdminUsers(parsed.ids, gate.user.id);
     revalidateUserPaths();
@@ -837,12 +772,6 @@ export async function restoreUsersAction(
     ids: parsed.ids,
   });
   if (blocked) return { ok: false, error: blocked };
-
-  if (!loaded.database) {
-    const restored = restoreDemoUsers(parsed.ids);
-    revalidateUserPaths();
-    return { ok: true, source: "demo", data: { restored } };
-  }
 
   try {
     const restored = await restoreAdminUsers(parsed.ids);
@@ -881,12 +810,6 @@ export async function purgeUsersAction(
     ids: parsed.ids,
   });
   if (blocked) return { ok: false, error: blocked };
-
-  if (!loaded.database) {
-    const purged = purgeDemoUsers(parsed.ids);
-    revalidateUserPaths();
-    return { ok: true, source: "demo", data: { purged } };
-  }
 
   try {
     const purged = await purgeAdminUsers(parsed.ids);

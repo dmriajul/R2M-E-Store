@@ -319,7 +319,7 @@ export function readImageDimensions(
 /** `mukra/<folder>/<id>` — ids we generate (and the legacy `<timestamp>-<name>`). */
 const CLOUDINARY_ID = /^mukra\/(products|categories|banners)\/[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/;
 
-/** `local:<folder>/<file>.<ext>` — the demo-mode disk fallback. */
+/** `local:<folder>/<file>.<ext>` — the local-disk fallback. */
 const LOCAL_ID = /^local:(products|categories|banners)\/[A-Za-z0-9][A-Za-z0-9_-]{0,159}\.(?:jpe?g|png|webp|avif)$/i;
 
 /** `/uploads/<folder>/<file>.<ext>` — the URL of a local fallback file. */

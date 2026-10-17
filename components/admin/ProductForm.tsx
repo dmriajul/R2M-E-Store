@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { cn, formatPrice, slugify } from "@/lib/utils";
 import { PRODUCT_GALLERY_LIMIT } from "@/lib/media";
 import { CATEGORY_META, COLOR_HEX, DEFAULT_SWATCH } from "@/lib/site";
-import { PRODUCT_BADGE_CHOICES } from "@/lib/mock-admin";
+import { PRODUCT_BADGE_CHOICES } from "@/lib/admin-constants";
 import {
   AGE_OPTIONS,
   PRODUCT_CATEGORY_NAMES,

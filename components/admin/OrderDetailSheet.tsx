@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatPrice, formatStamp } from "@/lib/utils";
-import { ADMIN_ORDER_STATUS_LABEL, ADMIN_STATUSES } from "@/lib/mock-admin";
+import { ADMIN_ORDER_STATUS_LABEL, ADMIN_STATUSES } from "@/lib/admin-constants";
 import { PAYMENT_STATUS_META, isManualPayment, paymentMethodFromLabel } from "@/lib/payments";
 import {
   Sheet,

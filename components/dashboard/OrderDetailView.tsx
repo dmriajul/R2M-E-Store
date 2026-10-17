@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, Copy, ExternalLink, MessageCircle, Printer, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatPrice, formatShortDate } from "@/lib/utils";
-import { isTrackable } from "@/lib/mock-dashboard";
+import { isTrackable } from "@/lib/dashboard-constants";
 import { DashboardPageHeader } from "@/components/dashboard/DashboardPageHeader";
 import { OrderStatusBadge } from "@/components/dashboard/OrderStatusBadge";
 import { OrderThumb } from "@/components/dashboard/OrderCard";

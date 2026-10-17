@@ -141,7 +141,7 @@ export async function POST(
     };
 
     let order;
-    let source: "database" | "mock";
+    let source: "database";
     try {
       const result = await createOrder(input, {
         id: session?.user?.id,

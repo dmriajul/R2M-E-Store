@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
-import { getOrderById } from "@/lib/mock-dashboard";
 import { useDashboardSession } from "@/components/dashboard/DashboardSessionProvider";
 import { OrderDetailView } from "@/components/dashboard/OrderDetailView";
 import { Button } from "@/components/ui/button";
@@ -14,17 +13,12 @@ import type { ApiResponse, DashboardOrder, OrderRecord } from "@/types";
 export default function DashboardOrderDetailPage() {
   const params = useParams<{ id: string }>();
   const id = typeof params.id === "string" ? params.id : "";
-  const { isDemoIdentity } = useDashboardSession();
-  const [order, setOrder] = useState<DashboardOrder | undefined>(() =>
-    isDemoIdentity ? getOrderById(id) : undefined,
-  );
-  const [loading, setLoading] = useState(!order);
+  const { user } = useDashboardSession();
+  const [order, setOrder] = useState<DashboardOrder | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    const demoOrder = isDemoIdentity ? getOrderById(id) : undefined;
-    setOrder(demoOrder);
-    setLoading(!demoOrder);
     fetch("/api/orders", { cache: "no-store" })
       .then(async (response) => {
         const result = (await response.json()) as ApiResponse<OrderRecord[]>;
@@ -32,7 +26,7 @@ export default function DashboardOrderDetailPage() {
           throw new Error(result.error ?? "Could not load this order");
         }
         const record = result.data.find((entry) => entry.id === id || entry.orderNumber === id);
-        if (active && record) setOrder(toDashboardOrder(record));
+        if (active) setOrder(record ? toDashboardOrder(record) : undefined);
         if (active) setLoading(false);
       })
       .catch((error: unknown) => {
@@ -42,7 +36,7 @@ export default function DashboardOrderDetailPage() {
     return () => {
       active = false;
     };
-  }, [id, isDemoIdentity]);
+  }, [id, user.id]);
 
   if (loading) {
     return <div className="glass-soft rounded-3xl border border-glass-border p-8 text-center text-sm text-muted-foreground">Loading order details…</div>;

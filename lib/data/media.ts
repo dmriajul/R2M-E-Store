@@ -3,7 +3,7 @@
  *
  * - `storeAdminImage()` validates an upload (declared type, size and the
  *   file's magic bytes) and stores it in Cloudinary under `mukra/<folder>/`,
- *   or on local disk when Cloudinary is not configured (demo mode).
+ *   or on local disk when Cloudinary is not configured (local-disk mode).
  * - `removeAdminImage()` deletes a managed asset by public id. Ids are checked
  *   against a strict pattern first, so it can never reach customer payment
  *   proofs, other folders, or escape the `.uploads/` directory.

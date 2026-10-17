@@ -5,7 +5,7 @@ import { Copy, Download, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PRODUCT_CATEGORY_NAMES } from "@/lib/validations";
-import { getStockState } from "@/lib/mock-admin";
+import { getStockState } from "@/lib/admin-constants";
 import { ProductArtwork } from "@/components/product/ProductArtwork";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { StockBadge } from "@/components/admin/StatusBadge";
@@ -53,7 +53,7 @@ function categoryFilterOf(query: string): ProductCategory | "all" {
 
 export default function AdminProductsPage() {
   /* Live data: the admin layout hydrates this store from Postgres (or keeps
-     the in-session demo catalogue when no database is configured). */
+     the database and reports the failure). */
   const products = useAdminStore((state) => state.products);
   /* The SEO manager edits metadata and placement only — no create, no delete. */
   const { can } = useAdminSession();
@@ -141,7 +141,7 @@ export default function AdminProductsPage() {
   /**
    * All four mutations below run a Server Action (`app/admin/actions.ts`).
    *
-   * `source: "database"` means Postgres committed the change; `source: "demo"`
+   * `source: "database"` means Postgres committed the change;
    * means no database is configured, so the same change is applied to the
    * in-session console store. Either way a failure is reported — never faked.
    */

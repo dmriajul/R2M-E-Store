@@ -40,15 +40,13 @@ const ROLE_RANK: Readonly<Record<SessionRole, number>> = {
 
 interface StaffDirectoryProps {
   /**
-   * Every account on file — Postgres rows (trashed ones included), or the five
-   * demo logins. The directory splits them into the two tabs itself, so the
-   * page above it stays a single read.
+   * Every account on file — Postgres rows, trashed ones included. The directory
+   * splits them into the two tabs itself, so the page above it stays a single
+   * read.
    */
   rows: readonly AdminUserAccount[];
   /** The signed-in super admin (their own row is locked). */
   currentUserId: string;
-  /** `demo` means the change lives in this server session only. */
-  source: "database" | "demo";
 }
 
 /**
@@ -64,7 +62,7 @@ interface StaffDirectoryProps {
  * waits out the retention window (`TRASH_RETENTION_DAYS`) and can be restored —
  * only the trash offers the irreversible action, and it asks twice.
  */
-export function StaffDirectory({ rows, currentUserId, source }: StaffDirectoryProps) {
+export function StaffDirectory({ rows, currentUserId }: StaffDirectoryProps) {
   const router = useRouter();
 
   const [accounts, setAccounts] = useState<readonly AdminUserAccount[]>(rows);
@@ -388,14 +386,6 @@ export function StaffDirectory({ rows, currentUserId, source }: StaffDirectoryPr
                 that account signs in. Deleting is a move: an account goes to the Trash for{" "}
                 {TRASH_RETENTION_DAYS} days, where it can be restored, and one that still holds orders
                 is never erased.
-                {source === "demo" && (
-                  <>
-                    {" "}
-                    <span className="text-primary">
-                      No database is connected — changes last for this server session.
-                    </span>
-                  </>
-                )}
               </p>
             </div>
           </section>

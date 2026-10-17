@@ -55,14 +55,6 @@ export async function PATCH(
 
   try {
     const product = await saveAdminProduct(parsed.data, id);
-    if (!product) {
-      return NextResponse.json({
-        data: { product: null },
-        error: null,
-        success: true,
-        source: "mock",
-      });
-    }
 
     revalidatePath("/");
     revalidatePath("/shop");
@@ -94,7 +86,7 @@ export async function PATCH(
               : "Could not save product",
         success: false,
       },
-      { status: errorCode === "P2025" ? 404 : errorCode === "P2002" ? 409 : 500 },
+      { status: errorCode === "P2025" ? 404 : errorCode === "P2002" ? 409 : error instanceof Error && error.name === "DatabaseUnavailableError" ? 503 : 500 },
     );
   }
 }

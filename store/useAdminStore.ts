@@ -3,27 +3,20 @@
 /**
  * Admin console client store.
  *
- * This is the console's **session cache**: the server (Postgres when
- * `DATABASE_URL` is set, the mock dataset otherwise) is the source of truth and
- * every mutation is performed by a Server Action in `app/admin/actions.ts`.
+ * This is the console's **session cache**: the server (Postgres) is the source
+ * of truth and every mutation is performed by a Server Action in
+ * `app/admin/actions.ts`, which returns the saved record and upserts it here,
+ * so the tables update without a full reload.
  *
- * - `source: "database"` → the action returns the saved record and the console
- *   upserts it here, so the tables update without a full reload.
- * - `source: "demo"` (no database configured) → nothing was persisted, so the
- *   local mutators below keep the demo experience exactly as it was.
+ * The store starts **empty**. `app/admin/layout.tsx` hydrates it from the
+ * database on every request via `AdminDataHydrator`; a freshly seeded database
+ * therefore shows empty tables until the first real products, orders and
+ * categories exist.
  */
 
 import { create } from "zustand";
 import { slugify } from "@/lib/utils";
-import {
-  ADMIN_CATEGORIES,
-  ADMIN_COUPONS,
-  ADMIN_CUSTOMERS,
-  ADMIN_ORDERS,
-  ADMIN_SETTINGS,
-  buildAdminProducts,
-  buildAdminTimeline,
-} from "@/lib/mock-admin";
+import { DEFAULT_ADMIN_SETTINGS } from "@/lib/admin-constants";
 import type { AdminCategoryValues, AdminCouponValues, AdminProductValues } from "@/lib/validations";
 import type {
   AdminCategory,
@@ -66,7 +59,7 @@ function applyProductValues(
     gender: values.gender,
     colors: values.colors.map((color) => color.name),
     sizes: values.sizes,
-    material: base.material ?? "Organic cotton",
+    material: base.material ?? "",
     badge,
     tags: base.tags ?? [],
     rating: base.rating ?? 5,
@@ -113,10 +106,9 @@ interface AdminState {
   /* ------------------------------------------------------------------ */
   /*  Server-backed collections                                          */
   /* ------------------------------------------------------------------ */
-  /*  The console hydrates these from the server (Postgres when          */
-  /*  DATABASE_URL is set) and refreshes them with the records the        */
-  /*  Server Actions return. Without a database the mock seeds above      */
-  /*  stay in place and the demo mutations further down apply locally.   */
+  /*  The console hydrates these from the server (Postgres) on every     */
+  /*  request and refreshes them with the records the Server Actions     */
+  /*  return. They start empty — an empty database means empty tables.   */
 
   setOrders: (orders: AdminOrder[]) => void;
   upsertOrder: (order: AdminOrder) => void;
@@ -150,12 +142,12 @@ interface AdminState {
 }
 
 export const useAdminStore = create<AdminState>()((set, get) => ({
-  products: buildAdminProducts(),
-  orders: [...ADMIN_ORDERS],
-  customers: [...ADMIN_CUSTOMERS],
-  coupons: [...ADMIN_COUPONS],
-  categories: [...ADMIN_CATEGORIES],
-  settings: ADMIN_SETTINGS,
+  products: [],
+  orders: [],
+  customers: [],
+  coupons: [],
+  categories: [],
+  settings: DEFAULT_ADMIN_SETTINGS,
   search: "",
 
   setSearch: (value) => set({ search: value }),
@@ -276,7 +268,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       orders: state.orders.map((order) => {
         if (order.id !== id) return order;
         const next: AdminOrder = { ...order, status };
-        return { ...next, timeline: buildAdminTimeline(next) };
+        return next;
       }),
     })),
 
@@ -296,7 +288,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
           status: "refunded",
           notes: [...order.notes, "Refund issued in full."],
         };
-        return { ...next, timeline: buildAdminTimeline(next) };
+        return next;
       }),
     })),
 
@@ -312,7 +304,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
           paymentStatus: "PAID",
           notes: [...order.notes, "Payment verified by an operator."],
         };
-        return { ...next, timeline: buildAdminTimeline(next) };
+        return next;
       }),
     })),
 
@@ -326,7 +318,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
           paymentStatus: "FAILED",
           notes: [...order.notes, reason ?? "Payment could not be verified — order cancelled."],
         };
-        return { ...next, timeline: buildAdminTimeline(next) };
+        return next;
       }),
     })),
 
@@ -340,7 +332,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
           paymentStatus: "PAID",
           notes: [...order.notes, "Cash collected by the delivery partner."],
         };
-        return { ...next, timeline: buildAdminTimeline(next) };
+        return next;
       }),
     })),
 
