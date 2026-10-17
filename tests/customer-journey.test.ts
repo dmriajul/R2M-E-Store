@@ -5,13 +5,14 @@ import { hash, compare } from "bcryptjs";
 import { createUser, findUserByEmail, verifyCredentialsDetailed } from "../lib/data/users";
 import {
   DatabaseUnavailableError,
-  withRequiredDatabase,
+  requireDatabase,
   type PrismaLikeClient,
   type PrismaDelegate,
 } from "../lib/prisma";
 import { createOrder, listOrdersForEmail } from "../lib/data/orders";
 import { authConfig } from "../lib/auth.config";
 import { safeCallbackPath } from "../lib/auth-redirect";
+import type { Product } from "../types";
 import {
   registerSchema,
   registerApiSchema,
@@ -209,10 +210,7 @@ test("configured database outage cannot fall back to demo admin or create a fake
   scope.prismaUnavailable = true;
   await assert.rejects(
     () =>
-      withRequiredDatabase(
-        async () => true,
-        () => false,
-      ),
+      requireDatabase(async () => true),
     DatabaseUnavailableError,
   );
 });
@@ -404,6 +402,29 @@ test("order transaction aggregates variant stock and saves opt-in address with o
   let savedAddress: Record<string, unknown> = {};
   database({
     product: delegate({
+      // createOrder re-reads the catalogue first (findProductsByIds)…
+      findMany: async () => [
+        {
+          id: "test-product",
+          slug: "test-product",
+          name: "Test item",
+          description: "Test item",
+          price: 600,
+          originalPrice: null,
+          category: "Tops & Tees",
+          gender: "Girls",
+          ageRange: "3-6Y",
+          colors: ["Gold"],
+          sizes: ["4Y"],
+          images: [],
+          stock: 10,
+          variants: [{ size: "4Y", color: "Gold", stock: 10 }],
+          badge: null,
+          featured: false,
+          active: true,
+        },
+      ],
+      // …then locks the variant rows inside the transaction.
       findUnique: async () => ({
         id: "test-product",
         name: "Test item",
@@ -448,6 +469,27 @@ test("stock conflict aborts transaction without inserting order or returning a f
   let inserted = false;
   database({
     product: delegate({
+      findMany: async () => [
+        {
+          id: "test-product",
+          slug: "test-product",
+          name: "Test item",
+          description: "Test item",
+          price: 600,
+          originalPrice: null,
+          category: "Tops & Tees",
+          gender: "Girls",
+          ageRange: "3-6Y",
+          colors: ["Gold"],
+          sizes: ["4Y"],
+          images: [],
+          stock: 1,
+          variants: [],
+          badge: null,
+          featured: false,
+          active: true,
+        },
+      ],
       findUnique: async () => ({
         id: "test-product",
         name: "Test item",
@@ -511,15 +553,32 @@ test("cart quantity, stock, removal and localStorage rehydration", async () => {
     configurable: true,
   });
   const { useCartStore } = await import("../store/useCartStore");
-  const { PRODUCTS } = await import("../lib/site");
-  const product = {
-    ...PRODUCTS[0]!,
+  /* A standalone product object — the cart store is catalogue-agnostic. */
+  const product: Product = {
     id: "cart-test",
+    slug: "cart-test",
+    name: "Cart Test Piece",
+    tagline: "Test",
+    description: "Test",
     price: 600,
+    currency: "BDT" as const,
+    images: [],
+    category: "Tops & Tees",
+    categories: ["Tops & Tees"],
+    ageRange: "3-6Y",
+    gender: "Girls",
     colors: ["Gold"],
     sizes: ["4Y"],
+    material: "Cotton",
+    tags: [],
+    rating: 5,
+    reviewCount: 0,
     stock: 5,
+    inStock: true,
     variants: [{ color: "Gold", size: "4Y", stock: 3 }],
+    featured: false,
+    status: "active",
+    createdAt: new Date().toISOString(),
   };
   const cart = () => useCartStore.getState();
   cart().clearCart();

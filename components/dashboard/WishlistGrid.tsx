@@ -1,19 +1,18 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getProductById } from "@/lib/site";
-import { getStockStatus } from "@/lib/mock-dashboard";
+import { getStockStatus } from "@/lib/dashboard-constants";
 import { useCartStore } from "@/store/useCartStore";
 import { useWishlistStore } from "@/store/useWishlistStore";
-import { useDashboardStore } from "@/store/useDashboardStore";
 import { ProductCard } from "@/components/product/ProductCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { Product } from "@/types";
+import type { ApiResponse, Product } from "@/types";
 
 function StockBadge({ product }: { product: Product }) {
   const status = getStockStatus(product.stock);
@@ -99,18 +98,37 @@ function SkeletonTile() {
   );
 }
 
-/** Grid of saved pieces, with the teddy-bear empty state. */
+/**
+ * Grid of saved pieces. Saved ids live in the wishlist store (persisted on the
+ * device); the products themselves are resolved against the live catalogue via
+ * `/api/products`, so a piece deleted from the store simply stops appearing.
+ */
 export function WishlistGrid() {
   const ids = useWishlistStore((state) => state.ids);
-  const seeded = useDashboardStore((state) => state.wishlistSeeded);
+  const [catalogue, setCatalogue] = useState<Product[] | null>(null);
 
-  const products = ids
-    .map((id) => getProductById(id))
-    .filter((product): product is Product => Boolean(product));
+  useEffect(() => {
+    let active = true;
+    fetch("/api/products", { cache: "no-store" })
+      .then(async (response) => {
+        const result = (await response.json()) as ApiResponse<Product[]>;
+        if (!active) return;
+        if (!response.ok || !result.success || !result.data) throw new Error("unavailable");
+        setCatalogue(result.data);
+      })
+      .catch(() => {
+        if (active) setCatalogue([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  // Before the demo favourites land (and during SSR) show placeholders rather
-  // than flashing "your wishlist is empty" at a shopper who has five saves.
-  if (!seeded && products.length === 0) {
+  const products = (catalogue ?? []).filter((product) => ids.includes(product.id));
+
+  // While the catalogue loads (and during SSR) show placeholders rather than
+  // flashing "your wishlist is empty" at a shopper who has saves.
+  if (catalogue === null && ids.length > 0) {
     return (
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2].map((key) => (

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { isDatabaseConfigured } from "@/lib/demo-mode";
 import { purgeExpiredAdminUsers } from "@/lib/data/admin-users";
 import { TRASH_RETENTION_DAYS } from "@/lib/rbac";
 
@@ -30,9 +29,9 @@ import { TRASH_RETENTION_DAYS } from "@/lib/rbac";
  * refuses to run in production (an unauthenticated deletion endpoint would be a
  * gift to anyone who guessed the path) and answers `401`.
  *
- * Outside production this route is also safe to call by hand — with no
- * `DATABASE_URL` it reports `source: "demo"` and does nothing, because the demo
- * trash is swept lazily when the console reads it.
+ * Outside production this route is also safe to call by hand. Without a
+ * `DATABASE_URL` the route reports the failure (503) — there is no demo trash
+ * and nothing is swept lazily.
  */
 
 export const dynamic = "force-dynamic";
@@ -75,19 +74,6 @@ async function runPurge(request: Request): Promise<Response> {
   if (!allowed.ok) {
     const status = allowed.error === "Unauthorized" ? 401 : 503;
     return NextResponse.json({ ok: false, error: allowed.error }, { status });
-  }
-
-  /* No database: the demo trash sweeps itself when the console reads it. */
-  if (!isDatabaseConfigured()) {
-    return NextResponse.json({
-      ok: true,
-      source: "unavailable",
-      retentionDays: TRASH_RETENTION_DAYS,
-      purged: 0,
-      skipped: 0,
-      note: "Account storage is not configured; no records were changed.",
-      at: new Date().toISOString(),
-    });
   }
 
   const startedAt = Date.now();

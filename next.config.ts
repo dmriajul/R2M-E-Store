@@ -28,12 +28,11 @@ const nextConfig: NextConfig = {
   images: {
     // Cloudinary images are delivered by a custom loader (`cloudinaryLoader` in
     // lib/images.ts: f_auto,q_auto,w_…,c_limit straight from the CDN); local
-    // demo uploads are served by app/uploads/[...path]. Keep this list in sync
+    // uploads are served by app/uploads/[...path]. Keep this list in sync
     // with OPTIMIZED_REMOTE_HOSTS in lib/images.ts.
     remotePatterns: [
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "images.unsplash.com" },
-      { protocol: "https", hostname: "images.pexels.com" },
     ],
     formats: ["image/avif", "image/webp"],
     dangerouslyAllowSVG: true,
@@ -81,10 +80,6 @@ const nextConfig: NextConfig = {
       {
         source: "/icons/:path*",
         headers: [{ key: "Cache-Control", value: IMMUTABLE }],
-      },
-      {
-        source: "/demo/:path*",
-        headers: [{ key: "Cache-Control", value: STATIC_FILE }],
       },
       {
         source: "/images/:path*",

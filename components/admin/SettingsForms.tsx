@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { ADMIN_CURRENCIES, ADMIN_TIMEZONES } from "@/lib/mock-admin";
+import { ADMIN_CURRENCIES, ADMIN_TIMEZONES } from "@/lib/admin-constants";
 import {
   settingsGeneralSchema,
   settingsNotificationsSchema,

@@ -3,7 +3,6 @@
 import { useState, type FormEvent } from "react";
 import { BadgeCheck, PenLine, Star } from "lucide-react";
 import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
-import { MOCK_REVIEWS } from "@/lib/site";
 import { StarRating } from "@/components/product/StarRating";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,10 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Product } from "@/types";
+import type { Product, Review } from "@/types";
 
 interface ReviewSectionProps {
   product: Product;
+  /** Reviews loaded from the database; empty until customers write some. */
+  reviews: Review[];
 }
 
 /** Star distribution used for the breakdown bars, weighted to the product rating. */
@@ -43,7 +44,7 @@ function buildBreakdown(rating: number, reviewCount: number): Array<{ stars: num
  * Reviews block: average, distribution bars, the three mock parent reviews and
  * a (UI-only) "Write a Review" dialog.
  */
-export function ReviewSection({ product }: ReviewSectionProps) {
+export function ReviewSection({ product, reviews }: ReviewSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [captchaToken, setCaptchaToken] = useState("");
@@ -131,7 +132,19 @@ export function ReviewSection({ product }: ReviewSectionProps) {
 
         {/* ---------- Review list ---------- */}
         <ul className="flex flex-col gap-4">
-          {MOCK_REVIEWS.map((review) => (
+          {reviews.length === 0 ? (
+            <li className="glass-soft flex flex-col items-center justify-center gap-3 rounded-3xl border border-glass-border px-6 py-12 text-center">
+            <span aria-hidden className="text-4xl">
+              💌
+            </span>
+            <p className="text-sm font-semibold">No reviews yet</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Be the first to tell other parents about this piece — your review
+              appears here once it&apos;s posted.
+            </p>
+          </li>
+        ) : (
+          reviews.map((review) => (
             <li
               key={review.id}
               className="glass-soft rounded-3xl border border-glass-border p-5 transition-colors duration-400 hover:border-rose/30"
@@ -155,19 +168,21 @@ export function ReviewSection({ product }: ReviewSectionProps) {
                       )}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {review.location} · {review.date}
+                      {review.location ? `${review.location} · ` : ""}
+                      {review.date}
                     </p>
                   </div>
                 </div>
                 <StarRating rating={review.rating} size="sm" />
               </div>
 
-              <h3 className="mt-4 text-sm font-semibold">{review.title}</h3>
+              {review.title && <h3 className="mt-4 text-sm font-semibold">{review.title}</h3>}
               <p className="prose-kids mt-1.5 text-sm text-muted-foreground">
                 {review.body}
               </p>
             </li>
-          ))}
+          ))
+        )}
         </ul>
       </div>
 

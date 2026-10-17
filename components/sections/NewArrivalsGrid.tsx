@@ -2,6 +2,7 @@ import { listProducts } from "@/lib/data/products";
 import { ProductCard } from "@/components/product/ProductCard";
 import { Reveal } from "@/components/sections/Reveal";
 import { SectionHeading } from "@/components/sections/SectionHeading";
+import type { Product } from "@/types";
 
 /** Stagger between grid cards: ~70ms, per the animation rules. */
 const CARD_STAGGER_S = 0.07;
@@ -27,7 +28,16 @@ const CARD_STAGGER_S = 0.07;
  * `priority` (preloaded, eager). The rest lazy-load.
  */
 export async function NewArrivalsGrid() {
-  const { products } = await listProducts({ sort: "newest", limit: 8 });
+  const { products } = await listProducts({ sort: "newest", limit: 8 }).catch(
+    (error: unknown) => {
+      // An unreachable catalogue collapses this section; the home page's
+      // maintenance notice (if any) is owned by the page itself.
+      if (error instanceof Error && error.name === "DatabaseUnavailableError") {
+        return { products: [] as Product[], source: "database" as const };
+      }
+      throw error;
+    },
+  );
 
   /** Nothing to show — collapse the section instead of leaving a gap. */
   if (products.length === 0) return null;

@@ -9,7 +9,7 @@
  * Credentials come from `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and
  * `CLOUDINARY_API_SECRET`. Nothing here throws at import time when they are
  * missing: `isCloudinaryConfigured()` is `false` and callers fall back to the
- * local `.uploads/` disk store (demo mode).
+ * local `.uploads/` disk store (local-disk mode).
  *
  * @example
  * import { cloudinary } from "@/lib/cloudinary";
@@ -23,7 +23,7 @@ import {
   type UploadApiOptions,
   type UploadApiResponse,
 } from "cloudinary";
-import { isCloudinaryConfigured } from "@/lib/demo-mode";
+import { isCloudinaryConfigured } from "@/lib/integrations";
 import { PRODUCT_FOLDER, isCloudinaryUrl, optimizeUrl } from "@/lib/images";
 
 /* -------------------------------------------------------------------------- */

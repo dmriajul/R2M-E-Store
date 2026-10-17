@@ -1,4 +1,4 @@
-import { CATEGORY_META, getProductById } from "@/lib/site";
+import { CATEGORY_META } from "@/lib/site";
 import {
   buildLineId,
   type Address,
@@ -20,8 +20,8 @@ export function toDashboardOrder(order: OrderRecord): DashboardOrder {
   };
   const status = statuses[order.status];
   const items: CartItem[] = order.items.map((line, index) => {
-    const product = getProductById(line.productId);
-    const category = product?.category ?? "Accessories";
+    /* Order lines carry no category; the neutral artwork keeps tiles shaped. */
+    const category = CATEGORY_META.Accessories;
     return {
       lineId: `${buildLineId(line.productId, line.color, line.size)}-${index}`,
       orderItemId: line.id,
@@ -34,10 +34,10 @@ export function toDashboardOrder(order: OrderRecord): DashboardOrder {
       quantity: line.quantity,
       color: line.color,
       size: line.size,
-      ageRange: product?.ageRange ?? "All ages",
-      imageGradient: CATEGORY_META[category].gradient,
-      emoji: CATEGORY_META[category].emoji,
-      stock: product?.stock ?? 0,
+      ageRange: "All ages",
+      imageGradient: category.gradient,
+      emoji: category.emoji,
+      stock: 0,
       addedAt: order.createdAt,
     };
   });

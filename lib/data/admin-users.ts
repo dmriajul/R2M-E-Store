@@ -3,10 +3,9 @@
  *
  * Same two rules as the other `lib/data/*` admin modules:
  *
- * 1. **No mock fallback.** Reads return `null` when Postgres is not configured
- *    (the page then lists the demo accounts instead) and writes throw — a super
- *    admin is never told a role changed, or an account was trashed, when nothing
- *    was persisted.
+ * 1. **No fallback directory.** Reads and writes throw when Postgres is not
+ *    reachable — an admin is never told a role changed, or an account was
+ *    trashed, when nothing was persisted.
  * 2. **Rows in, plain objects out.** Prisma types stop at this module, and the
  *    stored role always leaves through `normalizeRole()`, so the legacy `ADMIN`
  *    value reads as `SUPER_ADMIN` everywhere downstream.
@@ -28,7 +27,7 @@
  */
 
 import { AdminDataError } from "@/lib/data/admin-errors";
-import { getPrisma, type PrismaLikeClient } from "@/lib/prisma";
+import { DatabaseUnavailableError, getPrisma, type PrismaLikeClient } from "@/lib/prisma";
 import { TRASH_RETENTION_DAYS, normalizeRole, trashRetentionCutoff } from "@/lib/rbac";
 import type { AdminRoleChange, AdminUserAccount, SessionRole } from "@/types";
 
@@ -179,30 +178,24 @@ async function toAccounts(
  * `/admin/staff` feeds both the accounts list and the trash from this one read
  * (`getAdminUserAccounts({ includeTrashed: false })` narrows it).
  *
- * Returns `null` when no database is configured (or the read failed), which the
- * console distinguishes from "there are no accounts yet" — it then falls back to
- * the five demo logins.
+ * Throws when no database is configured or the read fails; there is no demo
+ * directory to fall back to.
  */
 export async function getAdminUserAccounts(
   options: { includeTrashed?: boolean } = {},
-): Promise<AdminUserAccount[] | null> {
+): Promise<AdminUserAccount[]> {
   const db = await getPrisma();
-  if (!db) return null;
+  if (!db) throw new DatabaseUnavailableError();
 
   const includeTrashed = options.includeTrashed ?? true;
 
-  try {
-    const rows = (await db.user.findMany({
-      where: includeTrashed ? {} : { deletedAt: null },
-      orderBy: [{ createdAt: "desc" }],
-      select: USER_SELECT,
-    })) as UserRow[];
+  const rows = (await db.user.findMany({
+    where: includeTrashed ? {} : { deletedAt: null },
+    orderBy: [{ createdAt: "desc" }],
+    select: USER_SELECT,
+  })) as UserRow[];
 
-    return await toAccounts(db, rows);
-  } catch (error) {
-    console.error("[admin/users] Could not load accounts", error);
-    return null;
-  }
+  return toAccounts(db, rows);
 }
 
 /**
@@ -257,7 +250,7 @@ export const ROLE_HISTORY_LIMIT = 20;
  * did move. A failed insert is logged and swallowed — only the trail row is
  * lost, never the role change.
  *
- * A no-op without a database (the demo trail lives in `lib/data/users.ts`), so
+ * Requires the database (the trail is the `RoleChange` table), so
  * callers may await it unconditionally.
  */
 export async function recordRoleChange(entry: {

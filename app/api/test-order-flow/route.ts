@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest, after } from "next/server";
 import { auth, isAdmin } from "@/lib/auth";
 import { createOrder } from "@/lib/data/orders";
-import { getProductById } from "@/lib/site";
+import { listProducts } from "@/lib/data/products";
 import { sendOrderConfirmationEmail } from "@/lib/order-email";
 import { createRateLimiter, clientIp } from "@/lib/rate-limit";
 
@@ -35,10 +35,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     errors: [] as string[],
   };
 
-  const product = getProductById("dino-graphic-tee");
+  const { products } = await listProducts({ limit: 1 });
+  const product = products[0];
   if (!product) {
-    report.errors.push("Seed product not found");
-    return NextResponse.json(report, { status: 500 });
+    report.errors.push(
+      "No active product in the catalogue — add products before testing the order flow",
+    );
+    return NextResponse.json(report, { status: 503 });
   }
 
   const input = {

@@ -1,12 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import {
-  DEMO_SHOPPER,
-  EMPTY_DASHBOARD_PROFILE,
-  MOCK_ADDRESSES,
-  MOCK_NOTIFICATIONS,
-} from "@/lib/mock-dashboard";
+import { EMPTY_DASHBOARD_PROFILE } from "@/lib/dashboard-constants";
 import type {
   Address,
   DashboardIdentity,
@@ -44,33 +39,25 @@ interface DashboardState {
   identity: DashboardIdentity | null;
   /**
    * Editable copy of the signed-in shopper. Identity fields come from the
-   * Auth.js session; the extras (birthday, kids, points, spend) are seeded from
-   * `DEMO_SHOPPER` for the demo account and left blank for everyone else.
+   * Auth.js session; the extras (birthday, kids, points, spend) start blank
+   * and are edited by the shopper.
    */
   profile: DashboardUser;
   addresses: Address[];
   notifications: NotificationItem[];
   preferences: DashboardPreferences;
-  /**
-   * Flipped once the demo wishlist has been loaded into `useWishlistStore`.
-   * Kept here so the wishlist page can show a skeleton instead of flashing its
-   * empty state on first paint.
-   */
-  wishlistSeeded: boolean;
 
   /**
    * Points the store at a session identity.
    *
    * Whatever the previous account left behind is discarded first — addresses,
-   * notifications, preferences and the demo wishlist flag — so switching users
-   * (admin → shopper, shopper → admin) can never show one account another's
-   * data. Demo collections are seeded only when `demo` is true.
+   * notifications and preferences — so switching users (admin → shopper,
+   * shopper → admin) can never show one account another's data.
    */
-  applyIdentity: (user: DashboardSessionUser, options: { demo: boolean }) => void;
+  applyIdentity: (user: DashboardSessionUser) => void;
   /** Forgets the identity entirely (used on sign-in/sign-out). */
   clearIdentity: () => void;
   updateProfile: (patch: Partial<DashboardUser>) => void;
-  markWishlistSeeded: () => void;
 
   addAddress: (values: Omit<Address, "id">) => void;
   updateAddress: (id: string, values: Omit<Address, "id">) => void;
@@ -110,30 +97,20 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
   addresses: [],
   notifications: [],
   preferences: DEFAULT_PREFERENCES,
-  wishlistSeeded: false,
 
-  applyIdentity: (user, { demo }) =>
+  applyIdentity: (user) =>
     set({
-      identity: { id: user.id, email: user.email.trim().toLowerCase(), demo },
-      profile: demo
-        ? {
-            ...DEMO_SHOPPER,
-            // The session wins for identity fields, even for the demo account.
-            name: user.name || DEMO_SHOPPER.name,
-            email: user.email || DEMO_SHOPPER.email,
-            phone: user.phone || DEMO_SHOPPER.phone,
-          }
-        : {
-            ...EMPTY_DASHBOARD_PROFILE,
-            name: user.name,
-            email: user.email,
-            phone: user.phone,
-          },
+      identity: { id: user.id, email: user.email.trim().toLowerCase() },
+      profile: {
+        ...EMPTY_DASHBOARD_PROFILE,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+      },
       /* Wipe everything the previous identity left behind. */
-      addresses: demo ? [...MOCK_ADDRESSES] : [],
-      notifications: demo ? [...MOCK_NOTIFICATIONS] : [],
+      addresses: [],
+      notifications: [],
       preferences: DEFAULT_PREFERENCES,
-      wishlistSeeded: false,
     }),
 
   clearIdentity: () =>
@@ -143,13 +120,10 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
       addresses: [],
       notifications: [],
       preferences: DEFAULT_PREFERENCES,
-      wishlistSeeded: false,
     }),
 
   updateProfile: (patch) =>
     set((state) => ({ profile: { ...state.profile, ...patch } })),
-
-  markWishlistSeeded: () => set({ wishlistSeeded: true }),
 
   addAddress: (values) =>
     set((state) => {

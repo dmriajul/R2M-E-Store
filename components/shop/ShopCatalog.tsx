@@ -129,22 +129,36 @@ export function ShopCatalog({ initialFilters, products: catalogue }: ShopCatalog
         </div>
 
         {products.length === 0 ? (
-          <div className="glass-soft flex flex-col items-center gap-4 rounded-3xl px-6 py-20 text-center">
-            <span className="text-6xl" aria-hidden>
-              🧸
-            </span>
-            <h3 className="text-xl font-semibold">No items found for this filter</h3>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Try a different age group or category — there is plenty more in the
-              wardrobe.
-            </p>
-            <Button
-              onClick={clearFilters}
-              className="mt-2 h-10 rounded-full bg-primary px-6 text-xs font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 hover:shadow-[0_0_28px_-8px_rgba(212,175,55,0.9)]"
-            >
-              Clear filters
-            </Button>
-          </div>
+          catalogue.length === 0 ? (
+            /* An empty catalogue, not a filter miss — invite the shopper back. */
+            <div className="glass-soft flex flex-col items-center gap-4 rounded-3xl px-6 py-20 text-center">
+              <span className="text-6xl" aria-hidden>
+                ✨
+              </span>
+              <h3 className="text-xl font-semibold">The collection is being curated</h3>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Our new pieces are almost ready. Check back soon — or sign up for
+                the newsletter below and be the first to know.
+              </p>
+            </div>
+          ) : (
+            <div className="glass-soft flex flex-col items-center gap-4 rounded-3xl px-6 py-20 text-center">
+              <span className="text-6xl" aria-hidden>
+                🧸
+              </span>
+              <h3 className="text-xl font-semibold">No items found for this filter</h3>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Try a different age group or category — there is plenty more in the
+                wardrobe.
+              </p>
+              <Button
+                onClick={clearFilters}
+                className="mt-2 h-10 rounded-full bg-primary px-6 text-xs font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 hover:shadow-[0_0_28px_-8px_rgba(212,175,55,0.9)]"
+              >
+                Clear filters
+              </Button>
+            </div>
+          )
         ) : (
           <>
             <div

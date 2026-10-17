@@ -8,6 +8,10 @@ import { MessageCircle, RefreshCw, ShoppingBag } from "lucide-react";
  * Storefront error boundary (home, shop, product, checkout and the account
  * area). Renders inside the shop layout, so the Navbar and Footer stay put and
  * the visitor never feels dropped out of the store.
+ *
+ * A `DatabaseUnavailableError` (the store's catalogue is unreachable or
+ * unconfigured) gets its own maintenance copy — the visitor is told the shop is
+ * briefly closed rather than shown a generic crash.
  */
 export default function ShopError({
   error,
@@ -19,6 +23,42 @@ export default function ShopError({
   useEffect(() => {
     console.error("[mukra] storefront error:", error);
   }, [error]);
+
+  if (error.name === "DatabaseUnavailableError") {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <div className="glass-soft relative overflow-hidden rounded-3xl p-8 text-center sm:p-12">
+          <span aria-hidden className="text-5xl">
+            🛠️
+          </span>
+
+          <h1 className="mt-5 text-2xl font-bold tracking-tight sm:text-3xl">
+            We&apos;ll be right back
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+            The shop is having a moment with its inventory system. Nothing was
+            lost — please try again in a little while.
+          </p>
+          {error.digest && (
+            <p className="mt-3 font-mono text-[11px] tracking-wide text-muted-foreground/80">
+              Error ID: {error.digest}
+            </p>
+          )}
+
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              type="button"
+              onClick={reset}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_34px_-10px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-safe:hover:scale-[1.02]"
+            >
+              <RefreshCw aria-hidden className="size-4" />
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">

@@ -6,6 +6,8 @@ import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema } from "@/lib/seo";
 import { listProducts } from "@/lib/data/products";
 import { ShopHeader } from "@/components/shop/ShopHeader";
+import { CatalogueUnavailable } from "@/components/shop/CatalogueUnavailable";
+import type { Product } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +43,18 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
   const params = await searchParams;
   // Filters are resolved on the server so a shared link paints the right grid.
   const initialFilters = filtersFromSearchParams(params);
-  const { products } = await listProducts();
+
+  // The catalogue comes from the database only. When it cannot be reached the
+  // page renders its maintenance state — never a baked-in sample catalogue.
+  const { products, unavailable } = await listProducts().then(
+    (result) => ({ ...result, unavailable: false }),
+    (error: unknown) => {
+      if (error instanceof Error && error.name === "DatabaseUnavailableError") {
+        return { products: [] as Product[], source: "database" as const, unavailable: true };
+      }
+      throw error;
+    },
+  );
 
   return (
     <div className="relative">
@@ -62,7 +75,11 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
       {/* ---------- Page header ---------- */}
       <ShopHeader />
 
-      <ShopCatalog initialFilters={initialFilters} products={products} />
+      {unavailable ? (
+        <CatalogueUnavailable />
+      ) : (
+        <ShopCatalog initialFilters={initialFilters} products={products} />
+      )}
     </div>
   );
 }

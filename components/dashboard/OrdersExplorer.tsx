@@ -5,14 +5,8 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  MOCK_ORDERS,
-  ORDER_FILTERS,
-  countOrdersByStatus,
-  getActiveOrderCount,
-} from "@/lib/mock-dashboard";
+import { ORDER_FILTERS } from "@/lib/dashboard-constants";
 import { usePrefersReducedMotion } from "@/hooks/useMediaQuery";
-import { useDashboardSession } from "@/components/dashboard/DashboardSessionProvider";
 import { OrderCard } from "@/components/dashboard/OrderCard";
 import { Button } from "@/components/ui/button";
 import type { OrderStatus } from "@/types";
@@ -23,8 +17,6 @@ const EASE_LUXE = [0.22, 1, 0.36, 1] as const;
 
 /** Status tabs with the gold underline, and the list of matching orders. */
 export function OrdersExplorer() {
-  /* Mock orders belong to the demo shopper; other accounts start empty. */
-  const { isDemoIdentity } = useDashboardSession();
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
   const [liveOrders, setLiveOrders] = useState<OrderRecord[] | null>(null);
   const reducedMotion = usePrefersReducedMotion();
@@ -48,26 +40,17 @@ export function OrdersExplorer() {
   }, []);
 
   const allOrders = useMemo(
-    () =>
-      liveOrders !== null
-        ? liveOrders.map(toDashboardOrder)
-        : isDemoIdentity
-          ? [...MOCK_ORDERS]
-          : [],
-    [liveOrders, isDemoIdentity],
+    () => (liveOrders !== null ? liveOrders.map(toDashboardOrder) : []),
+    [liveOrders],
   );
   const orders = useMemo(
     () => (filter === "all" ? allOrders : allOrders.filter((o) => o.status === filter)),
     [allOrders, filter],
   );
 
-  const activeCount =
-    liveOrders !== null
-      ? allOrders.filter((order) => ["pending", "confirmed", "processing", "shipped"].includes(order.status))
-          .length
-      : isDemoIdentity
-        ? getActiveOrderCount()
-        : 0;
+  const activeCount = allOrders.filter((order) =>
+    ["pending", "confirmed", "processing", "shipped"].includes(order.status),
+  ).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -83,9 +66,7 @@ export function OrdersExplorer() {
             const count =
               tab.value === "all"
                 ? allOrders.length
-                : liveOrders === null
-                  ? countOrdersByStatus(tab.value)
-                  : allOrders.filter((order) => order.status === tab.value).length;
+                : allOrders.filter((order) => order.status === tab.value).length;
 
             return (
               <button

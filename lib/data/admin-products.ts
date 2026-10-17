@@ -1,6 +1,6 @@
 import { AdminDataError } from "@/lib/data/admin-errors";
 import { scheduleImageCleanup } from "@/lib/data/media";
-import { getPrisma } from "@/lib/prisma";
+import { DatabaseUnavailableError, getPrisma } from "@/lib/prisma";
 import {
   adminProductSchema,
   type AdminProductSeoValues,
@@ -98,10 +98,13 @@ const productInclude = {
   variants: { select: { size: true, color: true, stock: true, sku: true } },
 };
 
-export async function getAdminProducts(): Promise<AdminProduct[] | null> {
-  const db = await getPrisma();
-  if (!db) return null;
-
+/**
+ * Every product row, newest first. Throws `DatabaseUnavailableError` when the
+ * database is not reachable — the console layout catches it and renders empty
+ * tables with a "not connected" notice.
+ */
+export async function getAdminProducts(): Promise<AdminProduct[]> {
+  const db = await requireDatabase();
   const rows = (await db.product.findMany({
     include: productInclude,
     orderBy: [{ createdAt: "desc" }, { id: "asc" }],
@@ -111,16 +114,15 @@ export async function getAdminProducts(): Promise<AdminProduct[] | null> {
 }
 
 /**
- * Storefront/API entry point: returns `null` when no database is configured so
- * `POST /api/admin/products` can answer `source: "mock"`.
+ * Storefront/API entry point. Throws when no database is configured, so
+ * `POST /api/admin/products` answers 503 instead of pretending the product
+ * was saved.
  */
 export async function saveAdminProduct(
   values: AdminProductValues,
   id?: string,
-): Promise<AdminProduct | null> {
-  const db = await getPrisma();
-  if (!db) return null;
-
+): Promise<AdminProduct> {
+  const db = await requireDatabase();
   return writeAdminProduct(db, values, id);
 }
 
@@ -234,11 +236,9 @@ export function parseAdminProduct(input: unknown) {
 /* -------------------------------------------------------------------------- */
 /*  Console mutations                                                         */
 /* -------------------------------------------------------------------------- */
-/*  Prisma only — no `withDatabase()` and no mock fallback. When a database is  */
-/*  configured, a console write either commits or throws; the Server Action in  */
-/*  `app/admin/actions.ts` turns the throw into an error the operator can see.  */
-/*  (Demo installs without DATABASE_URL never reach this code: the action       */
-/*  reports `source: "demo"` and the console applies the change locally.)       */
+/*  Prisma only — no mock fallback. A console write either commits or throws;  */
+/*  the Server Action in `app/admin/actions.ts` turns the throw into an error  */
+/*  the operator can see. An unconfigured database surfaces as a 503.          */
 
 /** Prisma's unique-constraint violation. */
 function isUniqueConflict(error: unknown): boolean {
@@ -263,12 +263,12 @@ function isForeignKeyViolation(error: unknown): boolean {
 async function requireDatabase() {
   const db = await getPrisma();
   if (!db) {
-    throw new AdminDataError(
-      "No database connection — set DATABASE_URL and run `npx prisma generate`",
-    );
+    // Unconfigured is a 503, not an operator mistake.
+    throw new DatabaseUnavailableError();
   }
   return db;
 }
+
 
 /**
  * Applies the SEO manager's slice of a product (slug, metadata, badge,
@@ -483,7 +483,7 @@ export async function setAdminProductsOutOfStock(ids: string[]): Promise<number>
 
 /**
  * Adds `units` to a product, spread as evenly as possible across its variants
- * (the same maths the console's demo store uses), and returns the fresh record.
+ * (the same maths the console's store uses), and returns the fresh record.
  */
 export async function restockAdminProduct(
   id: string,

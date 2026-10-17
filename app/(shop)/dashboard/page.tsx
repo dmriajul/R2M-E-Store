@@ -1,18 +1,14 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Gift, ShoppingBag, ShieldCheck, Sparkles, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { formatPrice } from "@/lib/utils";
-import {
-  getActiveOrderCount,
-  getLastDeliveredOrder,
-  getRecentOrders,
-  getRecommendedProducts,
-} from "@/lib/mock-dashboard";
+import { toDashboardOrder } from "@/lib/dashboard-orders";
 import { useDashboardSession } from "@/components/dashboard/DashboardSessionProvider";
 import { ADMIN_ROLE_LABEL, isStaff, landingPathFor, normalizeRole } from "@/lib/rbac";
-import type { AdminRole } from "@/types";
+import type { AdminRole, ApiResponse, DashboardOrder, OrderRecord, Product } from "@/types";
 import { useDashboardStore } from "@/store/useDashboardStore";
 import { useWishlistStore } from "@/store/useWishlistStore";
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -21,25 +17,71 @@ import { RecommendedRail } from "@/components/dashboard/RecommendedRail";
 import { useReorder } from "@/components/dashboard/useReorder";
 import { Button } from "@/components/ui/button";
 
+const ACTIVE_STATUSES = ["pending", "confirmed", "processing", "shipped"];
+
 export default function DashboardOverviewPage() {
   /* Identity is the session's; the store only holds this account's own extras. */
-  const { user, isDemoIdentity } = useDashboardSession();
+  const { user } = useDashboardSession();
   const profile = useDashboardStore((state) => state.profile);
-  const seeded = useDashboardStore((state) => state.wishlistSeeded);
   const wishlistCount = useWishlistStore((state) => state.ids?.length ?? 0);
   const reorder = useReorder();
 
-  /* The mock orders/addresses belong to the demo shopper alone. */
-  const recentOrders = isDemoIdentity ? (getRecentOrders(3) ?? []) : [];
-  const activeOrders = isDemoIdentity ? (getActiveOrderCount() ?? 0) : 0;
-  const recommended = getRecommendedProducts(4) ?? [];
+  /* This account's real orders, straight from the database. */
+  const [orders, setOrders] = useState<DashboardOrder[] | null>(null);
+  /* A small "you might love" rail from the live catalogue. */
+  const [recommended, setRecommended] = useState<Product[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/orders", { cache: "no-store" })
+      .then(async (response) => {
+        const result = (await response.json()) as ApiResponse<OrderRecord[]>;
+        if (!active) return;
+        if (!response.ok || !result.success || !result.data) throw new Error("orders unavailable");
+        setOrders(result.data.map(toDashboardOrder));
+      })
+      .catch((error: unknown) => {
+        console.warn("[dashboard] Could not load orders", error);
+        if (active) setOrders([]);
+      });
+    fetch("/api/products?featured=true", { cache: "no-store" })
+      .then(async (response) => {
+        const result = (await response.json()) as ApiResponse<Product[]>;
+        if (!active) return;
+        if (!response.ok || !result.success || !result.data) throw new Error("products unavailable");
+        setRecommended(result.data.slice(0, 4));
+      })
+      .catch((error: unknown) => {
+        console.warn("[dashboard] Could not load recommendations", error);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const recentOrders = useMemo(() => orders?.slice(0, 3) ?? [], [orders]);
+  const activeOrders = useMemo(
+    () => orders?.filter((order) => ACTIVE_STATUSES.includes(order.status)).length ?? 0,
+    [orders],
+  );
+  const totalSpent = useMemo(
+    () =>
+      orders
+        ?.filter((order) => order.status !== "cancelled" && order.status !== "refunded")
+        .reduce((sum, order) => sum + order.totals.total, 0) ?? 0,
+    [orders],
+  );
+  const lastDelivered = useMemo(
+    () => orders?.find((order) => order.status === "delivered"),
+    [orders],
+  );
+
   const firstName = user.name.trim().split(/\s+/)[0] || "there";
-  /* Staff (and the demo shopper) get an explicit identity chip, so this page can
-     never be mistaken for someone else's session. */
+  /* Staff get an explicit identity chip, so this page can never be mistaken
+     for someone else's session. */
   const staffRole = isStaff(user.role) ? (normalizeRole(user.role) as AdminRole) : null;
   const memberSinceYear = profile.memberSince.slice(0, 4);
-  const rewardPoints = isDemoIdentity && Number.isFinite(profile.rewardPoints) ? profile.rewardPoints : 0;
-  const totalSpent = isDemoIdentity && Number.isFinite(profile.totalSpent) ? profile.totalSpent : 0;
+  const rewardPoints = Number.isFinite(profile.rewardPoints) ? profile.rewardPoints : 0;
 
   return (
     <>
@@ -118,7 +160,7 @@ export default function DashboardOverviewPage() {
           <StatCard
             icon="📦"
             label="Active Orders"
-            value={String(activeOrders)}
+            value={orders === null ? "…" : String(activeOrders)}
             hint="On the way right now"
             action={{ label: "Track", href: "/dashboard/orders" }}
             index={0}
@@ -126,7 +168,7 @@ export default function DashboardOverviewPage() {
           <StatCard
             icon="🧸"
             label="Wishlist Items"
-            value={seeded ? String(wishlistCount) : "—"}
+            value={String(wishlistCount)}
             hint="Saved for later"
             action={{ label: "View", href: "/dashboard/wishlist" }}
             index={1}
@@ -148,7 +190,7 @@ export default function DashboardOverviewPage() {
           <StatCard
             icon="💰"
             label="Total Spent"
-            value={formatPrice(totalSpent)}
+            value={orders === null ? "…" : formatPrice(totalSpent)}
             hint="Across all orders"
             index={3}
           />
@@ -181,21 +223,23 @@ export default function DashboardOverviewPage() {
         </section>
 
         {/* ---------- Recommended ---------- */}
-        <section className="flex flex-col gap-4">
-          <header>
-            <h2 className="text-lg font-bold tracking-tight">
-              Your Little One Might Love{" "}
-              <span aria-hidden className="emoji-pop">
-                💕
-              </span>
-            </h2>
-            <p className="prose-kids mt-1 text-sm text-muted-foreground">
-              Picked from the pieces parents come back for.
-            </p>
-          </header>
+        {recommended.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <header>
+              <h2 className="text-lg font-bold tracking-tight">
+                Your Little One Might Love{" "}
+                <span aria-hidden className="emoji-pop">
+                  💕
+                </span>
+              </h2>
+              <p className="prose-kids mt-1 text-sm text-muted-foreground">
+                Picked from the pieces parents come back for.
+              </p>
+            </header>
 
-          <RecommendedRail products={recommended} />
-        </section>
+            <RecommendedRail products={recommended} />
+          </section>
+        )}
 
         {/* ---------- Quick actions ---------- */}
         <section aria-label="Quick actions" className="grid gap-3 sm:grid-cols-3">
@@ -203,8 +247,7 @@ export default function DashboardOverviewPage() {
             type="button"
             variant="outline"
             onClick={() => {
-              const last = isDemoIdentity ? getLastDeliveredOrder() : undefined;
-              if (last) reorder(last);
+              if (lastDelivered) reorder(lastDelivered);
               else
                 toast.info("Nothing to reorder yet", {
                   description: "Your first delivered order will show up here.",

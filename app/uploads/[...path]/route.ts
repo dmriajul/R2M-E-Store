@@ -13,7 +13,7 @@ interface RouteContext {
 /**
  * Serves uploads written by the local fallback in `/api/upload`.
  *
- * Cloudinary is preferred, but demo installs store files on disk — and Next
+ * Cloudinary is preferred, but local-disk installs store files there — and Next
  * only serves `public/` files that existed at build time, so a runtime-written
  * file would 404 there. This route streams them instead with an explicit
  * content type, path-traversal guard and long-lived caching.

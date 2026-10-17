@@ -6,7 +6,7 @@
  * uses, so `npm run dev` works on a bare checkout.
  */
 
-import { isCloudinaryConfigured, isDatabaseConfigured, isSSLCommerzEnabled } from "@/lib/demo-mode";
+import { isCloudinaryConfigured, isDatabaseConfigured, isSSLCommerzEnabled } from "@/lib/integrations";
 
 /* -------------------------------------------------------------------------- */
 /*  Currency                                                                  */
@@ -144,7 +144,6 @@ export const AUTH_URL = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "htt
 /** Server-side summary shown by `/api/health` and the admin console footer. */
 export function integrationStatus() {
   return {
-    demoMode: process.env.NODE_ENV !== "production" && !FEATURES.database,
     database: FEATURES.database ? "configured" : "unconfigured",
     cloudinary: FEATURES.cloudinary ? "configured" : "local-disk",
     sslcommerz: FEATURES.sslcommerz ? "enabled" : "disabled",

@@ -8,9 +8,8 @@ import {
   COUPON_TYPE_LABEL,
   describeCouponValue,
   getCouponStatus,
-} from "@/lib/mock-admin";
+} from "@/lib/admin-constants";
 import { PRODUCT_CATEGORY_NAMES } from "@/lib/validations";
-import { DEMO_NOW } from "@/lib/mock-dashboard";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { CouponStatusBadge } from "@/components/admin/StatusBadge";
 import { CouponDialog } from "@/components/admin/CouponDialog";
@@ -42,7 +41,7 @@ export default function AdminCouponsPage() {
     const term = search.trim().toLowerCase();
     return coupons.filter((coupon) => {
       const matchesTerm = term.length === 0 || coupon.code.toLowerCase().includes(term);
-      const matchesStatus = status === "all" || getCouponStatus(coupon, DEMO_NOW) === status;
+      const matchesStatus = status === "all" || getCouponStatus(coupon) === status;
       return matchesTerm && matchesStatus;
     });
   }, [coupons, search, status]);
@@ -145,7 +144,7 @@ export default function AdminCouponsPage() {
     {
       key: "status",
       label: "Status",
-      render: (coupon) => <CouponStatusBadge status={getCouponStatus(coupon, DEMO_NOW)} />,
+      render: (coupon) => <CouponStatusBadge status={getCouponStatus(coupon)} />,
     },
     {
       key: "actions",
@@ -232,7 +231,7 @@ export default function AdminCouponsPage() {
 
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
           <span>
-            {coupons.filter((coupon) => getCouponStatus(coupon, DEMO_NOW) === "active").length}{" "}
+            {coupons.filter((coupon) => getCouponStatus(coupon) === "active").length}{" "}
             live codes
           </span>
           <span aria-hidden>·</span>

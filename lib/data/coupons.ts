@@ -1,13 +1,12 @@
 /**
  * Coupons data layer.
  *
- * The seed mirrors the four demo codes the admin console already shows
- * (`WELCOME10`, `SUMMER25`, `FREESHIP`, `BIRTHDAY`). Server-side validation
- * lives in `validateCoupon`, which the checkout can call once it moves off the
+ * Coupon rows live in Postgres only. Server-side validation lives in
+ * `validateCoupon`, which the checkout can call once it moves off the
  * client-side table in `lib/cart.ts`.
  */
 
-import { withDatabase } from "@/lib/prisma";
+import { requireDatabase } from "@/lib/prisma";
 import type { CouponType } from "@/types";
 
 export interface CouponRecord {
@@ -23,57 +22,6 @@ export interface CouponRecord {
   endDate?: string;
   active: boolean;
 }
-
-/** Mirrors `ADMIN_COUPONS` in `lib/mock-admin.ts`. */
-export const MOCK_COUPONS: readonly CouponRecord[] = [
-  {
-    id: "coupon-welcome10",
-    code: "WELCOME10",
-    type: "percentage",
-    value: 10,
-    minOrder: 50,
-    usageLimit: 100,
-    usedCount: 45,
-    startDate: "2026-01-01",
-    endDate: "2026-12-31",
-    active: true,
-  },
-  {
-    id: "coupon-summer25",
-    code: "SUMMER25",
-    type: "fixed",
-    value: 25,
-    minOrder: 100,
-    usageLimit: 50,
-    usedCount: 12,
-    startDate: "2026-06-01",
-    endDate: "2026-11-30",
-    active: true,
-  },
-  {
-    id: "coupon-freeship",
-    code: "FREESHIP",
-    type: "free-shipping",
-    value: 0,
-    minOrder: 0,
-    usedCount: 89,
-    startDate: "2026-02-01",
-    endDate: "2026-12-31",
-    active: true,
-  },
-  {
-    id: "coupon-birthday",
-    code: "BIRTHDAY",
-    type: "percentage",
-    value: 20,
-    minOrder: 30,
-    usageLimit: 20,
-    usedCount: 5,
-    startDate: "2026-06-01",
-    endDate: "2026-08-15",
-    active: false,
-  },
-] as const;
 
 /** Prisma enums (PERCENTAGE, FREE_SHIPPING) → the storefront's lowercase keys. */
 function couponTypeFromEnum(value: unknown): CouponType {
@@ -99,36 +47,28 @@ function rowToCoupon(row: Record<string, unknown>): CouponRecord {
 
 export async function listCoupons(): Promise<{
   coupons: CouponRecord[];
-  source: "database" | "mock";
+  source: "database";
 }> {
-  const { data, source } = await withDatabase<CouponRecord[]>(
-    async (db) => {
-      const rows = (await db.coupon.findMany({ orderBy: { createdAt: "asc" } })) as unknown as Array<
-        Record<string, unknown>
-      >;
-      return rows.map(rowToCoupon);
-    },
-    () => [...MOCK_COUPONS],
-  );
+  const coupons = await requireDatabase(async (db) => {
+    const rows = (await db.coupon.findMany({ orderBy: { createdAt: "asc" } })) as unknown as Array<
+      Record<string, unknown>
+    >;
+    return rows.map(rowToCoupon);
+  });
 
-  return { coupons: data, source };
+  return { coupons, source: "database" };
 }
 
 export async function findCouponByCode(code: string): Promise<CouponRecord | null> {
   const wanted = code.trim().toUpperCase();
 
-  const { data } = await withDatabase<CouponRecord | null>(
-    async (db) => {
-      const row = (await db.coupon.findUnique({ where: { code: wanted } })) as unknown as Record<
-        string,
-        unknown
-      > | null;
-      return row ? rowToCoupon(row) : null;
-    },
-    () => MOCK_COUPONS.find((coupon) => coupon.code === wanted) ?? null,
-  );
-
-  return data;
+  return requireDatabase(async (db) => {
+    const row = (await db.coupon.findUnique({ where: { code: wanted } })) as unknown as Record<
+      string,
+      unknown
+    > | null;
+    return row ? rowToCoupon(row) : null;
+  });
 }
 
 export interface CouponValidation {

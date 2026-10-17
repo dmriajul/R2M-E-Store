@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { ADMIN_ORDER_STATUS_LABEL, STOCK_STATE_LABEL } from "@/lib/mock-admin";
+import { ADMIN_ORDER_STATUS_LABEL, STOCK_STATE_LABEL } from "@/lib/admin-constants";
 import type { AdminOrderStatus, CouponStatus, StockState } from "@/types";
 
 export type BadgeTone = "green" | "amber" | "blue" | "red" | "gray" | "violet" | "gold";

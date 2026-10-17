@@ -49,13 +49,13 @@ export async function GET(): Promise<NextResponse<ApiResponse<AdminProduct[]>>> 
       data: products,
       error: null,
       success: true,
-      source: products ? "database" : "mock",
+      source: "database",
     });
   } catch (error) {
     console.error("[admin/products] Failed to load products", error);
     return NextResponse.json(
       { data: null, error: "Could not load products", success: false },
-      { status: 500 },
+      { status: error instanceof Error && error.name === "DatabaseUnavailableError" ? 503 : 500 },
     );
   }
 }
@@ -86,15 +86,13 @@ export async function POST(
 
   try {
     const product = await saveAdminProduct(parsed.data);
-    if (product) {
-      revalidateProductPaths(product.slug);
-    }
+    revalidateProductPaths(product.slug);
     return NextResponse.json(
       {
         data: { product },
         error: null,
         success: true,
-        source: product ? "database" : "mock",
+        source: "database",
       },
       { status: 201 },
     );
@@ -113,7 +111,13 @@ export async function POST(
           : "Could not save product",
         success: false,
       },
-      { status: uniqueConflict ? 409 : 500 },
+      {
+        status: uniqueConflict
+          ? 409
+          : error instanceof Error && error.name === "DatabaseUnavailableError"
+            ? 503
+            : 500,
+      },
     );
   }
 }

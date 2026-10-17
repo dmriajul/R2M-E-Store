@@ -2,18 +2,20 @@
  * Regression coverage for the "Something went wrong" (Error ID digest) incident:
  *
  * A production deployment with **no env vars configured** (fresh Vercel project,
- * no DATABASE_URL) must still render the storefront. Catalogue reads resolve to
- * the documented mock fallback, admin reads honour their `null`-when-
- * unconfigured contract, and account/order flows keep failing closed.
+ * no DATABASE_URL) must never serve demo products, demo accounts or demo
+ * orders. Catalogue reads throw `DatabaseUnavailableError` (the storefront then
+ * renders its maintenance state), admin reads throw (the console renders empty
+ * tables), and account/order flows keep failing closed.
  */
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { DatabaseUnavailableError, withRequiredDatabase, requireDatabase } from "../lib/prisma";
+import { DatabaseUnavailableError, requireDatabase } from "../lib/prisma";
 import { listProducts, findProduct } from "../lib/data/products";
 import { getHeroSettings } from "../lib/data/hero-settings";
-import { getAdminCategories, getCategoryImageMap } from "../lib/data/categories";
+import { getCategoryImageMap } from "../lib/data/categories";
 import { getAdminOrders } from "../lib/data/admin-orders";
 import { getAdminProducts } from "../lib/data/admin-products";
+import { getAdminCategories } from "../lib/data/categories";
 import { DEFAULT_HERO_SETTINGS } from "../lib/hero-settings";
 
 const env = { ...process.env };
@@ -33,18 +35,10 @@ function unconfiguredProduction() {
   delete scope.prismaUnavailable;
 }
 
-test("unconfigured production storefront reads resolve to the mock catalogue instead of throwing", async () => {
+test("unconfigured production catalogue reads reject instead of serving a mock catalogue", async () => {
   unconfiguredProduction();
-  const { products, source } = await listProducts();
-  assert.equal(source, "mock");
-  assert.ok(products.length > 0, "demo catalogue should still render");
-
-  const found = await findProduct("floral-summer-dress");
-  assert.equal(found.source, "mock");
-  assert.equal(found.product?.id, "floral-summer-dress");
-
-  const missing = await findProduct("does-not-exist");
-  assert.equal(missing.product, null, "unknown products 404 instead of crashing");
+  await assert.rejects(() => listProducts(), DatabaseUnavailableError);
+  await assert.rejects(() => findProduct("anything"), DatabaseUnavailableError);
 });
 
 test("unconfigured production hero settings and category covers degrade to defaults", async () => {
@@ -53,15 +47,22 @@ test("unconfigured production hero settings and category covers degrade to defau
   assert.deepEqual(await getCategoryImageMap(), {});
 });
 
-test("unconfigured production admin reads resolve to null so the console keeps its in-session dataset", async () => {
+test("unconfigured production admin reads reject — the console never invents rows", async () => {
   unconfiguredProduction();
-  assert.equal(await getAdminOrders(), null);
-  assert.equal(await getAdminCategories(), null);
-  assert.equal(await getAdminProducts(), null);
+  await assert.rejects(() => getAdminOrders(), DatabaseUnavailableError);
+  await assert.rejects(() => getAdminCategories(), DatabaseUnavailableError);
+  await assert.rejects(() => getAdminProducts(), DatabaseUnavailableError);
 });
 
 test("account and order flows still fail closed on an unconfigured production database", async () => {
   unconfiguredProduction();
-  await assert.rejects(() => withRequiredDatabase(async () => true, () => false), DatabaseUnavailableError);
   await assert.rejects(() => requireDatabase(async () => true), DatabaseUnavailableError);
+});
+
+test("no module path in the app still ships a mock catalogue", async () => {
+  // The demo modules are gone for good: nothing may re-import them.
+  const { access } = await import("node:fs/promises");
+  for (const removed of ["lib/mock-admin.ts", "lib/mock-dashboard.ts", "lib/demo-mode.ts"]) {
+    await assert.rejects(() => access(removed), Error, `${removed} must not exist`);
+  }
 });

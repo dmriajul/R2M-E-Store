@@ -4,10 +4,10 @@ A complete, copy-pasteable runbook: from an empty GitHub repo to a live store on
 your own domain. Total time on a good connection: **about 40 minutes**, most of
 it waiting for Supabase and Cloudinary accounts.
 
-> **Short on time?** Steps 1–5 alone give you a fully working store on
-> `*.vercel.app` running in **demo mode** — mock catalogue, in-memory orders and
-> local image storage. Steps 6–9 switch it over to the real database, real
-> uploads and real payments. You can do them in any order, later.
+> **Plan the order.** The store is database-driven: deploy with `DATABASE_URL`
+> set (step 6) before announcing anything, or the storefront will show its
+> maintenance state and sign-in will refuse until the database exists. Steps
+> 6–9 (database, uploads, payments) can be done in any order.
 
 ---
 
@@ -36,10 +36,11 @@ workflow to configure, Vercel builds on push.
    - **Build command:** `npm run build` (from `vercel.json`)
    - **Output directory:** `.next`
    - **Node version:** 20.x or 22.x
-4. Leave the environment variables empty for now — click **Deploy**.
+4. Add at least `DATABASE_URL` (see step 6) — then click **Deploy**.
 
 The first build takes ~2 minutes. When it finishes you get a live URL like
-`https://mukra-xyz.vercel.app`. Everything works in demo mode.
+`https://mukra-xyz.vercel.app`. Without a database the storefront shows its
+maintenance state; once `DATABASE_URL` is set it serves your real catalogue.
 
 > **Region:** `vercel.json` pins `regions: ["sin1"]` (Singapore) — the closest
 > Vercel region to Bangladesh, typically 40–70 ms faster for Dhaka shoppers than
@@ -92,8 +93,8 @@ curl -s "$BASE/manifest.json" | head -5         # PWA manifest
 curl -s "$BASE/robots.txt"                      # sitemap line present
 ```
 
-Expect `200` everywhere, `/admin` and `/dashboard` returning `307` → `/login`
-when signed out, and `"mode":"demo"` until step 6 is done.
+Expect `200` everywhere and `/admin` and `/dashboard` returning `307` → `/login`
+when signed out. `"database":"unconfigured"` means step 6 is still to do.
 
 ---
 
@@ -124,12 +125,17 @@ when signed out, and `"mode":"demo"` until step 6 is done.
    - **Connection pooling** (port `6543`) → `DATABASE_URL`
    - **Direct connection** (port `5432`) → `DIRECT_URL`
 3. Append `?pgbouncer=true&connection_limit=1` to the pooled URL.
-4. Locally, put both in `.env`, then push the schema and seed:
+4. Locally, put both in `.env`, then push the schema and create your admin:
 
 ```bash
 npx prisma generate
 npx prisma db push          # creates all 13 tables + 7 enums
-npm run db:seed             # 12 products, admin, 3 customers, 4 coupons, 5 orders
+
+# Creates exactly one SUPER_ADMIN — no demo products or customers are seeded:
+ADMIN_NAME="Your Name" \
+ADMIN_EMAIL="you@example.com" \
+ADMIN_PASSWORD="a-long-random-password" \
+npm run db:seed
 ```
 
 5. Add the same two values in Vercel, redeploy, and check:
@@ -171,9 +177,11 @@ curl -i -H "Authorization: Bearer $CRON_SECRET" https://mukra.com/api/cron/purge
    A healthy run answers `200` with `{ "ok": true, "purged": …, "skipped": … }`;
    accounts that still hold an order or a review are counted as `skipped` and kept.
 
-The seeded admin login is `admin@mukra.com` / `password123` — **change it
-immediately** after your first sign-in (Admin → Settings), and rotate the demo
-customer passwords while you are there.
+Sign in with the email and password you passed to `npm run db:seed`, then add
+your real products under **Admin → Products → Add Product** (the full walkthrough
+is in [docs/PRODUCTION_CATALOGUE.md](./docs/PRODUCTION_CATALOGUE.md)). The
+database starts empty by design — no demo products, orders or customers are
+created for you.
 
 ---
 
@@ -225,7 +233,7 @@ Final checklist before announcing:
       `"database":"connected"`
 - [ ] `NEXTAUTH_SECRET` set to a fresh 32-byte random string, `NEXTAUTH_URL`
       points at the real domain
-- [ ] Admin password changed away from `password123`
+- [ ] Admin password stored somewhere safe (it was set via `ADMIN_PASSWORD` when seeding)
 - [ ] `CRON_SECRET` set in Vercel and the cron answers `200` — without it
       `/api/cron/purge-trash` returns `401` on every run and the Trash never
       empties on its own:
@@ -285,7 +293,7 @@ PORT=3000 HOSTNAME=0.0.0.0 node .next/standalone/server.js
 `npm run start` also works locally, it just warns that the standalone output is
 the production entry point. Remember `NEXTAUTH_URL` and `NEXT_PUBLIC_SITE_URL`
 must match the public origin, and keep `public/` next to `server.js` so the
-manifest, icons and demo assets resolve.
+manifest, icons and static assets resolve.
 
 ### Error monitoring
 
@@ -305,7 +313,7 @@ is clearly labelled as such.
 | Symptom | Fix |
 | --- | --- |
 | `PrismaClientInitializationError` in logs | `DATABASE_URL` missing/incorrect, or the pooled URL is missing `?pgbouncer=true` |
-| "Something went wrong" page with an **Error ID (digest)** on `/`, `/shop` or `/product/…` | The server render threw while loading the catalogue. Check `/api/ready` (`database: "unconfigured"` means env vars are missing — add `DATABASE_URL` etc. and redeploy). The digest is a hash of the server stack: search it in Vercel's runtime logs for the exact frame. With no database configured the storefront now falls back to the demo catalogue instead of erroring; account/order flows still need a real database. |
+| "We'll be right back" maintenance page on `/`, `/shop` or `/product/…` | The catalogue database could not be reached. Check `/api/ready` (`database: "unconfigured"` means env vars are missing — add `DATABASE_URL` etc. and redeploy) and Supabase status. The store never falls back to sample products. |
 | Sign-in loops back to `/login` | `NEXTAUTH_URL` doesn't match the deployed domain, or `NEXTAUTH_SECRET` changed between deploys |
 | Uploads vanish after a while | Cloudinary keys not set — local uploads live on the ephemeral filesystem |
 | Canonical URLs point at `localhost` | `NEXT_PUBLIC_SITE_URL` not set in Vercel |

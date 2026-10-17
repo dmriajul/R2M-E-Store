@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { countProductsInCategory } from "@/lib/mock-admin";
+import { countProductsInCategory } from "@/lib/admin-constants";
 import { deleteCategoryAction } from "@/app/admin/actions";
 import { CategoryDialog } from "@/components/admin/CategoryDialog";
 import { ConfirmActionDialog } from "@/components/admin/ConfirmActionDialog";

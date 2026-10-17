@@ -7,6 +7,7 @@ import { FEATURES } from "@/lib/config";
 import { listProducts } from "@/lib/data/products";
 import { getCategoryImageMap } from "@/lib/data/categories";
 import { getHeroSettings } from "@/lib/data/hero-settings";
+import { CatalogueUnavailable } from "@/components/shop/CatalogueUnavailable";
 /* Section imports below are kept in render order (top → bottom) so the import
    block doubles as a table of contents for the page. */
 import { HeroSection } from "@/components/sections/HeroSection";
@@ -72,20 +73,39 @@ export const dynamic = "force-dynamic";
  * self-contained <section> whose height went with it.
  */
 export default async function HomePage() {
-  const [heroSettings, virtualBoutique, featured, categoryImages] = await Promise.all([
-    getHeroSettings(),
-    // Skip the query entirely while the Virtual Boutique is hidden — there is
-    // no point paying for a round-trip whose results nothing renders.
-    FEATURES.virtualBoutique
-      ? listProducts({ placement: "virtualBoutique", limit: 3 })
-      : Promise.resolve({ products: [] as Product[], source: "mock" as const }),
-    // Curated rail. 8 rather than 4 so the carousel still has something to
-    // scroll at 3-up on desktop once more products get flagged. <NewArrivalsGrid />
-    // fetches its own data server-side, so it is not queried here.
-    listProducts({ featured: true, limit: 8 }),
-    // Category covers uploaded in the console ({} in fallback mode / on error).
-    getCategoryImageMap(),
-  ]);
+  // The catalogue comes from the database only. When it cannot be reached the
+  // product sections collapse and a maintenance notice explains why — the home
+  // page never falls back to baked-in sample products.
+  const catalogueUnavailable = (error: unknown): boolean =>
+    error instanceof Error && error.name === "DatabaseUnavailableError";
+
+  const [heroSettings, virtualBoutique, featured, categoryImages, unavailable] =
+    await Promise.all([
+      getHeroSettings(),
+      // Skip the query entirely while the Virtual Boutique is hidden — there is
+      // no point paying for a round-trip whose results nothing renders.
+      FEATURES.virtualBoutique
+        ? listProducts({ placement: "virtualBoutique", limit: 8 }).catch((error: unknown) => {
+            if (!catalogueUnavailable(error)) throw error;
+            return { products: [] as Product[], source: "database" as const };
+          })
+        : Promise.resolve({ products: [] as Product[], source: "database" as const }),
+      // Curated rail. 8 rather than 4 so the carousel still has something to
+      // scroll at 3-up on desktop once more products get flagged. <NewArrivalsGrid />
+      // fetches its own data server-side, so it is not queried here.
+      listProducts({ featured: true, limit: 8 }).catch((error: unknown) => {
+        if (!catalogueUnavailable(error)) throw error;
+        return { products: [] as Product[], source: "database" as const };
+      }),
+      // Category covers uploaded in the console ({} in fallback mode / on error).
+      getCategoryImageMap(),
+      listProducts({ limit: 1 })
+        .then(() => false)
+        .catch((error: unknown) => {
+          if (!catalogueUnavailable(error)) throw error;
+          return true;
+        }),
+    ]);
   return (
     /* reducedMotion="user" makes framer-motion honour prefers-reduced-motion
        globally: transform/layout animations are skipped and snapped to their
@@ -123,6 +143,9 @@ export default async function HomePage() {
         <Reveal>
           <FeaturedCarousel products={featured.products} />
         </Reveal>
+
+        {/* Catalogue unreachable — an honest notice, never sample products. */}
+        {unavailable && <CatalogueUnavailable />}
 
         <Reveal>
           <StatsSection />

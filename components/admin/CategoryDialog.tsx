@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { cn, slugify } from "@/lib/utils";
-import { CATEGORY_EMOJI_CHOICES } from "@/lib/mock-admin";
+import { CATEGORY_EMOJI_CHOICES } from "@/lib/admin-constants";
 import {
   adminCategorySchema,
   type AdminCategoryValues,

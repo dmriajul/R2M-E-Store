@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn, formatRelative } from "@/lib/utils";
-import { DEMO_NOW } from "@/lib/mock-dashboard";
 import { selectUnreadCount, useDashboardStore } from "@/store/useDashboardStore";
 
 /** Notification feed: unread rows get a gold rail and a brighter surface. */
@@ -37,7 +36,7 @@ export function NotificationsList() {
       <ul className="flex flex-col gap-3">
         <AnimatePresence initial={false}>
           {notifications.map((notification, index) => {
-            const relative = formatRelative(notification.createdAt, DEMO_NOW);
+            const relative = formatRelative(notification.createdAt, new Date().toISOString());
 
             return (
               <motion.li

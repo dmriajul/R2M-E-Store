@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -29,7 +29,7 @@ import {
   navForRole,
   type AdminNavItem,
 } from "@/components/admin/admin-nav";
-import { ADMIN_NOTIFICATIONS, getStockState } from "@/lib/mock-admin";
+import { notificationsFromRecords } from "@/lib/admin-metrics";
 import {
   ADMIN_ROLE_HINT,
   ADMIN_ROLE_LABEL,
@@ -37,7 +37,6 @@ import {
   searchDestinationFor,
 } from "@/lib/rbac";
 import { useAdminSession } from "@/components/admin/AdminSessionProvider";
-import { DEMO_NOW } from "@/lib/mock-dashboard";
 import { useAdminStore } from "@/store/useAdminStore";
 import { signOut } from "next-auth/react";
 import { clearIdentityCaches, clearSessionCache } from "@/lib/session-cache";
@@ -216,14 +215,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const canSeeReturns = canAccessSection(user.role, "returns");
 
   const setSearch = useAdminStore((state) => state.setSearch);
-  const lowStockCount = useAdminStore(
-    (state) =>
-      (state.products ?? []).filter(
-        (product) =>
-        product &&
-        product.trackInventory &&
-          getStockState(product.stock, product.lowStockThreshold) === "low-stock",
-      ).length,
+  const orders = useAdminStore((state) => state.orders);
+  const products = useAdminStore((state) => state.products);
+
+  /* Bell dropdown: payment decisions to make and stock running low — all from
+     the records the console loaded, so an empty database means an empty bell. */
+  const notifications = useMemo(
+    () => notificationsFromRecords(orders, products ?? []),
+    [orders, products],
   );
 
   const meta = adminPageMeta(pathname);
@@ -376,13 +375,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  aria-label={`Notifications${lowStockCount > 0 ? `, ${lowStockCount} low-stock alerts` : ""}`}
+                  aria-label={`Notifications${notifications.length > 0 ? `, ${notifications.length} items needing attention` : ""}`}
                   className="relative inline-flex size-11 items-center justify-center rounded-lg border border-[#2A2A2A] text-muted-foreground transition-colors duration-200 hover:border-[#3A3A3A] hover:text-foreground focus-visible:ring-2 focus-visible:ring-blue-400/40 focus-visible:outline-none lg:size-10"
                 >
                   <Bell aria-hidden className="size-4" />
-                  {lowStockCount > 0 && (
+                  {notifications.length > 0 && (
                     <span className="absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white tabular-nums">
-                      {lowStockCount}
+                      {notifications.length}
                     </span>
                   )}
                 </button>
@@ -392,7 +391,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   Notifications
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-[#242424]" />
-                {ADMIN_NOTIFICATIONS.map((notification) => (
+                {notifications.length === 0 ? (
+                  <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+                    Nothing needs your attention right now.
+                  </p>
+                ) : (
+                  notifications.map((notification) => (
                   <DropdownMenuItem
                     key={notification.id}
                     className="flex-col items-start gap-0.5 focus:bg-white/5"
@@ -406,10 +410,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                       )}
                     </span>
                     <span className="pl-6 text-[11px] text-muted-foreground">
-                      {formatRelative(notification.createdAt, DEMO_NOW)}
+                      {formatRelative(notification.createdAt, new Date().toISOString())}
                     </span>
                   </DropdownMenuItem>
-                ))}
+                  ))
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
 

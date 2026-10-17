@@ -1,20 +1,22 @@
 /**
  * Products data layer.
  *
- * Queries Postgres through Prisma when `DATABASE_URL` is set, and falls back to
- * the mock catalogue in `lib/site.ts` otherwise — every call resolves, so the
- * storefront never sees an error state it can't render.
+ * Every read goes to Postgres through Prisma. There is no catalogue baked into
+ * the app: when the database is unreachable the call throws
+ * `DatabaseUnavailableError` and the route renders its error state, and when
+ * the `Product` table is simply empty the caller gets `[]` and shows its empty
+ * state.
  */
 
-import { CATEGORY_META, PRODUCT_IMAGES, PRODUCTS, getProductById } from "@/lib/site";
-import { isRenderableImage } from "@/lib/images";
-import { withDatabase, withRequiredDatabase } from "@/lib/prisma";
+import { CATEGORY_META } from "@/lib/site";
+import { requireDatabase } from "@/lib/prisma";
 import type {
   Product,
   ProductBadge,
   ProductCategory,
   ProductGender,
   ProductInventoryVariant,
+  Review,
 } from "@/types";
 
 /** The row shape we read back from Postgres. */
@@ -55,6 +57,10 @@ function toGender(value: string): ProductGender {
   return value === "Boys" || value === "Unisex" ? value : "Girls";
 }
 
+const productVariantSelect = {
+  variants: { select: { size: true, color: true, stock: true } },
+} as const;
+
 /** Database row → storefront `Product`. */
 export function rowToProduct(row: ProductRow): Product {
   const category = toProductCategory(row.category);
@@ -64,9 +70,6 @@ export function rowToProduct(row: ProductRow): Product {
   const stock = variants
     ? variants.reduce((total, variant) => total + variant.stock, 0)
     : row.stock;
-  const images = row.images.some(isRenderableImage)
-    ? row.images
-    : [...(PRODUCT_IMAGES[row.slug] ?? row.images)];
 
   return {
     id: row.id,
@@ -78,7 +81,7 @@ export function rowToProduct(row: ProductRow): Product {
     originalPrice: row.originalPrice ?? undefined,
     compareAtPrice: row.originalPrice ?? undefined,
     currency: "BDT",
-    images,
+    images: [...row.images],
     category,
     categories:
       row.categories?.length
@@ -88,7 +91,7 @@ export function rowToProduct(row: ProductRow): Product {
     gender: toGender(row.gender),
     colors: row.colors,
     sizes: row.sizes,
-    material: row.material ?? "Organic cotton",
+    material: row.material ?? "",
     badge: (row.badge as ProductBadge | null) ?? undefined,
     tags: [],
     rating: 5,
@@ -124,121 +127,167 @@ export interface ProductQuery {
   sort?: "newest";
   activeOnly?: boolean;
   limit?: number;
+  /** Products to leave out (used by the "you may also like" rail). */
+  excludeId?: string;
 }
 
-/** Catalogue listing. Fallback: the 12 seeded mock products. */
+/** Catalogue listing. An empty table means an empty list — never sample rows. */
 export async function listProducts(
   query: ProductQuery = {},
-): Promise<{ products: Product[]; source: "database" | "mock" }> {
-  const { data, source } = await withDatabase<Product[]>(
-    async (db) => {
-      const rows = (await db.product.findMany({
-        where: {
-          ...(query.category
-            ? {
-                OR: [
-                  { category: query.category },
-                  { categories: { has: query.category } },
-                ],
-              }
-            : {}),
-          ...(query.featured ? { featured: true } : {}),
-          ...(query.placement ? { [query.placement]: true } : {}),
-          ...(query.activeOnly === false ? {} : { active: true }),
-        },
-        include: {
-          variants: { select: { size: true, color: true, stock: true } },
-        },
-        orderBy: query.featured
-          ? [{ featuredOrder: "asc" }, { createdAt: "desc" }, { id: "asc" }]
-          : query.placement
-            ? [{ createdAt: "desc" }, { id: "asc" }]
-            : query.sort === "newest"
-              ? [{ createdAt: "desc" }, { id: "asc" }]
-              : [{ createdAt: "asc" }, { id: "asc" }],
-        ...(query.limit
-          ? { take: Math.min(Math.max(Math.trunc(query.limit), 1), 100) }
+): Promise<{ products: Product[]; source: "database" }> {
+  const products = await requireDatabase(async (db) => {
+    const rows = (await db.product.findMany({
+      where: {
+        ...(query.category
+          ? {
+              OR: [
+                { category: query.category },
+                { categories: { has: query.category } },
+              ],
+            }
           : {}),
-      })) as ProductRow[];
+        ...(query.featured ? { featured: true } : {}),
+        ...(query.placement ? { [query.placement]: true } : {}),
+        ...(query.activeOnly === false ? {} : { active: true }),
+        ...(query.excludeId ? { id: { not: query.excludeId } } : {}),
+      },
+      include: productVariantSelect,
+      orderBy: query.featured
+        ? [{ featuredOrder: "asc" }, { createdAt: "desc" }, { id: "asc" }]
+        : query.placement
+          ? [{ createdAt: "desc" }, { id: "asc" }]
+          : query.sort === "newest"
+            ? [{ createdAt: "desc" }, { id: "asc" }]
+            : [{ createdAt: "asc" }, { id: "asc" }],
+      ...(query.limit
+        ? { take: Math.min(Math.max(Math.trunc(query.limit), 1), 100) }
+        : {}),
+    })) as ProductRow[];
 
-      return rows.map(rowToProduct);
-    },
-    () =>
-      PRODUCTS.filter(
-        (product) =>
-          (!query.category ||
-            product.category === query.category ||
-            product.categories?.includes(toProductCategory(query.category))) &&
-          (!query.featured || product.featured) &&
-          (!query.placement || product[query.placement]) &&
-          (query.activeOnly === false || product.status === "active"),
-      )
-        .sort((a, b) =>
-          query.featured
-            ? (a.featuredOrder ?? 0) - (b.featuredOrder ?? 0) ||
-              b.createdAt.localeCompare(a.createdAt) ||
-              a.id.localeCompare(b.id)
-            : query.placement
-              ? b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id)
-              : query.sort === "newest"
-                ? b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id)
-                : a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
-        )
-        .slice(0, query.limit ? Math.min(Math.max(Math.trunc(query.limit), 1), 100) : undefined),
-  );
+    return rows.map(rowToProduct);
+  });
 
-  return { products: data, source };
+  return { products, source: "database" };
 }
 
-/** Single product by slug **or** id (the mock catalogue keys on id). */
+/** Single product by slug **or** id. */
 export async function findProduct(identifier: string): Promise<{
   product: Product | null;
-  source: "database" | "mock";
+  source: "database";
 }> {
-  const { data, source } = await withDatabase<Product | null>(
-    async (db) => {
-      const row = (await db.product.findFirst({
-        where: {
-          OR: [{ slug: identifier }, { id: identifier }],
-          active: true,
-        },
-        include: {
-          variants: { select: { size: true, color: true, stock: true } },
-        },
-      })) as ProductRow | null;
-      return row ? rowToProduct(row) : null;
-    },
-    () => {
-      const product = getProductById(identifier);
-      return product?.status === "active" ? product : null;
-    },
-  );
+  const product = await requireDatabase(async (db) => {
+    const row = (await db.product.findFirst({
+      where: {
+        OR: [{ slug: identifier }, { id: identifier }],
+        active: true,
+      },
+      include: productVariantSelect,
+    })) as ProductRow | null;
+    return row ? rowToProduct(row) : null;
+  });
 
-  return { product: data, source };
+  return { product, source: "database" };
 }
 
 /** Stock lookup used by the order API to re-price lines. */
 export async function findProductsByIds(ids: readonly string[]): Promise<{
   products: Product[];
-  source: "database" | "mock";
+  source: "database";
 }> {
   const unique = Array.from(new Set(ids));
 
-  const { data, source } = await withRequiredDatabase<Product[]>(
-    async (db) => {
-      const rows = (await db.product.findMany({
-        where: { id: { in: unique }, active: true },
-        include: {
-          variants: { select: { size: true, color: true, stock: true } },
-        },
-      })) as ProductRow[];
-      return rows.map(rowToProduct);
-    },
-    () =>
-      unique
-        .map((id) => getProductById(id))
-        .filter((product): product is Product => Boolean(product)),
-  );
+  const products = await requireDatabase(async (db) => {
+    const rows = (await db.product.findMany({
+      where: { id: { in: unique }, active: true },
+      include: productVariantSelect,
+    })) as ProductRow[];
+    return rows.map(rowToProduct);
+  });
 
-  return { products: data, source };
+  return { products, source: "database" };
+}
+
+/**
+ * "You may also like": same category first, then the same gender, then
+ * anything else — all straight from the catalogue table.
+ */
+export async function listRelatedProducts(
+  product: Product,
+  limit = 4,
+): Promise<Product[]> {
+  const [sameCategory, everything] = await Promise.all([
+    listProducts({ category: product.category, excludeId: product.id, limit: 100 }),
+    listProducts({ excludeId: product.id, limit: 100 }),
+  ]);
+
+  const picked: Product[] = [];
+  const seen = new Set<string>([product.id]);
+
+  const take = (candidates: readonly Product[]) => {
+    for (const candidate of candidates) {
+      if (picked.length >= limit) return;
+      if (seen.has(candidate.id)) continue;
+      picked.push(candidate);
+      seen.add(candidate.id);
+    }
+  };
+
+  take(sameCategory.products);
+  take(everything.products.filter((candidate) => candidate.gender === product.gender));
+  take(everything.products);
+
+  return picked.slice(0, limit);
+}
+
+/** One review row as the product page renders it. */
+interface ReviewRow {
+  id: string;
+  rating: number;
+  comment: string;
+  createdAt: Date | string;
+  user?: { name: string | null; email: string } | null;
+}
+
+function authorOf(row: ReviewRow): string {
+  const name = row.user?.name?.trim();
+  if (name) return name;
+  const email = row.user?.email ?? "";
+  return email ? email.split("@")[0]! : "Verified buyer";
+}
+
+/**
+ * Real reviews for one product, newest first.
+ *
+ * The `Review` table is the only source; an empty table means the product page
+ * shows its "no reviews yet" state.
+ */
+export async function listProductReviews(productId: string): Promise<Review[]> {
+  return requireDatabase(async (db) => {
+    const rows = (await db.review.findMany({
+      where: { productId },
+      include: { user: { select: { name: true, email: true } } },
+      orderBy: [{ createdAt: "desc" }],
+      take: 20,
+    })) as ReviewRow[];
+
+    return rows.map((row) => {
+      const created =
+        typeof row.createdAt === "string" ? row.createdAt : row.createdAt.toISOString();
+
+      return {
+        id: row.id,
+        author: authorOf(row),
+        location: "",
+        rating: row.rating,
+        title: "",
+        body: row.comment,
+        date: new Date(created).toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        }),
+        verified: true,
+      };
+    });
+  });
 }
