@@ -7,8 +7,9 @@ import { AlertTriangle, CheckCircle2, Info, Loader2, XCircle } from "lucide-reac
  * Global toast surface, mounted once in the root layout.
  *
  * Usage: `toast.success("Added to bag! 🛍️")` / `toast.error(...)` /
- * `toast.info(...)`. The cart store raises the bag toasts, so every add/remove
- * entry point (card, quick view, product page) is covered without extra wiring.
+ * `toast.info(...)`.
+ * - Default auto-dismiss timing is 5000ms (5 seconds) for success/info toasts.
+ * - Error toasts raised via `authToast` remain visible until dismissed or fixed.
  */
 export function AppToaster() {
   return (
@@ -16,7 +17,7 @@ export function AppToaster() {
       theme="dark"
       position="bottom-right"
       closeButton
-      duration={3200}
+      duration={5000}
       gap={10}
       offset={16}
       /* Every toast carries an icon; the type classes below colour them. */
@@ -38,11 +39,11 @@ export function AppToaster() {
           cancelButton: "!rounded-full !bg-white/10 !text-xs",
           closeButton:
             "!rounded-full !border-glass-border !bg-[#101010] !text-muted-foreground",
-          // Type colours: success green, error red, info blue, warning amber.
-          success: "!text-emerald-400",
-          error: "!text-rose",
-          info: "!text-sky-400",
-          warning: "!text-amber-400",
+          // Type colours: success green, error red, info blue, warning yellow/amber.
+          success: "!border-emerald-400/40 !text-emerald-400",
+          error: "!border-rose/50 !text-rose",
+          info: "!border-sky-400/40 !text-sky-400",
+          warning: "!border-amber-400/50 !text-amber-400",
         },
       }}
     />
