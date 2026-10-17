@@ -111,7 +111,7 @@ test("SSR hydrates without warnings; Strict Mode deduplicates script, expiry/res
     assert.equal(widget.appearance, "always");
     assert.equal(widget.action, "login");
     assert.equal(widget.theme, "dark");
-    assert.equal(widget.size, "compact");
+    assert.equal(widget.size, "flexible");
     await act(async () => widget.callback("token-one"));
     assert.equal(element.querySelector("button")?.disabled, false);
     await act(async () => widget["expired-callback"]());

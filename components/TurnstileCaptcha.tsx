@@ -67,8 +67,8 @@ export function TurnstileCaptcha({ onVerify, onError, theme = "dark", action = "
 
   const options = useMemo(() => ({
     theme, action, appearance: "always" as const,
-    // Compact stays visible even in narrow mobile forms; no resize-driven widget resets.
-    size: "compact" as const,
+    // Flexible uses the available width and a low-profile challenge footprint.
+    size: "flexible" as const,
     responseField: false, refreshExpired: "auto" as const, refreshTimeout: "auto" as const,
   }), [theme, action]);
   const scriptOptions = useMemo(() => ({ onError: unavailable }), [unavailable]);
@@ -77,7 +77,7 @@ export function TurnstileCaptcha({ onVerify, onError, theme = "dark", action = "
   return (
     <div className="min-w-0 rounded-2xl border border-primary/25 bg-[#141210] p-3">
       <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">Security check</p>
-      <div className="flex min-h-[140px] w-full items-center justify-center" data-turnstile-action={action}>
+      <div className="flex min-h-[74px] w-full items-center justify-center [&_iframe]:border-0" data-turnstile-action={action}>
         {siteKey ? (
           <Turnstile id={`mukra-turnstile-${id.replace(/:/g, "")}`} siteKey={siteKey}
             options={options} scriptOptions={scriptOptions} rerenderOnCallbackChange={false}

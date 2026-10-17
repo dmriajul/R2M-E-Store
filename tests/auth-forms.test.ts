@@ -139,7 +139,7 @@ test("registration captcha: visible directly above submit; unsolved attempts gui
     await solve();
     assert.equal(submit.disabled, false);
     assert.equal(guidance().getAttribute("role"), "status");
-    assert.match(guidance().textContent ?? "", /Captcha verified/);
+    assert.equal(guidance().textContent, "", "The widget's success state makes duplicate green confirmation copy unnecessary");
     await act(async () => [...widgets.values()].at(-1)!["expired-callback"]());
     assert.equal(submit.disabled, true);
     assert.match(guidance().textContent ?? "", /Captcha verification is required/);
