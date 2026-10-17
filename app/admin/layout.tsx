@@ -32,7 +32,7 @@ export const dynamic = "force-dynamic";
  * second layer (and the source of the session the UI renders).
  *
  * The three collections the console mutates are loaded here too — from Postgres
- * when `DATABASE_URL` is set, or `null` in demo mode, in which case the client
+ * when `DATABASE_URL` is set, or `null` when unconfigured, in which case the client
  * store keeps its in-session dataset. Load failures also resolve to `null`
  * (logged, not thrown) so a schema problem can't white-screen the console.
  */

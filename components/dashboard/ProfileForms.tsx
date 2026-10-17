@@ -362,8 +362,8 @@ export function DangerZone() {
         confirmLabel="Delete Forever"
         destructive
         onConfirm={() =>
-          toast.info("Account deletion is disabled in this demo 🔒", {
-            description: "Nothing was removed — connect a backend to enable it.",
+          toast.info("Please contact support to delete your account 🔒", {
+            description: "Email hello@mukra.com and our team will assist you.",
           })
         }
       />

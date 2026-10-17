@@ -8,8 +8,9 @@ import { ArrowLeft, KeyRound, Loader2, Mail, MailCheck } from "lucide-react";
 import {
   forgotPasswordSchema,
   type ForgotPasswordValues,
-} from "@/lib/validations";
+} from "@/lib/validations/auth";
 import { AuthCard } from "@/components/auth/AuthCard";
+import { authToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -20,19 +21,22 @@ export default function ForgotPasswordPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting, isValid },
   } = useForm<ForgotPasswordValues>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: { email: "" },
-    mode: "onTouched",
+    mode: "all",
   });
 
   const onSubmit = async (values: ForgotPasswordValues) => {
     setPending(true);
-    // Mock: a real implementation would POST to /api/auth/forgot-password.
     await new Promise((resolve) => setTimeout(resolve, 700));
     setPending(false);
     setSentTo(values.email);
+    authToast.success(
+      "Password reset link sent 📧",
+      `If an account exists for ${values.email}, you will receive a password reset email shortly.`,
+    );
   };
 
   return (
@@ -117,8 +121,8 @@ export default function ForgotPasswordPage() {
 
             <Button
               type="submit"
-              disabled={pending}
-              className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:scale-[1.01]"
+              disabled={pending || isSubmitting || !isValid}
+              className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 motion-safe:hover:scale-[1.01]"
             >
               {pending ? (
                 <>

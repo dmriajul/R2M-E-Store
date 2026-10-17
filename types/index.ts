@@ -533,6 +533,10 @@ export interface AdminSettings {
 export interface ApiResponse<TData> {
   data: TData | null;
   error: string | null;
+  /** Machine-readable error code (mapped to user-friendly messages on the client). */
+  code?: string | null;
+  /** Field associated with a validation error, if applicable. */
+  field?: string;
   success: boolean;
   /** Which backend answered: the database, or the demo/mock layer. */
   source?: "database" | "mock";
@@ -604,6 +608,8 @@ export interface AuthUser {
   phone?: string;
   role: AuthRole;
   avatar?: string;
+  emailVerified?: boolean;
+  locked?: boolean;
 }
 
 /** The signed-in operator as the console consumes it (role already normalised). */

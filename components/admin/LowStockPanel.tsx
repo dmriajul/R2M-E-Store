@@ -24,7 +24,7 @@ export function LowStockPanel({ className }: { className?: string }) {
   /* Urgent first: empty shelves, then the thinnest stock. */
   const alerts = [...outOfStock, ...low];
 
-  /** Server Action first; the local store mirrors the result in demo mode. */
+  /** Server Action first; the local store mirrors the result when unconfigured. */
   const handleRestock = async (id: string, name: string) => {
     const result = await restockProductAction(id, RESTOCK_UNITS);
 

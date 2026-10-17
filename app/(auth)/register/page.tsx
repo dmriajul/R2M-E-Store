@@ -1,19 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Mail, Phone, Sparkles, User } from "lucide-react";
-import { toast } from "sonner";
-import { registerSchema, type RegisterValues } from "@/lib/validations";
-import { DEMO_PASSWORD } from "@/lib/demo-mode";
+import {
+  AUTH_ERROR_CODES,
+  getRegisterErrorMessage,
+  registerSchema,
+  type AuthErrorCopy,
+  type RegisterValues,
+} from "@/lib/validations/auth";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { PasswordStrength } from "@/components/auth/PasswordStrength";
 import { SocialButtons } from "@/components/auth/SocialButtons";
+import { Toast, authToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -24,12 +29,15 @@ const FIELD_CLASS =
 export default function RegisterPage() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [serverError, setServerError] = useState<AuthErrorCopy | null>(null);
+  const activeToastId = useRef<string | number | undefined>(undefined);
 
   const {
     register,
     handleSubmit,
     watch,
-    formState: { errors },
+    trigger,
+    formState: { errors, isSubmitting, isValid, touchedFields },
   } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -40,16 +48,46 @@ export default function RegisterPage() {
       confirmPassword: "",
       acceptedTerms: false,
     },
-    mode: "onTouched",
+    mode: "all",
   });
 
   const password = watch("password");
+  const confirmPassword = watch("confirmPassword");
+
+  // Re-validate confirmPassword whenever password changes so mismatch updates immediately.
+  useEffect(() => {
+    if (confirmPassword || touchedFields.confirmPassword) {
+      void trigger("confirmPassword");
+    }
+  }, [password, confirmPassword, touchedFields.confirmPassword, trigger]);
+
+  // Clear visible server errors as soon as the user starts fixing the inputs.
+  useEffect(() => {
+    const subscription = watch(() => {
+      setServerError((current) => {
+        if (current && activeToastId.current !== undefined) {
+          authToast.dismiss(activeToastId.current);
+          activeToastId.current = undefined;
+        }
+        return null;
+      });
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
+
+  const dismissServerError = () => {
+    setServerError(null);
+    if (activeToastId.current !== undefined) {
+      authToast.dismiss(activeToastId.current);
+      activeToastId.current = undefined;
+    }
+  };
 
   const onSubmit = async (values: RegisterValues) => {
     setPending(true);
+    dismissServerError();
 
     try {
-      /* 1 — create the account (Postgres via Prisma, or the demo user log). */
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -58,47 +96,75 @@ export default function RegisterPage() {
           email: values.email,
           phone: values.phone || undefined,
           password: values.password,
+          confirmPassword: values.confirmPassword,
         }),
       });
 
-      const payload = (await response.json()) as { data?: unknown; error?: string };
+      const payload = (await response.json()) as {
+        data?: unknown;
+        error?: string | null;
+        code?: string | null;
+        field?: string;
+      };
 
       if (!response.ok) {
         setPending(false);
-        toast.error("We couldn't create that account", {
-          description: payload.error ?? "Please try again in a moment.",
-        });
+        const copy = getRegisterErrorMessage(payload.code ?? payload.error);
+        setServerError(copy);
+        activeToastId.current =
+          copy.severity === "warning"
+            ? authToast.warning(copy.title, copy.message)
+            : authToast.error(copy.title, copy.message);
         return;
       }
 
-      /* 2 — sign the new shopper straight in. */
       const result = await signIn("credentials", {
         email: values.email,
         password: values.password,
         redirect: false,
       }).catch(() => null);
 
+      const firstName = values.fullName.trim().split(" ")[0] || "there";
+
       if (!result || result.error) {
         setPending(false);
-        toast.warning("Account created — please sign in", {
-          description: `Use your password on the sign-in page (demo tip: ${DEMO_PASSWORD}).`,
-        });
+        authToast.success(
+          "Account created! Verification email sent.",
+          "Your account is ready. Please sign in with your email and password.",
+        );
         router.push("/login");
         return;
       }
 
-      toast.success("Account created! 🎉", {
-        description: `Welcome to the family, ${values.fullName.split(" ")[0]}.`,
-      });
-      router.push("/shop");
+      authToast.success(
+        "Account created! Verification email sent.",
+        `Welcome to the family, ${firstName}. A verification email has been sent to ${values.email}.`,
+      );
+      router.push("/dashboard");
       router.refresh();
     } catch {
       setPending(false);
-      toast.error("Something went wrong", {
-        description: "We couldn't reach the account service — please try again.",
-      });
+      const copy = getRegisterErrorMessage(AUTH_ERROR_CODES.SERVER_ERROR);
+      setServerError(copy);
+      activeToastId.current = authToast.error(copy.title, copy.message);
     }
   };
+
+  const fullNameError =
+    errors.fullName?.message ??
+    (serverError?.field === "fullName" ? serverError.message : undefined);
+  const emailError =
+    errors.email?.message ??
+    (serverError?.field === "email" ? serverError.message : undefined);
+  const phoneError =
+    errors.phone?.message ??
+    (serverError?.field === "phone" ? serverError.message : undefined);
+  const passwordError =
+    errors.password?.message ??
+    (serverError?.field === "password" ? serverError.message : undefined);
+  const confirmPasswordError =
+    errors.confirmPassword?.message ??
+    (serverError?.field === "confirmPassword" ? serverError.message : undefined);
 
   return (
     <>
@@ -117,6 +183,15 @@ export default function RegisterPage() {
         </header>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
+          {serverError && (
+            <Toast
+              variant={serverError.severity}
+              title={serverError.title}
+              message={serverError.message}
+              onDismiss={dismissServerError}
+            />
+          )}
+
           {/* Full name */}
           <div className="flex flex-col gap-2">
             <label htmlFor="register-name" className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
@@ -126,17 +201,17 @@ export default function RegisterPage() {
               <User aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="register-name"
-                aria-describedby={errors.fullName ? "register-name-error" : undefined}
+                aria-describedby={fullNameError ? "register-name-error" : undefined}
                 autoComplete="name"
                 placeholder="Alex Parker"
-                aria-invalid={Boolean(errors.fullName)}
+                aria-invalid={Boolean(fullNameError)}
                 className={FIELD_CLASS}
                 {...register("fullName")}
               />
             </div>
-            {errors.fullName && (
+            {fullNameError && (
               <p id="register-name-error" role="alert" className="text-xs text-rose">
-                {errors.fullName.message}
+                {fullNameError}
               </p>
             )}
           </div>
@@ -150,18 +225,18 @@ export default function RegisterPage() {
               <Mail aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="register-email"
-                aria-describedby={errors.email ? "register-email-error" : undefined}
+                aria-describedby={emailError ? "register-email-error" : undefined}
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
-                aria-invalid={Boolean(errors.email)}
+                aria-invalid={Boolean(emailError)}
                 className={FIELD_CLASS}
                 {...register("email")}
               />
             </div>
-            {errors.email && (
+            {emailError && (
               <p id="register-email-error" role="alert" className="text-xs text-rose">
-                {errors.email.message}
+                {emailError}
               </p>
             )}
           </div>
@@ -175,18 +250,18 @@ export default function RegisterPage() {
               <Phone aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="register-phone"
-                aria-describedby={errors.phone ? "register-phone-error" : undefined}
+                aria-describedby={phoneError ? "register-phone-error" : undefined}
                 type="tel"
                 autoComplete="tel"
                 placeholder="+880 1700 000000"
-                aria-invalid={Boolean(errors.phone)}
+                aria-invalid={Boolean(phoneError)}
                 className={FIELD_CLASS}
                 {...register("phone")}
               />
             </div>
-            {errors.phone && (
+            {phoneError && (
               <p id="register-phone-error" role="alert" className="text-xs text-rose">
-                {errors.phone.message}
+                {phoneError}
               </p>
             )}
           </div>
@@ -198,16 +273,16 @@ export default function RegisterPage() {
             </label>
             <PasswordInput
               id="register-password"
-              aria-describedby={errors.password ? "register-password-error" : undefined}
+              aria-describedby={passwordError ? "register-password-error" : undefined}
               autoComplete="new-password"
               placeholder="••••••••"
-              invalid={Boolean(errors.password)}
+              invalid={Boolean(passwordError)}
               {...register("password")}
             />
             <PasswordStrength value={password ?? ""} className="mt-1" />
-            {errors.password && (
+            {passwordError && (
               <p id="register-password-error" role="alert" className="text-xs text-rose">
-                {errors.password.message}
+                {passwordError}
               </p>
             )}
           </div>
@@ -219,15 +294,15 @@ export default function RegisterPage() {
             </label>
             <PasswordInput
               id="register-confirm"
-              aria-describedby={errors.confirmPassword ? "register-confirm-error" : undefined}
+              aria-describedby={confirmPasswordError ? "register-confirm-error" : undefined}
               autoComplete="new-password"
               placeholder="••••••••"
-              invalid={Boolean(errors.confirmPassword)}
+              invalid={Boolean(confirmPasswordError)}
               {...register("confirmPassword")}
             />
-            {errors.confirmPassword && (
+            {confirmPasswordError && (
               <p id="register-confirm-error" role="alert" className="text-xs text-rose">
-                {errors.confirmPassword.message}
+                {confirmPasswordError}
               </p>
             )}
           </div>
@@ -242,11 +317,11 @@ export default function RegisterPage() {
               />
               <span>
                 I agree to the{" "}
-                <Link href="/#terms" className="text-primary underline-offset-4 hover:underline">
+                <Link href="/terms" className="text-primary underline-offset-4 hover:underline">
                   Terms
                 </Link>{" "}
                 &amp;{" "}
-                <Link href="/#privacy" className="text-primary underline-offset-4 hover:underline">
+                <Link href="/privacy" className="text-primary underline-offset-4 hover:underline">
                   Privacy Policy
                 </Link>
               </span>
@@ -260,8 +335,8 @@ export default function RegisterPage() {
 
           <Button
             type="submit"
-            disabled={pending}
-            className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:scale-[1.01]"
+            disabled={pending || isSubmitting || !isValid}
+            className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 motion-safe:hover:scale-[1.01]"
           >
             {pending ? (
               <>

@@ -122,7 +122,7 @@ export function CustomerDetailSheet({ customerId, onOpenChange }: CustomerDetail
                   </h3>
                   {history.length === 0 ? (
                     <p className="mt-3 text-[11px] text-muted-foreground">
-                      No orders in the demo dataset yet.
+                      No orders found for this customer yet.
                     </p>
                   ) : (
                     <ul className="mt-3 flex flex-col gap-2">
