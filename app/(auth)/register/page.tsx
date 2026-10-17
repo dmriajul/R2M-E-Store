@@ -291,7 +291,7 @@ export default function RegisterPage() {
               className={`text-xs leading-5 ${captchaAttempted && !captcha.token && !pending ? "text-rose" : captcha.token ? "text-emerald-400" : "text-amber-200"}`}
             >
               {pending ? "Creating your account…" : captcha.token
-                ? "Captcha verified. Complete all required fields to create your account."
+                ? ""
                 : captchaAttempted ? "Please complete the captcha verification."
                   : "Captcha verification is required. Complete the security check above to enable Create Account."}
             </p>
