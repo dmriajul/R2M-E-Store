@@ -148,7 +148,7 @@ test("local development login: no widget, no token, and the server's credential 
   try {
     view = await mount(LoginPage);
     assert.equal(view.element.querySelector('[data-turnstile-action="login"]'), null, "No CAPTCHA widget in development");
-    assert.match(view.element.textContent ?? "", /Security check bypassed in local development/);
+    assert.match(view.element.textContent ?? "", /Security check bypassed in development/);
 
     const submit = view.element.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     assert.equal(submit.disabled, true, "An empty form stays disabled");

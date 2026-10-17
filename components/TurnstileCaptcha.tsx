@@ -45,7 +45,6 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
   const uid = useId().replace(/:/g, "");
   const alive = useRef(false);
-  const watchdog = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const callbacks = useRef({ onVerify, onError });
   const [status, setStatus] = useState<CaptchaStatus>("loading");
 
@@ -55,22 +54,24 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
 
   const unavailable = useCallback(() => {
     if (!alive.current) return;
-    clearTimeout(watchdog.current);
     callbacks.current.onVerify("");
     callbacks.current.onError?.();
     setStatus("unavailable");
   }, []);
   const ready = useCallback(() => {
     if (!alive.current) return;
-    clearTimeout(watchdog.current);
     callbacks.current.onVerify("");
     setStatus("ready");
   }, []);
   const success = useCallback((token: string) => {
     if (!alive.current) return;
-    clearTimeout(watchdog.current);
     setStatus("verified");
     callbacks.current.onVerify(token);
+  }, []);
+  const retry = useCallback(() => {
+    if (!alive.current) return;
+    callbacks.current.onVerify("");
+    setStatus("loading");
   }, []);
   const expire = useCallback(() => {
     if (!alive.current) return;
@@ -92,12 +93,12 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
       }
     };
     document.addEventListener("error", scriptError, true);
+    // A slow CDN is not a failure. Only a real script/widget error can fail
+    // the challenge; the wrapper will render if its script arrives later.
     if (!siteKey) unavailable();
-    else watchdog.current = setTimeout(unavailable, 5_000);
     return () => {
       alive.current = false;
       document.removeEventListener("error", scriptError, true);
-      clearTimeout(watchdog.current);
     };
   }, [siteKey, unavailable]);
 
@@ -156,9 +157,9 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
                 rerenderOnCallbackChange={false}
                 onWidgetLoad={ready}
                 onSuccess={success}
-                onError={unavailable}
+                onError={retry}
                 onExpire={expire}
-                onTimeout={unavailable}
+                onTimeout={expire}
                 onUnsupported={unavailable}
                 className="flex w-full justify-center border-0 bg-transparent shadow-none [&_iframe]:max-w-full [&_iframe]:border-0 [&_iframe]:shadow-none"
                 style={{ minWidth: 0, maxWidth: "100%" }}
