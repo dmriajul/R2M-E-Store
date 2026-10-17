@@ -1,9 +1,16 @@
 # MUKRA — Turnstile diagnosis, implementation and verification
 
+## Production debug-UI removal (2026-10-17)
+
+- Removed the development-only red **“TURNSTILE DEBUG: Site Key = PRESENT/MISSING”** banner from `components/TurnstileCaptcha.tsx`, together with the development-only client console log of the public key and the development-only “set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` in `.env.local`” hint.
+- The production auth pages now render only the dark, gold-bordered Turnstile widget (or its neutral **“Security check unavailable. Please refresh.”** fallback) and the accessible status line.
+- Missing configuration is diagnosed server-side, once per process, by `warnOnTurnstileConfigurationGaps()` in `lib/turnstile.ts`, invoked from the auth layout. It logs variable **names** only, never values, tokens or hostnames. The widget stays absent and submit stays disabled.
+- `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is still read at build time as documented below; changing it requires a rebuild/redeploy.
+
 ## Registration visibility and guidance follow-up (2026-10-16)
 
 - Registration always renders a named captcha section immediately above **Create Account**, including the widget/fallback and inline guidance. The button references that guidance with `aria-describedby`.
-- Without `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, the visible security-check fallback remains. Development additionally explains setting the public key in `.env.local` and restarting the dev server. No automatic test key or captcha bypass is used.
+- Without `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, only the neutral visible security-check fallback remains; no environment-variable hint or debug banner is rendered. Missing configuration is logged server-side. No automatic test key or captcha bypass is used.
 - Unsolved captcha keeps submit disabled, with visible instructions explaining why. Enter attempts and actual form-submit attempts show **“Please complete the captcha verification.”** inline, including when other fields are invalid. No registration request is sent without a token.
 - Successful verification clears the attempted-submit error and shows a verified status; expiry disables submit and restores required guidance. Other validation and server-side siteverify enforcement are unchanged.
 - Checks: strict TypeScript and lint passed; **104 unit/DOM tests** passed, including placement, missing-key fallback, keyboard/submit attempts, no-request enforcement, solved state and expiry. Production build passed; **222 isolated production HTTP checks** passed. The build used a public dummy key. No live Cloudflare/browser-visual claim.

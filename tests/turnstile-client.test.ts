@@ -46,21 +46,39 @@ function latestWidget() {
   return widget;
 }
 
-test("debug banner reports key presence only in development, without exposing its value", () => {
+test("never renders debug banners, key values or internal configuration hints", async (context) => {
   const originalEnv = process.env;
+  const log = context.mock.method(console, "log", () => {});
   try {
     process.env = { ...originalEnv, NODE_ENV: "development", NEXT_PUBLIC_TURNSTILE_SITE_KEY: "debug-public-key-do-not-display" };
     const render = () => renderToString(createElement(TurnstileCaptcha, { action: "register", onVerify: () => {} }));
     const present = render();
-    assert.match(present, /TURNSTILE DEBUG: Site Key = (?:<!-- -->)?PRESENT/);
+    assert.ok(!present.includes("TURNSTILE DEBUG"));
+    assert.ok(!present.includes("Site Key"));
     assert.ok(!present.includes("debug-public-key-do-not-display"));
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-    assert.match(render(), /TURNSTILE DEBUG: Site Key = (?:<!-- -->)?MISSING/);
+    const missing = render();
+    assert.ok(!missing.includes("TURNSTILE DEBUG"));
+    assert.ok(!missing.includes("Site Key"));
+    assert.ok(!missing.includes("NEXT_PUBLIC_TURNSTILE_SITE_KEY"));
+    assert.ok(!missing.includes("Development setup"));
+    assert.match(missing, /Security check unavailable/);
     process.env = { ...process.env, NODE_ENV: "production", NEXT_PUBLIC_TURNSTILE_SITE_KEY: "debug-public-key-do-not-display" };
-    assert.ok(!render().includes("TURNSTILE DEBUG"));
+    const production = render();
+    assert.ok(!production.includes("TURNSTILE DEBUG"));
+    assert.ok(!production.includes("debug-public-key-do-not-display"));
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
     assert.ok(!render().includes("TURNSTILE DEBUG"));
+    // The client component stays silent; missing configuration is reported
+    // server-side only (see lib/turnstile.ts).
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "debug-public-key-do-not-display";
+    const { root, element } = mount();
+    await act(async () => root.render(createElement(TurnstileCaptcha, { action: "register", onVerify: () => {} })));
+    await act(async () => root.unmount());
+    element.remove();
+    assert.equal(log.mock.callCount(), 0);
   } finally {
+    log.mock.restore();
     process.env = originalEnv;
   }
 });
