@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MukraLogo } from "@/components/brand/MukraLogo";
+import { warnOnTurnstileConfigurationGaps } from "@/lib/turnstile";
 
 /**
  * Focused auth shell: no navbar, no footer. The backdrop is pure CSS — two
@@ -11,6 +12,10 @@ import { MukraLogo } from "@/components/brand/MukraLogo";
 export default function AuthLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Server-only, once-per-process diagnostic for deployment logs. Missing
+  // Turnstile configuration never renders internal state to the browser.
+  warnOnTurnstileConfigurationGaps();
+
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden">
       {/* ---------- Animated background ---------- */}

@@ -58,3 +58,29 @@ export async function verifyTurnstileToken(
 export function isTurnstileServerConfigured(): boolean {
   return Boolean(process.env.TURNSTILE_SECRET_KEY?.trim()) && allowedHostnames().size > 0;
 }
+
+let configurationWarningLogged = false;
+
+/**
+ * Server-only operational warning, emitted at most once per process.
+ *
+ * Nothing is rendered to the browser: when the public key is absent the widget
+ * shows its neutral "unavailable" fallback and every auth submit stays
+ * disabled. Only variable names are logged — never key values, tokens or hosts.
+ */
+export function warnOnTurnstileConfigurationGaps(): void {
+  if (configurationWarningLogged) return;
+  const publicKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+  const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
+  if (publicKey && secret && allowedHostnames().size > 0) return;
+  configurationWarningLogged = true;
+  const missing = [
+    !publicKey ? "NEXT_PUBLIC_TURNSTILE_SITE_KEY" : null,
+    !secret ? "TURNSTILE_SECRET_KEY" : null,
+    allowedHostnames().size === 0 ? "TURNSTILE_ALLOWED_HOSTNAMES" : null,
+  ].filter((name): name is string => Boolean(name));
+  console.warn(
+    `[turnstile] Security verification is not fully configured (missing: ${missing.join(", ")}). ` +
+      "Authentication submissions stay disabled until the Turnstile widget is available.",
+  );
+}

@@ -146,9 +146,9 @@ test("registration captcha: visible directly above submit; unsolved attempts gui
     assert.equal(requests, 0);
   } finally { globalThis.fetch = originalFetch; await view.unmount(); }
 });
-test("registration development missing site key: visible setup fallback, no fake verification, disabled submit", async (context) => {
+test("registration missing site key: neutral fallback, no internal configuration details, disabled submit", async (context) => {
   const env = process.env;
-  context.mock.method(console, "log", () => {});
+  const log = context.mock.method(console, "log", () => {});
   process.env = { ...env, NODE_ENV: "development" };
   delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   let view: Awaited<ReturnType<typeof mount>> | undefined;
@@ -158,10 +158,11 @@ test("registration development missing site key: visible setup fallback, no fake
     const area = submit.previousElementSibling!;
     assert.ok(area.querySelector('[data-turnstile-action="register"]'));
     assert.match(area.textContent ?? "", /Security check unavailable. Please refresh./);
-    assert.match(area.textContent ?? "", /Development setup: set NEXT_PUBLIC_TURNSTILE_SITE_KEY in .env.local/);
+    assert.doesNotMatch(view.element.textContent ?? "", /TURNSTILE DEBUG|Site Key|NEXT_PUBLIC_TURNSTILE_SITE_KEY|Development setup|\.env\.local/);
     assert.equal(submit.disabled, true);
     assert.equal(widgets.size, 0);
-  } finally { await view?.unmount(); process.env = env; }
+    assert.equal(log.mock.callCount(), 0);
+  } finally { await view?.unmount(); log.mock.restore(); process.env = env; }
 });
 
 function FeedbackHarness() {
