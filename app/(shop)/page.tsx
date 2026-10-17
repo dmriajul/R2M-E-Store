@@ -17,7 +17,7 @@ import { ShopByCategory } from "@/components/sections/ShopByCategory";
 import { NewArrivalsGrid } from "@/components/sections/NewArrivalsGrid";
 import { CampaignBanner } from "@/components/sections/CampaignBanner";
 import { FeaturedCarousel } from "@/components/sections/FeaturedCarousel";
-import { StatsSection } from "@/components/sections/StatsSection";
+import { FeaturesSection } from "@/components/sections/FeaturesSection";
 import { Reveal } from "@/components/sections/Reveal";
 import { WelcomeOverlay } from "@/components/ui/WelcomeOverlay";
 import type { Product } from "@/types";
@@ -43,14 +43,22 @@ export const dynamic = "force-dynamic";
  * globals.css keeps the sticky navbar from covering them on jump.
  *
  * Render order (top → bottom):
- *   1. <HeroSection />      — owns the viewport
+ *   1. <HeroSection />      — owns the viewport; always rendered (CSS entrance)
  *   2. <BrandMarquee />     — "Brand values" ticker
- *   3. <ShopByCategory />   — #collections carousel
+ *   3. <ShopByCategory />   — #collections carousel (static tiles + photos)
  *   4. <NewArrivalsGrid />  — #new-arrivals, 8 latest products (2/3/4-up grid)
  *   5. <CampaignBanner />   — full-bleed "The Winter Edit" campaign
  *   6. <FeaturedCarousel /> — #featured, Embla rail (manual only)
- *   7. <StatsSection />     — #stats, with final values server-rendered
+ *   7. <FeaturesSection />  — #features + #stats, the always-rendered trust band
  *   …then the single <NewsletterSection /> and <Footer /> from the shop layout.
+ *
+ * Empty-catalogue contract (0 products in the database):
+ *   • Hero, brand marquee, category tiles, campaign banner and the features
+ *     band ALWAYS render their full layout — none of them is data-driven.
+ *   • The two product surfaces (<NewArrivalsGrid />, <FeaturedCarousel />)
+ *     keep their headings and swap the grid/rail for a premium empty state.
+ *   • Only an *unreachable* database collapses those two sections in favour
+ *     of the <CatalogueUnavailable /> maintenance notice.
  *
  * Vertical rhythm: every section ships its own `py-24 lg:py-32` (the banner
  * puts the token on its inner content frame so it can stay edge-to-edge), so
@@ -117,7 +125,9 @@ export default async function HomePage() {
       {/* Welcome intro overlay — hidden, see FEATURES.welcomeOverlay. */}
       {FEATURES.welcomeOverlay ? <WelcomeOverlay /> : null}
 
-      <main className="w-full overflow-x-clip">
+      {/* The shop layout already owns <main id="main-content">; this is the
+          page's own clipping wrapper (overflow-x-clip contains the marquee). */}
+      <div className="w-full overflow-x-clip">
         <HeroSection settings={heroSettings} />
 
         {/* Virtual Boutique showcase — hidden, see FEATURES.virtualBoutique. */}
@@ -139,19 +149,23 @@ export default async function HomePage() {
             Its copy lines stagger internally. */}
         <CampaignBanner />
 
-        {/* Curated rail — Embla, manual navigation only. */}
-        <Reveal>
-          <FeaturedCarousel products={featured.products} />
-        </Reveal>
+        {/* Curated rail — Embla, manual navigation only. Skipped entirely
+            while the catalogue is unreachable (the maintenance notice below
+            owns that message); an empty-but-reachable catalogue gets the
+            rail's own premium empty state. */}
+        {!unavailable && (
+          <Reveal>
+            <FeaturedCarousel products={featured.products} />
+          </Reveal>
+        )}
 
         {/* Catalogue unreachable — an honest notice, never sample products. */}
         {unavailable && <CatalogueUnavailable />}
 
-        <Reveal>
-          <StatsSection />
-        </Reveal>
+        {/* Why-Mukra trust band + stats — always rendered, layout and all. */}
+        <FeaturesSection />
 
-      </main>
+      </div>
     </MotionConfig>
   );
 }

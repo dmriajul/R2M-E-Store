@@ -1,5 +1,6 @@
 import { listProducts } from "@/lib/data/products";
 import { ProductCard } from "@/components/product/ProductCard";
+import { CatalogueEmptyState } from "@/components/sections/CatalogueEmptyState";
 import { Reveal } from "@/components/sections/Reveal";
 import { SectionHeading } from "@/components/sections/SectionHeading";
 import type { Product } from "@/types";
@@ -28,19 +29,27 @@ const CARD_STAGGER_S = 0.07;
  * `priority` (preloaded, eager). The rest lazy-load.
  */
 export async function NewArrivalsGrid() {
-  const { products } = await listProducts({ sort: "newest", limit: 8 }).catch(
+  const { products, catalogueAvailable } = await listProducts({
+    sort: "newest",
+    limit: 8,
+  }).then(
+    (result) => ({ ...result, catalogueAvailable: true }),
     (error: unknown) => {
       // An unreachable catalogue collapses this section; the home page's
       // maintenance notice (if any) is owned by the page itself.
       if (error instanceof Error && error.name === "DatabaseUnavailableError") {
-        return { products: [] as Product[], source: "database" as const };
+        return {
+          products: [] as Product[],
+          source: "database" as const,
+          catalogueAvailable: false,
+        };
       }
       throw error;
     },
   );
 
-  /** Nothing to show — collapse the section instead of leaving a gap. */
-  if (products.length === 0) return null;
+  /** Outage — collapse; the page-level maintenance notice explains why. */
+  if (!catalogueAvailable) return null;
 
   return (
     <section
@@ -65,21 +74,27 @@ export async function NewArrivalsGrid() {
             Each card gets its own <Reveal /> with a 70ms step. The cards carry
             no animation of their own, so this is the only thing moving them —
             no double animation, and nothing plays off-screen. */}
-        <div className="mt-12 grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
-          {products.map((product, index) => (
-            <Reveal
-              key={product.id}
-              delay={index * CARD_STAGGER_S}
-              className="h-full"
-            >
-              <ProductCard
-                product={product}
-                priority={index < 4}
+        {products.length === 0 ? (
+          /* Reachable catalogue, nothing in it yet — keep the section's
+             layout and say so, instead of leaving a hole in the page. */
+          <CatalogueEmptyState />
+        ) : (
+          <div className="mt-12 grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
+            {products.map((product, index) => (
+              <Reveal
+                key={product.id}
+                delay={index * CARD_STAGGER_S}
                 className="h-full"
-              />
-            </Reveal>
-          ))}
-        </div>
+              >
+                <ProductCard
+                  product={product}
+                  priority={index < 4}
+                  className="h-full"
+                />
+              </Reveal>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
