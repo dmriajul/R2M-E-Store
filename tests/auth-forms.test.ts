@@ -75,6 +75,55 @@ test("login form: accessible inline validation and valid-form plus captcha gatin
     assert.doesNotMatch(view.element.textContent ?? "", /demo|admin@mukra/i);
   } finally { await view.unmount(); }
 });
+test("login sends one non-empty Turnstile token to Credentials and remounts after rejection", async (context) => {
+  const originalFetch = globalThis.fetch;
+  const errors = context.mock.method(toast, "error", () => "login-captcha-error");
+  const callbackBodies: URLSearchParams[] = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/auth/providers") {
+      return Response.json({ credentials: { id: "credentials", name: "Email and password", type: "credentials" } });
+    }
+    if (url === "/api/auth/csrf") return Response.json({ csrfToken: "isolated-csrf" });
+    if (url.startsWith("/api/auth/callback/credentials?")) {
+      callbackBodies.push(new URLSearchParams(String(init?.body)));
+      return Response.json({
+        url: "http://localhost/login?error=CredentialsSignin&code=security-verification-failed",
+      });
+    }
+    throw new Error(`Unexpected login request: ${url}`);
+  };
+
+  const view = await mount(LoginPage);
+  try {
+    await change(view.element, "#login-email", "customer@example.com");
+    await change(view.element, "#login-password", "legacy-password");
+    await solve();
+    const solvedGeneration = sequence;
+    const form = view.element.querySelector("form")!;
+
+    await act(async () => {
+      // Two same-tick events model a double click before React can repaint the
+      // disabled button. The solved challenge must still be consumed once.
+      form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+      form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.equal(callbackBodies.length, 1, "A single-use token must reach one Credentials request only");
+    assert.equal(callbackBodies[0]!.get("turnstileToken"), "isolated-token");
+    assert.equal(callbackBodies[0]!.get("email"), "customer@example.com");
+    assert.equal(callbackBodies[0]!.get("password"), "legacy-password");
+    assert.ok(sequence > solvedGeneration, "A rejected login must remount Turnstile for a fresh token");
+    assert.equal(view.element.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled, true);
+    assert.ok(view.element.textContent?.includes(AUTH_MESSAGES.SECURITY_CHECK_FAILED));
+  } finally {
+    globalThis.fetch = originalFetch;
+    errors.mock.restore();
+    await view.unmount();
+  }
+});
+
 test("registration form: five strength rules, mismatch, terms and captcha gating; server duplicate maps inline", async (context) => {
   const originalFetch = globalThis.fetch;
   const errors = context.mock.method(toast, "error", () => "auth-form-error");

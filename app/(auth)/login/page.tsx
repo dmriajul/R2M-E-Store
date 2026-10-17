@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
 import { useTurnstile } from "@/hooks/useTurnstile";
@@ -8,7 +8,7 @@ import { queueAuthSuccess } from "@/lib/auth-flash";
 import { loginErrorCode } from "@/lib/auth-messages";
 import { AuthFeedback } from "@/components/auth/AuthFeedback";
 import { useAuthFeedback } from "@/hooks/useAuthFeedback";
-import { signIn } from "next-auth/react";
+import { signIn, type SignInResponse } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Loader2, Mail, ShieldCheck } from "lucide-react";
@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator";
 export default function LoginPage() {
   const captcha = useTurnstile();
   const feedback = useAuthFeedback();
+  const submissionInFlight = useRef(false);
   const [pending, setPending] = useState(false);
   /* Set by `clearSessionCache()` — confirms the debug wipe actually ran. */
   const [cacheCleared, setCacheCleared] = useState(false);
@@ -56,10 +57,15 @@ export default function LoginPage() {
   });
 
   const onSubmit = async (values: LoginValues) => {
-    if (!captcha.token) { feedback.show("SECURITY_CHECK_FAILED"); return; }
+    // React state updates are asynchronous. Consume from the hook's ref so one
+    // solved challenge can enter exactly one Credentials request, even if the
+    // form receives two submit events before the disabled state paints.
+    if (submissionInFlight.current) return;
+    const turnstileToken = captcha.consumeToken();
+    if (!turnstileToken) { feedback.show("SECURITY_CHECK_FAILED"); return; }
+
+    submissionInFlight.current = true;
     feedback.clear();
-    const turnstileToken = captcha.token;
-    captcha.clearToken();
     setPending(true);
 
     /* Where to land after a successful sign-in (middleware adds ?callbackUrl=). */
@@ -68,16 +74,25 @@ export default function LoginPage() {
         "callbackUrl",
       ), window.location.origin);
 
-    const result = await signIn("credentials", {
-      email: values.email,
-      password: values.password,
-      turnstileToken,
-      redirect: false,
-    }).catch(() => null).finally(captcha.reset);
+    let result: SignInResponse | null = null;
+    try {
+      result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        turnstileToken,
+        redirect: false,
+      });
+    } catch {
+      result = null;
+    } finally {
+      submissionInFlight.current = false;
+      // Siteverify consumes tokens even when the password is wrong. Always
+      // remount after the request settles so the next attempt is fresh.
+      captcha.reset();
+    }
 
     if (!result || result.error || !result.ok) {
       setPending(false);
-
       feedback.show(loginErrorCode(result?.code));
       return;
     }
