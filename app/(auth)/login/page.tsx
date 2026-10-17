@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
+import { CaptchaBypassNotice } from "@/components/auth/CaptchaBypassNotice";
 import { useTurnstile } from "@/hooks/useTurnstile";
 import { queueAuthSuccess } from "@/lib/auth-flash";
 import { loginErrorCode } from "@/lib/auth-messages";
+import { isTurnstileBypassed } from "@/lib/turnstile-shared";
 import { AuthFeedback } from "@/components/auth/AuthFeedback";
 import { useAuthFeedback } from "@/hooks/useAuthFeedback";
 import { signIn, type SignInResponse } from "next-auth/react";
@@ -25,6 +27,8 @@ import { Separator } from "@/components/ui/separator";
 
 export default function LoginPage() {
   const captcha = useTurnstile();
+  /* `next dev` only — production and test builds keep the real challenge. */
+  const captchaBypassed = isTurnstileBypassed();
   const feedback = useAuthFeedback();
   const submissionInFlight = useRef(false);
   const [pending, setPending] = useState(false);
@@ -62,7 +66,7 @@ export default function LoginPage() {
     // form receives two submit events before the disabled state paints.
     if (submissionInFlight.current) return;
     const turnstileToken = captcha.consumeToken();
-    if (!turnstileToken) { feedback.show("SECURITY_CHECK_FAILED"); return; }
+    if (!turnstileToken && !captchaBypassed) { feedback.show("SECURITY_CHECK_FAILED"); return; }
 
     submissionInFlight.current = true;
     feedback.clear();
@@ -79,7 +83,8 @@ export default function LoginPage() {
       result = await signIn("credentials", {
         email: values.email,
         password: values.password,
-        turnstileToken,
+        /* Omit entirely in development: URLSearchParams would send "undefined". */
+        ...(turnstileToken ? { turnstileToken } : {}),
         redirect: false,
       });
     } catch {
@@ -210,11 +215,15 @@ export default function LoginPage() {
             Keep me signed in on this device
           </label>
 
-          <TurnstileCaptcha key={captcha.generation} action="login" onVerify={captcha.onVerify} onError={captcha.onError} />
+          {captchaBypassed ? (
+            <CaptchaBypassNotice />
+          ) : (
+            <TurnstileCaptcha key={captcha.generation} action="login" onVerify={captcha.onVerify} onError={captcha.onError} />
+          )}
 
           <Button
             type="submit"
-            disabled={pending || isSubmitting || !isValid || !captcha.token}
+            disabled={pending || isSubmitting || !isValid || (!captchaBypassed && !captcha.token)}
             aria-busy={pending || isSubmitting}
             className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:scale-[1.01]"
           >

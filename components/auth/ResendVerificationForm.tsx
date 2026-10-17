@@ -3,20 +3,23 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { resendVerificationEmail } from "@/app/(auth)/auth/actions";
 import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
+import { CaptchaBypassNotice } from "@/components/auth/CaptchaBypassNotice";
 import { useTurnstile } from "@/hooks/useTurnstile";
-import { TURNSTILE_ERROR } from "@/lib/turnstile-shared";
+import { isTurnstileBypassed, TURNSTILE_ERROR } from "@/lib/turnstile-shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function ResendVerificationForm() {
   const captcha = useTurnstile();
+  /* `next dev` only — production and test builds keep the real challenge. */
+  const captchaBypassed = isTurnstileBypassed();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!captcha.token) { setMessage(TURNSTILE_ERROR); return; }
-    const turnstileToken = captcha.token;
+    if (!captcha.token && !captchaBypassed) { setMessage(TURNSTILE_ERROR); return; }
+    const turnstileToken = captcha.token || undefined;
     captcha.clearToken();
     setMessage("");
     startTransition(async () => {
@@ -49,8 +52,12 @@ export function ResendVerificationForm() {
         placeholder="you@example.com"
         className="h-12 rounded-xl border-glass-border bg-[#1A1A1A]"
       />
-      <TurnstileCaptcha key={captcha.generation} action="resend_verification" onVerify={captcha.onVerify} onError={captcha.onError} />
-      <Button type="submit" disabled={pending || !captcha.token} className="h-12 rounded-full">
+      {captchaBypassed ? (
+        <CaptchaBypassNotice />
+      ) : (
+        <TurnstileCaptcha key={captcha.generation} action="resend_verification" onVerify={captcha.onVerify} onError={captcha.onError} />
+      )}
+      <Button type="submit" disabled={pending || (!captchaBypassed && !captcha.token)} className="h-12 rounded-full">
         {pending ? "Requesting link…" : "Resend Email"}
       </Button>
       <p className="text-xs leading-6 text-muted-foreground">

@@ -1,4 +1,4 @@
-import type { TurnstileAction } from "@/lib/turnstile-shared";
+import { isTurnstileBypassed, type TurnstileAction } from "@/lib/turnstile-shared";
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const TURNSTILE_ALWAYS_PASS_TEST_SECRET = "1x0000000000000000000000000000000AA";
@@ -117,11 +117,34 @@ function rejected(reason: TurnstileFailureReason, diagnostic?: SafeProviderDiagn
   return false;
 }
 
-/** Server-only call sites. Missing configuration, outages, bad data and replays fail closed. */
+let developmentBypassWarningLogged = false;
+function warnOnDevelopmentBypass(): void {
+  if (developmentBypassWarningLogged) return;
+  developmentBypassWarningLogged = true;
+  console.warn(
+    "[turnstile] LOCAL DEVELOPMENT: CAPTCHA verification is bypassed (NODE_ENV=development). " +
+      "Production builds always enforce Cloudflare Turnstile.",
+  );
+}
+
+/**
+ * Server-only call sites. Missing configuration, outages, bad data and replays
+ * fail closed.
+ *
+ * Local development is the one exception: `next dev` cannot be blocked on a
+ * CAPTCHA whose widget/keys/CDN may not be reachable. That bypass is neither
+ * buildable nor runtime-enableable in production (NODE_ENV is inlined by
+ * Next.js), and the caller still verifies credentials against the database.
+ */
 export async function verifyTurnstileToken(
   token: unknown,
   options: { action: TurnstileAction },
 ): Promise<boolean> {
+  if (isTurnstileBypassed()) {
+    warnOnDevelopmentBypass();
+    return true;
+  }
+
   if (typeof token !== "string") return rejected("invalid-token");
   const normalizedToken = token.trim();
   if (!normalizedToken || normalizedToken.length > 2048) return rejected("invalid-token");
@@ -182,6 +205,8 @@ export async function verifyTurnstileToken(
 
 /** Server-only configuration readiness; deliberately does not reveal any key/hostname. */
 export function isTurnstileServerConfigured(): boolean {
+  // Local development does not need provider configuration to sign in.
+  if (isTurnstileBypassed()) return true;
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
   return Boolean(secret) &&
     !(process.env.NODE_ENV === "production" && TURNSTILE_TEST_SECRETS.has(secret ?? "")) &&
@@ -198,7 +223,9 @@ let configurationWarningLogged = false;
  * disabled. Only variable names are logged — never key values, tokens or hosts.
  */
 export function warnOnTurnstileConfigurationGaps(): void {
-  if (configurationWarningLogged) return;
+  // Development submissions are not disabled, so the configuration warning
+  // would be misleading. The bypass warning above is the relevant diagnostic.
+  if (configurationWarningLogged || isTurnstileBypassed()) return;
   const publicKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
   if (publicKey && secret && isTurnstileServerConfigured()) return;

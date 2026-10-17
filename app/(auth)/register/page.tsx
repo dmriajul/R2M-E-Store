@@ -3,8 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
+import { CaptchaBypassNotice } from "@/components/auth/CaptchaBypassNotice";
 import { useTurnstile } from "@/hooks/useTurnstile";
 import { authErrorMessage, isAuthErrorCode, type AuthErrorCode } from "@/lib/auth-messages";
+import { isTurnstileBypassed } from "@/lib/turnstile-shared";
 import { AuthFeedback } from "@/components/auth/AuthFeedback";
 import { useAuthFeedback } from "@/hooks/useAuthFeedback";
 import { useForm } from "react-hook-form";
@@ -25,6 +27,8 @@ const FIELD_CLASS =
 
 export default function RegisterPage() {
   const captcha = useTurnstile();
+  /* `next dev` only — production and test builds keep the real challenge. */
+  const captchaBypassed = isTurnstileBypassed();
   const feedback = useAuthFeedback();
   const [pending, setPending] = useState(false);
   const [captchaAttempted, setCaptchaAttempted] = useState(false);
@@ -52,9 +56,9 @@ export default function RegisterPage() {
   const password = watch("password");
 
   const onSubmit = async (values: RegisterValues) => {
-    if (!captcha.token) { setCaptchaAttempted(true); return; }
+    if (!captcha.token && !captchaBypassed) { setCaptchaAttempted(true); return; }
     feedback.clear();
-    const turnstileToken = captcha.token;
+    const turnstileToken = captcha.token || undefined;
     captcha.clearToken();
     setPending(true);
 
@@ -125,12 +129,12 @@ export default function RegisterPage() {
           }
         }} onKeyDownCapture={(event) => {
           // A disabled submit button can suppress the browser's implicit Enter submission.
-          if (event.key === "Enter" && event.target instanceof HTMLInputElement && !captcha.token && !pending) {
+          if (event.key === "Enter" && event.target instanceof HTMLInputElement && !captcha.token && !captchaBypassed && !pending) {
             setCaptchaAttempted(true);
           }
         }} onSubmitCapture={() => {
           // Also guide keyboard/programmatic submissions when other fields are invalid.
-          if (!captcha.token && !pending) setCaptchaAttempted(true);
+          if (!captcha.token && !captchaBypassed && !pending) setCaptchaAttempted(true);
         }} onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
           <AuthFeedback message={feedback.message} warning={feedback.warning} onDismiss={feedback.clear} />
           {/* Full name */}
@@ -276,35 +280,41 @@ export default function RegisterPage() {
 
           {/* Keep the visible captcha area immediately above the submit button. */}
           <section aria-label="Captcha verification" className="flex flex-col gap-2">
-            <TurnstileCaptcha
-              key={captcha.generation}
-              action="register"
-              onVerify={(token) => {
-                captcha.onVerify(token);
-                if (token.trim()) setCaptchaAttempted(false);
-              }}
-              onError={captcha.onError}
-            />
+            {captchaBypassed ? (
+              <CaptchaBypassNotice />
+            ) : (
+              <TurnstileCaptcha
+                key={captcha.generation}
+                action="register"
+                onVerify={(token) => {
+                  captcha.onVerify(token);
+                  if (token.trim()) setCaptchaAttempted(false);
+                }}
+                onError={captcha.onError}
+              />
+            )}
             {/* The widget card carries the standing instruction; this line only
                 surfaces attempt feedback so the two never stack redundant copy. */}
             <p
               id="register-captcha-guidance"
-              role={captchaAttempted && !captcha.token && !pending ? "alert" : "status"}
-              className={`min-h-5 text-xs leading-5 ${captchaAttempted && !captcha.token && !pending ? "text-rose" : "text-muted-foreground"}`}
+              role={!captchaBypassed && captchaAttempted && !captcha.token && !pending ? "alert" : "status"}
+              className={`min-h-5 text-xs leading-5 ${!captchaBypassed && captchaAttempted && !captcha.token && !pending ? "text-rose" : "text-muted-foreground"}`}
             >
-              {pending
-                ? "Creating your account…"
-                : captcha.token
-                  ? ""
-                  : captchaAttempted
-                    ? "Please complete the captcha verification."
-                    : ""}
+              {captchaBypassed
+                ? ""
+                : pending
+                  ? "Creating your account…"
+                  : captcha.token
+                    ? ""
+                    : captchaAttempted
+                      ? "Please complete the captcha verification."
+                      : ""}
             </p>
           </section>
 
           <Button
             type="submit"
-            disabled={pending || isSubmitting || !isValid || !captcha.token}
+            disabled={pending || isSubmitting || !isValid || (!captchaBypassed && !captcha.token)}
             aria-busy={pending || isSubmitting}
             aria-describedby="register-captcha-guidance"
             className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:scale-[1.01]"
