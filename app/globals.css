@@ -588,8 +588,9 @@
 
   /* Scroll-reveal (see components/sections/Reveal.tsx).
      Elements render VISIBLE in the server HTML — the hidden state is only
-     armed by the client for items still below the fold, so the page can
-     never lose content to a failed hydration. */
+     armed by the client for items still below the fold, so the page can never
+     lose content to failed hydration, a deep link or a restored scroll
+     position. Once revealed, an element stays revealed. */
   .reveal-hidden {
     opacity: 0;
     transform: translateY(var(--reveal-y, 40px));
@@ -599,8 +600,8 @@
     opacity: 1;
     transform: translateY(0);
     transition:
-      opacity 0.8s var(--ease-luxe) var(--reveal-delay, 0s),
-      transform 0.8s var(--ease-luxe) var(--reveal-delay, 0s);
+      opacity 0.7s var(--ease-luxe) var(--reveal-delay, 0s),
+      transform 0.7s var(--ease-luxe) var(--reveal-delay, 0s);
   }
 
   @media (prefers-reduced-motion: reduce) {

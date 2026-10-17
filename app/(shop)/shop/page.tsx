@@ -4,10 +4,9 @@ import { filtersFromSearchParams } from "@/lib/shop";
 import { SITE } from "@/lib/site";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema } from "@/lib/seo";
-import { listProducts } from "@/lib/data/products";
+import { getCatalogue, isCatalogueOutage } from "@/lib/data/products";
 import { ShopHeader } from "@/components/shop/ShopHeader";
 import { CatalogueUnavailable } from "@/components/shop/CatalogueUnavailable";
-import type { Product } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -44,17 +43,18 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
   // Filters are resolved on the server so a shared link paints the right grid.
   const initialFilters = filtersFromSearchParams(params);
 
-  // The catalogue comes from the database only. When it cannot be reached the
-  // page renders its maintenance state — never a baked-in sample catalogue.
-  const { products, unavailable } = await listProducts().then(
-    (result) => ({ ...result, unavailable: false }),
-    (error: unknown) => {
-      if (error instanceof Error && error.name === "DatabaseUnavailableError") {
-        return { products: [] as Product[], source: "database" as const, unavailable: true };
-      }
-      throw error;
-    },
-  );
+  // Three distinct situations, three distinct surfaces:
+  //
+  //   ready / empty / unconfigured → the catalogue layout (header, filters,
+  //                                  grid) with either products or the premium
+  //                                  empty state inside it;
+  //   unavailable                  → maintenance notice — the *only* state
+  //                                  that is allowed to say "we'll be back".
+  //
+  // `getCatalogue` never throws for the two failure states, so a fresh deploy
+  // with no DATABASE_URL renders a beautiful storefront shell instead of the
+  // error boundary.
+  const { products, status } = await getCatalogue();
 
   return (
     <div className="relative">
@@ -75,10 +75,16 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
       {/* ---------- Page header ---------- */}
       <ShopHeader />
 
-      {unavailable ? (
+      {isCatalogueOutage(status) ? (
         <CatalogueUnavailable />
       ) : (
-        <ShopCatalog initialFilters={initialFilters} products={products} />
+        <ShopCatalog
+          initialFilters={initialFilters}
+          products={products}
+          catalogueStatus={
+            status === "unconfigured" ? "unconfigured" : products.length > 0 ? "ready" : "empty"
+          }
+        />
       )}
     </div>
   );

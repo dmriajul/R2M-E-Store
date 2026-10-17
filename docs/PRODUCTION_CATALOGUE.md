@@ -70,10 +70,16 @@ For bulk imports you have two options:
 
 | Situation | What shoppers see |
 | --- | --- |
-| 0 active products | `/shop` shows "The collection is being curated"; home sections collapse |
-| Database unreachable | "We'll be right back" maintenance page; `GET /api/products` answers **503** |
+| 0 active products | The premium empty state — "The collection is being curated" — inside the full `/shop` and `/collections` layouts, and in the home page's New Arrivals section |
+| `DATABASE_URL` not configured | The same premium empty state, worded as "opening soon" (a setup state, never an error) |
+| Database configured but unreachable | The "We'll be right back" maintenance notice; `GET /api/products` answers **503** |
+| Filters exclude everything | The filter empty state with a **Clear Filters** action |
 | Product slug unknown | The 404 page |
 | No reviews for a product | "No reviews yet" |
+
+The distinction matters: only a real outage shows maintenance copy. Empty and
+not-yet-connected catalogues both keep the storefront's layout and its premium
+voice, because a fresh store is not a broken one.
 
 Nothing ever serves demo products, so what you see is always what is in the
 database.

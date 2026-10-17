@@ -1,9 +1,8 @@
-import { listProducts } from "@/lib/data/products";
+import { getCatalogue } from "@/lib/data/products";
 import { ProductCard } from "@/components/product/ProductCard";
-import { CatalogueEmptyState } from "@/components/sections/CatalogueEmptyState";
+import { CatalogueEmptyState } from "@/components/shop/CatalogueEmptyState";
 import { Reveal } from "@/components/sections/Reveal";
 import { SectionHeading } from "@/components/sections/SectionHeading";
-import type { Product } from "@/types";
 
 /** Stagger between grid cards: ~70ms, per the animation rules. */
 const CARD_STAGGER_S = 0.07;
@@ -18,9 +17,15 @@ const CARD_STAGGER_S = 0.07;
  * does.
  *
  * Data: the 8 most recently added active products, via the `sort: "newest"`
- * option on `listProducts`. We deliberately sort by `createdAt` rather than
+ * option on `getCatalogue`. We deliberately sort by `createdAt` rather than
  * filtering on the `newArrival` flag, because the flag is opt-in per product
  * and is easy to leave unticked — a date sort always yields a full grid.
+ *
+ * States:
+ *  • rows      → the grid;
+ *  • empty     → the same section with a premium empty state (healthy state);
+ *  • unconfigured → the same, worded as "opening soon";
+ *  • unavailable → renders nothing; the page's maintenance notice takes over.
  *
  * Layout: 2-up on phones, 3-up on tablets, 4-up from `lg` (1024px). Cards are
  * stretched to equal height so titles and prices line up across each row.
@@ -29,33 +34,16 @@ const CARD_STAGGER_S = 0.07;
  * `priority` (preloaded, eager). The rest lazy-load.
  */
 export async function NewArrivalsGrid() {
-  const { products, catalogueAvailable } = await listProducts({
-    sort: "newest",
-    limit: 8,
-  }).then(
-    (result) => ({ ...result, catalogueAvailable: true }),
-    (error: unknown) => {
-      // An unreachable catalogue collapses this section; the home page's
-      // maintenance notice (if any) is owned by the page itself.
-      if (error instanceof Error && error.name === "DatabaseUnavailableError") {
-        return {
-          products: [] as Product[],
-          source: "database" as const,
-          catalogueAvailable: false,
-        };
-      }
-      throw error;
-    },
-  );
+  const { products, status } = await getCatalogue({ sort: "newest", limit: 8 });
 
   /** Outage — collapse; the page-level maintenance notice explains why. */
-  if (!catalogueAvailable) return null;
+  if (status === "unavailable") return null;
 
   return (
     <section
       id="new-arrivals"
       aria-labelledby="new-arrivals-title"
-      className="relative py-24 lg:py-32"
+      className="relative py-16 lg:py-20"
     >
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
@@ -77,9 +65,12 @@ export async function NewArrivalsGrid() {
         {products.length === 0 ? (
           /* Reachable catalogue, nothing in it yet — keep the section's
              layout and say so, instead of leaving a hole in the page. */
-          <CatalogueEmptyState />
+          <CatalogueEmptyState
+            className="mt-10"
+            mode={status === "unconfigured" ? "setup" : "empty"}
+          />
         ) : (
-          <div className="mt-12 grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-10 grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
             {products.map((product, index) => (
               <Reveal
                 key={product.id}

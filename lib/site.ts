@@ -30,7 +30,7 @@ export interface NavLink {
 export const NAV_LINKS: readonly NavLink[] = [
   { label: "Home", href: "/" },
   { label: "Shop", href: "/shop" },
-  { label: "Collections", href: "/#collections" },
+  { label: "Collections", href: "/collections" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ] as const;

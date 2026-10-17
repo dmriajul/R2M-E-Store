@@ -132,7 +132,7 @@ export function FeaturesSection() {
   const statsInView = useInView(statsRef, { once: true, amount: 0.35 });
 
   return (
-    <section id="features" aria-labelledby="features-title" className="relative py-24 lg:py-32">
+    <section id="features" aria-labelledby="features-title" className="relative py-16 lg:py-20">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
           <SectionHeading
@@ -144,7 +144,7 @@ export function FeaturesSection() {
         </Reveal>
 
         {/* ---------- Benefit cards ---------- */}
-        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((feature, index) => {
             const Icon = feature.icon;
             return (
@@ -195,7 +195,7 @@ export function FeaturesSection() {
 
         {/* Quiet closer — keeps the band from ending on raw numbers. */}
         <Reveal>
-          <p className="mt-10 text-center text-xs tracking-[0.22em] text-muted-foreground/80 uppercase">
+          <p className="mt-8 text-center text-xs tracking-[0.22em] text-muted-foreground/80 uppercase">
             <Link
               href="/about"
               className="transition-colors duration-300 hover:text-primary"

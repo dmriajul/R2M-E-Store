@@ -292,6 +292,78 @@ export function t(key: string, language?: Language): string {
       en: "Browse the Collection",
       bn: "সংগ্রহ দেখুন",
     },
+    "sections.clearFilters": {
+      en: "Clear Filters",
+      bn: "ফিল্টার মুছুন",
+    },
+    "sections.backToHome": {
+      en: "Back to Home",
+      bn: "হোমে ফিরুন",
+    },
+    "sections.catalogueEmptyEyebrow": {
+      en: "Curated in small numbers",
+      bn: "অল্প সংখ্যায় বাছাই করা",
+    },
+    "sections.catalogueEmptyTitle": {
+      en: "The collection is being curated",
+      bn: "সংগ্রহ প্রস্তুত করা হচ্ছে",
+    },
+    "sections.catalogueEmptyDescription": {
+      en: "Our next release is in its final stitch — new pieces are coming soon. Join the Inner Circle below and we will let you know the moment they land.",
+      bn: "আমাদের পরবর্তী সংগ্রহ শেষ পর্যায়ে — নতুন পোশাক শীঘ্রই আসছে। নিচে ইননার সার্কেলে যোগ দিন, নতুন সংগ্রহ এলেই প্রথম জানবেন।",
+    },
+    "sections.catalogueEmptyCta": {
+      en: "Notify Me",
+      bn: "আমাকে জানান",
+    },
+    "sections.catalogueEmptySecondaryCta": {
+      en: "Browse Categories",
+      bn: "ক্যাটাগরি দেখুন",
+    },
+    "sections.catalogueEmptyPerks": {
+      en: "Early access for members · Free nationwide shipping · 30-day easy returns",
+      bn: "সদস্যদের আগাম অ্যাক্সেস · সারা দেশে ফ্রি ডেলিভারি · ৩০ দিনের সহজ রিটার্ন",
+    },
+    "sections.filterEmptyEyebrow": {
+      en: "No matches",
+      bn: "কোনো মিল নেই",
+    },
+    "sections.filterEmptyTitle": {
+      en: "Nothing in this edit yet",
+      bn: "এই বাছাইয়ে এখনো কিছু নেই",
+    },
+    "sections.filterEmptyDescription": {
+      en: "No pieces match this combination right now. Clear the filters to see the full wardrobe.",
+      bn: "এই সমন্বয়ে এখন কোনো পোশাক নেই। সব পোশাক দেখতে ফিল্টারগুলো মুছে ফেলুন।",
+    },
+    "sections.databaseUnconfiguredEyebrow": {
+      en: "Opening soon",
+      bn: "শীঘ্রই চালু হচ্ছে",
+    },
+    "sections.databaseUnconfiguredTitle": {
+      en: "The catalogue is almost live",
+      bn: "ক্যাটালগ শীঘ্রই চালু হবে",
+    },
+    "sections.databaseUnconfiguredDescription": {
+      en: "Products will appear here as soon as the store is connected to its catalogue. Nothing was lost — the shop is simply being set up.",
+      bn: "স্টোরের ক্যাটালগ সংযুক্ত হওয়ামাত্র পণ্যগুলো এখানে দেখা যাবে। কিছুই হারায়নি — দোকানটি এখন সেটআপ করা হচ্ছে।",
+    },
+    "sections.databaseUnconfiguredCta": {
+      en: "Browse Categories",
+      bn: "ক্যাটাগরি দেখুন",
+    },
+    "sections.databaseUnavailableTitle": {
+      en: "We'll be right back",
+      bn: "আমরা শীঘ্রই ফিরছি",
+    },
+    "sections.databaseUnavailableDescription": {
+      en: "The shop is having a moment with its inventory system. Nothing was lost — please refresh in a little while and the collection will be right here.",
+      bn: "দোকানের ইনভেন্টরি সিস্টেমে সাময়িক সমস্যা হচ্ছে। কিছুই হারায়নি — একটু পরে রিফ্রেশ করুন, সংগ্রহ এখানেই থাকবে।",
+    },
+    "sections.databaseUnavailableCta": {
+      en: "Try Again",
+      bn: "আবার চেষ্টা করুন",
+    },
     "features.freeShipping": {
       en: "Free Nationwide Shipping",
       bn: "সারা দেশে ফ্রি ডেলিভারি",
@@ -532,6 +604,78 @@ export function getTranslations(key: string): Record<Language, string> {
     "sections.browseCollection": {
       en: "Browse the Collection",
       bn: "সংগ্রহ দেখুন",
+    },
+    "sections.clearFilters": {
+      en: "Clear Filters",
+      bn: "ফিল্টার মুছুন",
+    },
+    "sections.backToHome": {
+      en: "Back to Home",
+      bn: "হোমে ফিরুন",
+    },
+    "sections.catalogueEmptyEyebrow": {
+      en: "Curated in small numbers",
+      bn: "অল্প সংখ্যায় বাছাই করা",
+    },
+    "sections.catalogueEmptyTitle": {
+      en: "The collection is being curated",
+      bn: "সংগ্রহ প্রস্তুত করা হচ্ছে",
+    },
+    "sections.catalogueEmptyDescription": {
+      en: "Our next release is in its final stitch — new pieces are coming soon. Join the Inner Circle below and we will let you know the moment they land.",
+      bn: "আমাদের পরবর্তী সংগ্রহ শেষ পর্যায়ে — নতুন পোশাক শীঘ্রই আসছে। নিচে ইননার সার্কেলে যোগ দিন, নতুন সংগ্রহ এলেই প্রথম জানবেন।",
+    },
+    "sections.catalogueEmptyCta": {
+      en: "Notify Me",
+      bn: "আমাকে জানান",
+    },
+    "sections.catalogueEmptySecondaryCta": {
+      en: "Browse Categories",
+      bn: "ক্যাটাগরি দেখুন",
+    },
+    "sections.catalogueEmptyPerks": {
+      en: "Early access for members · Free nationwide shipping · 30-day easy returns",
+      bn: "সদস্যদের আগাম অ্যাক্সেস · সারা দেশে ফ্রি ডেলিভারি · ৩০ দিনের সহজ রিটার্ন",
+    },
+    "sections.filterEmptyEyebrow": {
+      en: "No matches",
+      bn: "কোনো মিল নেই",
+    },
+    "sections.filterEmptyTitle": {
+      en: "Nothing in this edit yet",
+      bn: "এই বাছাইয়ে এখনো কিছু নেই",
+    },
+    "sections.filterEmptyDescription": {
+      en: "No pieces match this combination right now. Clear the filters to see the full wardrobe.",
+      bn: "এই সমন্বয়ে এখন কোনো পোশাক নেই। সব পোশাক দেখতে ফিল্টারগুলো মুছে ফেলুন।",
+    },
+    "sections.databaseUnconfiguredEyebrow": {
+      en: "Opening soon",
+      bn: "শীঘ্রই চালু হচ্ছে",
+    },
+    "sections.databaseUnconfiguredTitle": {
+      en: "The catalogue is almost live",
+      bn: "ক্যাটালগ শীঘ্রই চালু হবে",
+    },
+    "sections.databaseUnconfiguredDescription": {
+      en: "Products will appear here as soon as the store is connected to its catalogue. Nothing was lost — the shop is simply being set up.",
+      bn: "স্টোরের ক্যাটালগ সংযুক্ত হওয়ামাত্র পণ্যগুলো এখানে দেখা যাবে। কিছুই হারায়নি — দোকানটি এখন সেটআপ করা হচ্ছে।",
+    },
+    "sections.databaseUnconfiguredCta": {
+      en: "Browse Categories",
+      bn: "ক্যাটাগরি দেখুন",
+    },
+    "sections.databaseUnavailableTitle": {
+      en: "We'll be right back",
+      bn: "আমরা শীঘ্রই ফিরছি",
+    },
+    "sections.databaseUnavailableDescription": {
+      en: "The shop is having a moment with its inventory system. Nothing was lost — please refresh in a little while and the collection will be right here.",
+      bn: "দোকানের ইনভেন্টরি সিস্টেমে সাময়িক সমস্যা হচ্ছে। কিছুই হারায়নি — একটু পরে রিফ্রেশ করুন, সংগ্রহ এখানেই থাকবে।",
+    },
+    "sections.databaseUnavailableCta": {
+      en: "Try Again",
+      bn: "আবার চেষ্টা করুন",
     },
     "features.freeShipping": {
       en: "Free Nationwide Shipping",
