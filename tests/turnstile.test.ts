@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { verifyTurnstileToken } from "../lib/turnstile";
+import { isTurnstileServerConfigured, verifyTurnstileToken } from "../lib/turnstile";
 
 const originalEnv = { ...process.env };
 const originalFetch = globalThis.fetch;
@@ -46,9 +46,9 @@ test("production requires trusted host configuration", async () => {
   reply({ success: true, action: "login", hostname: "shop.example.com" });
   assert.equal(await verifyTurnstileToken("token", { action: "login" }), true);
 });
-test("local development trusts loopback even with an explicit non-local allowlist", async () => {
+test("non-production verification trusts loopback even with an explicit non-local allowlist", async () => {
   delete process.env.TURNSTILE_ALLOWED_HOSTNAMES;
-  process.env = { ...process.env, NODE_ENV: "development" };
+  process.env = { ...process.env, NODE_ENV: "test" };
   reply({ success: true, action: "register", hostname: "localhost" });
   assert.equal(await verifyTurnstileToken("token", { action: "register" }), true);
 
@@ -56,6 +56,28 @@ test("local development trusts loopback even with an explicit non-local allowlis
   // implicit local hostname and rejected a valid local Cloudflare verdict.
   process.env.TURNSTILE_ALLOWED_HOSTNAMES = "shop.example.com";
   assert.equal(await verifyTurnstileToken("token", { action: "register" }), true);
+});
+
+test("local development bypasses Siteverify for missing or invalid tokens without contacting Cloudflare", async (context) => {
+  const warn = context.mock.method(console, "warn", () => {});
+  delete process.env.TURNSTILE_SECRET_KEY;
+  process.env = { ...process.env, NODE_ENV: "development" };
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return Response.json({ success: false }); };
+
+  // The bypass must come before token validation: an absent token is the exact
+  // case blocking local login when the widget cannot load.
+  for (const token of [undefined, null, 12, {}, "", "  ", "invalid-token"]) {
+    assert.equal(await verifyTurnstileToken(token, { action: "login" }), true);
+  }
+  assert.equal(calls, 0, "Development must never call Cloudflare Siteverify");
+  assert.equal(isTurnstileServerConfigured(), true);
+  assert.ok(warn.mock.calls.some((call) => String(call.arguments[0]).includes("LOCAL DEVELOPMENT")));
+
+  // Leaving development restores strict verification immediately.
+  process.env = { ...process.env, NODE_ENV: "test" };
+  assert.equal(await verifyTurnstileToken(undefined, { action: "login" }), false);
+  assert.equal(calls, 0, "A missing token still fails before fetching outside production");
 });
 
 test("localhost, 127.0.0.1 and URL-shaped local configuration compare as one loopback host", async () => {
@@ -68,10 +90,10 @@ test("localhost, 127.0.0.1 and URL-shaped local configuration compare as one loo
   assert.equal(await verifyTurnstileToken("token", { action: "login" }), true);
 });
 
-test("Cloudflare's official local test pair accepts widget tokens with static metadata only outside production", async () => {
+test("Cloudflare's official test pair accepts widget tokens with static metadata only outside production", async () => {
   process.env = {
     ...process.env,
-    NODE_ENV: "development",
+    NODE_ENV: "test",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
     TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
     TURNSTILE_ALLOWED_HOSTNAMES: "localhost",

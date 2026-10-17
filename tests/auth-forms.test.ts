@@ -124,6 +124,52 @@ test("login sends one non-empty Turnstile token to Credentials and remounts afte
   }
 });
 
+test("local development login: no widget, no token, and the server's credential error is the only feedback", async (context) => {
+  const env = process.env;
+  const originalFetch = globalThis.fetch;
+  const errors = context.mock.method(toast, "error", () => "login-dev-error");
+  const callbackBodies: URLSearchParams[] = [];
+  process.env = { ...env, NODE_ENV: "development" };
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/auth/providers") {
+      return Response.json({ credentials: { id: "credentials", name: "Email and password", type: "credentials" } });
+    }
+    if (url === "/api/auth/csrf") return Response.json({ csrfToken: "isolated-dev-csrf" });
+    if (url.startsWith("/api/auth/callback/credentials?")) {
+      callbackBodies.push(new URLSearchParams(String(init?.body)));
+      // The captcha bypass must expose the credential verdict, not a security error.
+      return Response.json({ url: "http://localhost/login?error=CredentialsSignin&code=invalid-credentials" });
+    }
+    throw new Error(`Unexpected login request: ${url}`);
+  };
+
+  let view: Awaited<ReturnType<typeof mount>> | undefined;
+  try {
+    view = await mount(LoginPage);
+    assert.equal(view.element.querySelector('[data-turnstile-action="login"]'), null, "No CAPTCHA widget in development");
+    assert.match(view.element.textContent ?? "", /Security check bypassed in local development/);
+
+    const submit = view.element.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    assert.equal(submit.disabled, true, "An empty form stays disabled");
+    await change(view.element, "#login-email", "super-admin@example.com");
+    await change(view.element, "#login-password", "CorrectLookingPassword1!");
+    assert.equal(submit.disabled, false, "Valid credentials enable submit without solving a CAPTCHA");
+
+    await act(async () => view!.element.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
+    assert.equal(callbackBodies.length, 1);
+    assert.equal(callbackBodies[0]!.get("email"), "super-admin@example.com");
+    assert.equal(callbackBodies[0]!.get("turnstileToken"), null, "No token is fabricated in development");
+    assert.ok(view.element.textContent?.includes(AUTH_MESSAGES.INVALID_CREDENTIALS));
+    assert.ok(!view.element.textContent?.includes(AUTH_MESSAGES.SECURITY_CHECK_FAILED));
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.env = env;
+    errors.mock.restore();
+    await view?.unmount();
+  }
+});
+
 test("registration form: five strength rules, mismatch, terms and captcha gating; server duplicate maps inline", async (context) => {
   const originalFetch = globalThis.fetch;
   const errors = context.mock.method(toast, "error", () => "auth-form-error");
@@ -200,7 +246,9 @@ test("registration captcha: visible directly above submit; unsolved attempts gui
 test("registration missing site key: neutral fallback, no internal configuration details, disabled submit", async (context) => {
   const env = process.env;
   const log = context.mock.method(console, "log", () => {});
-  process.env = { ...env, NODE_ENV: "development" };
+  // The development bypass is intentionally not active here: this test covers
+  // the non-development missing-key fallback.
+  process.env = { ...env, NODE_ENV: "test" };
   delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   let view: Awaited<ReturnType<typeof mount>> | undefined;
   try {

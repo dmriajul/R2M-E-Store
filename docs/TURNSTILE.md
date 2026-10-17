@@ -1,5 +1,14 @@
 # MUKRA — Turnstile diagnosis, implementation and verification
 
+## Local-development CAPTCHA bypass (2026-10-17)
+
+- **Scope:** `next dev` only. `isTurnstileBypassed()` in `lib/turnstile-shared.ts` returns true solely when `process.env.NODE_ENV === "development"`. Next.js inlines `NODE_ENV` into browser and server bundles, so `next build`/`next start` (production) always verify; the `npm test` runner and isolated HTTP contracts run outside development and are unchanged.
+- **Server:** `verifyTurnstileToken()` returns `true` before token validation when bypassed, so a missing/expired/invalid token cannot produce “Security verification failed” locally. It logs a one-time `[turnstile] LOCAL DEVELOPMENT` warning. `isTurnstileServerConfigured()` also reports ready, and the configuration-gap warning is suppressed, in development.
+- **Client:** Login, registration and verification-resend forms do not render the widget and do not require a token in development; they show a visible “Security check bypassed in local development” notice instead. No token is fabricated — the credential request simply omits `turnstileToken`.
+- **Credentials remain enforced:** the bypass covers CAPTCHA only. The email/password are still validated and checked against the database (bcrypt + lockout). Wrong email or password returns the generic **“Invalid email or password. Please try again.”**; correct staff/customer credentials proceed to the dashboard/session as usual.
+- **Production safety:** there is no environment variable that enables the bypass in a production build. The historical statement “No automatic test key or captcha bypass is used” now applies to production/non-development environments only. Never run `next dev` on a publicly reachable host; restart the dev server after pulling this change.
+- **Tests:** `tests/turnstile.test.ts` covers the dev bypass (missing tokens, no Siteverify call, immediate strictness outside development); `tests/dev-auth-bypass.test.ts` runs the real Auth.js Credentials handlers with the isolated database and proves a tokenless SUPER_ADMIN login plus `invalid-credentials` for a wrong password; `tests/auth-merge.test.ts` covers the login API with bypassed CAPTCHA and real credential failures; `tests/auth-forms.test.ts` covers the login UI (no widget/token, generic credential feedback). Full `npm test` suite passes.
+
 ## Production debug-UI removal (2026-10-17)
 
 - Removed the development-only red **“TURNSTILE DEBUG: Site Key = PRESENT/MISSING”** banner from `components/TurnstileCaptcha.tsx`, together with the development-only client console log of the public key and the development-only “set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` in `.env.local`” hint.
