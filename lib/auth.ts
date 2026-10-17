@@ -63,6 +63,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(raw, request) {
         if (!loginLimiter.check(clientIp(request.headers)).ok)
           throw new LoginError("too-many-attempts");
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(`[auth] Credentials CAPTCHA token received: ${typeof raw?.turnstileToken === "string" && raw.turnstileToken.trim().length > 0}.`);
+        }
         if (!await verifyTurnstileToken(raw?.turnstileToken, { action: "login" })) {
           throw new LoginError("security-verification-failed");
         }
