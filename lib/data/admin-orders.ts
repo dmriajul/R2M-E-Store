@@ -8,10 +8,12 @@
  * Deliberately **not** built on `withDatabase()`: that helper swallows failures
  * and serves mock data, which is right for the storefront but wrong for an
  * authenticated admin action. Here a write either commits or throws, and the
- * Server Action turns the throw into an error toast. Reads return `null` when no
+ * Server Action turns the throw into an error toast. Failed reads throw rather
+ * than retaining demo orders. Reads return `null` when no
  * database is configured so the console can keep its in-session demo list.
  */
 
+import { isDatabaseConfigured } from "@/lib/demo-mode";
 import { AdminDataError } from "@/lib/data/admin-errors";
 import { buildAdminTimeline } from "@/lib/mock-admin";
 import { getPrisma, type PrismaLikeClient } from "@/lib/prisma";
@@ -214,7 +216,10 @@ export function toAdminOrder(row: OrderRow): AdminOrder {
  */
 export async function getAdminOrders(): Promise<AdminOrder[] | null> {
   const db = await getPrisma();
-  if (!db) return null;
+  if (!db) {
+    if (isDatabaseConfigured()) throw new AdminDataError("Orders database is unavailable. Check the database connection and Prisma client.");
+    return null;
+  }
 
   try {
     const rows = (await db.order.findMany({
@@ -224,9 +229,8 @@ export async function getAdminOrders(): Promise<AdminOrder[] | null> {
 
     return rows.map(toAdminOrder);
   } catch (error) {
-    // Reads degrade to the in-session demo list; writes never do.
     console.error("[admin/orders] Could not load orders", error);
-    return null;
+    throw new AdminDataError("Could not load live orders. Check the database connection and retry.");
   }
 }
 

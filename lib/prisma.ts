@@ -87,10 +87,11 @@ export async function getPrisma(): Promise<PrismaLikeClient | null> {
   }
 }
 
-/** Typed helper: run `query`, fall back to `fallback` on any failure. */
+/** Optional read fallback. Durable writes must set `fallbackOnError: false`. */
 export async function withDatabase<T>(
   query: (db: PrismaLikeClient) => Promise<T>,
   fallback: () => T | Promise<T>,
+  options: { fallbackOnError?: boolean } = {},
 ): Promise<{ data: T; source: "database" | "mock" }> {
   const db = await getPrisma();
 
@@ -98,6 +99,7 @@ export async function withDatabase<T>(
     try {
       return { data: await query(db), source: "database" };
     } catch (error) {
+      if (options.fallbackOnError === false) throw error;
       if (process.env.NODE_ENV !== "production") {
         console.warn(
           "[prisma] query failed — serving mock data:",
@@ -107,6 +109,9 @@ export async function withDatabase<T>(
     }
   }
 
+  if (!db && isDatabaseConfigured() && options.fallbackOnError === false) {
+    throw new Error("Database client unavailable. Please try again later.");
+  }
   return { data: await fallback(), source: "mock" };
 }
 

@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest, after } from "next/server";
 import { auth } from "@/lib/auth";
 import { createOrder, listOrdersForEmail } from "@/lib/data/orders";
@@ -123,14 +124,21 @@ export async function POST(
     order = result.order;
     source = result.source;
   } catch (error) {
+    console.error("[orders] Could not persist checkout order", error);
     return NextResponse.json(
       {
         data: null,
-        error: error instanceof Error ? error.message : "Could not create order",
+        error: "Could not save your order. Please check availability and try again.",
         success: false,
       },
       { status: 500 },
     );
+  }
+
+  if (source === "database") {
+    revalidatePath("/admin/orders");
+    revalidatePath("/admin");
+    revalidatePath("/dashboard/orders");
   }
 
   // Fire-and-forget receipt email — must never delay or fail the 201 response.

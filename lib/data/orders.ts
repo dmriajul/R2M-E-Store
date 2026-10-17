@@ -7,6 +7,8 @@
  * identical, only the durability differs.
  */
 
+import { randomUUID } from "node:crypto";
+import { hash } from "bcryptjs";
 import { CATEGORY_META, getProductById } from "@/lib/site";
 import { computeTotals, lookupCoupon } from "@/lib/cart";
 import { validateCoupon } from "@/lib/data/coupons";
@@ -142,7 +144,15 @@ export async function createOrder(
         });
       }
 
+      // Guest orders need a real FK target. Never use the demo sentinel in
+      // Postgres or update an existing account's profile/password from checkout.
+      const guestPassword = user.id ? undefined : await hash(randomUUID(), 12);
       const created = await db.$transaction(async (tx) => {
+        const owner = user.id ? { id: user.id } : await tx.user.upsert({
+          where: { email: user.email.trim().toLowerCase() },
+          update: {},
+          create: { email: user.email.trim().toLowerCase(), name: user.name, password: guestPassword, role: "CUSTOMER" },
+        }) as { id: string };
         // Atomically decrement stock; fail the whole transaction if any line
         // cannot be satisfied (SELECT ... FOR UPDATE semantics via conditional
         // updateMany).
@@ -186,7 +196,7 @@ export async function createOrder(
         const row = (await tx.order.create({
           data: {
             orderNumber,
-            userId: user.id ?? "demo-guest",
+            userId: owner.id,
             subtotal: totals.subtotal,
             shipping: totals.shipping,
             discount: totals.discount,
@@ -227,8 +237,12 @@ export async function createOrder(
       memoryOrders.unshift(demo);
       return demo;
     },
+    { fallbackOnError: false },
   );
 
+  // Log only operational identifiers, never shipping/contact/payment details.
+  // eslint-disable-next-line no-console -- operational confirmation without customer data
+  console.info("[orders] created", { orderNumber: data.orderNumber, status: data.status, source });
   return { order: { ...data, source }, source };
 }
 

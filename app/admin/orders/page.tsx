@@ -14,10 +14,9 @@ import { cn, formatShortDate } from "@/lib/utils";
 import {
   ADMIN_ORDER_STATUS_LABEL,
   ADMIN_STATUSES,
-  ORDER_STATS,
   ordersToCsv,
 } from "@/lib/mock-admin";
-import { DEMO_NOW } from "@/lib/mock-dashboard";
+import { useAdminOrdersSync } from "@/hooks/useAdminOrdersSync";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { OrderStatusBadge } from "@/components/admin/StatusBadge";
 import { PaymentStatusBadge } from "@/components/admin/PaymentStatusBadge";
@@ -69,6 +68,7 @@ const DATE_RANGES: readonly { id: DateRange; label: { en: string; bn: string } }
 ];
 
 export default function AdminOrdersPage() {
+  const sync = useAdminOrdersSync();
   /* Live rows: the admin layout hydrates this list from Postgres, or keeps the
      in-session demo orders when no database is configured. */
   const orders = useAdminStore((state) => state.orders);
@@ -101,7 +101,6 @@ export default function AdminOrdersPage() {
       viewDetails: language === "bn" ? "বিস্তারিত দেখুন" : "View details",
       printInvoice: language === "bn" ? "ইনভয়েস প্রিন্ট করুন" : "Print invoice",
       noOrders: language === "bn" ? "এই ফিল্টারে কোনো অর্ডার নেই।" : "No orders match these filters.",
-      demoDate: language === "bn" ? "ডেমো \"আজ\", " : "demo 'today', ",
     };
     return translations[key] ?? key;
   };
@@ -111,7 +110,7 @@ export default function AdminOrdersPage() {
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const anchor = new Date(DEMO_NOW).getTime();
+    const anchor = Date.now();
 
     return orders.filter((order) => {
       const matchesTerm =
@@ -126,8 +125,8 @@ export default function AdminOrdersPage() {
       let matchesDate = true;
       const placed = new Date(order.placedAt).getTime();
 
-      if (range === "7") matchesDate = anchor - placed <= 7 * DAY;
-      else if (range === "30") matchesDate = anchor - placed <= 30 * DAY;
+      if (range === "7") matchesDate = placed <= anchor && anchor - placed <= 7 * DAY;
+      else if (range === "30") matchesDate = placed <= anchor && anchor - placed <= 30 * DAY;
       else if (range === "custom" && customFrom) {
         const from = new Date(`${customFrom}T00:00:00Z`).getTime();
         const to = customTo ? new Date(`${customTo}T23:59:59Z`).getTime() : Number.POSITIVE_INFINITY;
@@ -135,7 +134,7 @@ export default function AdminOrdersPage() {
       }
 
       return matchesTerm && matchesStatus && matchesDate;
-    });
+    }).sort((a, b) => Date.parse(b.placedAt) - Date.parse(a.placedAt));
   }, [orders, search, status, range, customFrom, customTo]);
 
   const stats = useMemo(
@@ -143,31 +142,31 @@ export default function AdminOrdersPage() {
       [
         {
           label: language === "bn" ? "মোট অর্ডার" : "Total Orders",
-          value: ORDER_STATS.total,
+          value: orders.length,
           accent: "text-foreground",
         },
         {
           label: language === "bn" ? "লম্বা" : "Pending",
-          value: ORDER_STATS.pending,
+          value: orders.filter((order) => order.status === "pending").length,
           accent: "text-amber-400",
         },
         {
           label: language === "bn" ? "পাঠানো হয়েছে" : "Shipped",
-          value: ORDER_STATS.shipped,
+          value: orders.filter((order) => order.status === "shipped").length,
           accent: "text-violet-400",
         },
         {
           label: language === "bn" ? "বিতরণ" : "Delivered",
-          value: ORDER_STATS.delivered,
+          value: orders.filter((order) => order.status === "delivered").length,
           accent: "text-emerald-400",
         },
         {
           label: language === "bn" ? "বাতিল" : "Cancelled",
-          value: ORDER_STATS.cancelled,
+          value: orders.filter((order) => order.status === "cancelled").length,
           accent: "text-rose-400",
         },
       ] as const,
-    [language],
+    [language, orders],
   );
 
   const handleExport = () => {
@@ -176,7 +175,7 @@ export default function AdminOrdersPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `mukra-orders-${DEMO_NOW.slice(0, 10)}.csv`;
+    link.download = `mukra-orders-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     toast.success(
@@ -453,6 +452,12 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <button type="button" onClick={() => void sync.refresh()} disabled={sync.refreshing} className={cn(adminButtonGhost, "min-h-10 disabled:opacity-50")}>
+          <RefreshCw aria-hidden className={cn("size-3.5", sync.refreshing && "animate-spin")} />Refresh orders
+        </button>
+        <span role="status">{sync.error ? `${sync.error} Displayed orders may be stale.` : sync.source === "demo" ? "Demo mode: no database configured. Checkout orders are not durable or synced to this demo list." : sync.lastUpdated ? `Live orders · refreshed ${new Date(sync.lastUpdated).toLocaleTimeString()} · auto-refresh every 2 seconds` : "Connecting to live orders…"}</span>
+      </div>
       {/* ---------- Stats ---------- */}
       <section aria-label={t("Order statistics")} className="grid gap-3 sm:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => (
@@ -582,14 +587,14 @@ export default function AdminOrdersPage() {
         rows={rows}
         columns={columns}
         rowKey={(order) => order.id}
-        initialSort={{ key: "number", direction: "desc" }}
+        initialSort={{ key: "date", direction: "desc" }}
         onRowClick={(order) => setActiveOrderId(order.id)}
         emptyMessage={t("noOrders")}
       />
 
       <p className="text-[11px] text-muted-foreground">
         {showingOf(rows.length, orders.length)}{" "}
-        {t("demoDate")}{formatShortDate(DEMO_NOW)}.
+        Dates use the actual order creation time.
       </p>
 
       <OrderDetailSheet

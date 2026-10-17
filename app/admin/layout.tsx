@@ -33,8 +33,9 @@ export const dynamic = "force-dynamic";
  *
  * The three collections the console mutates are loaded here too — from Postgres
  * when `DATABASE_URL` is set, or `null` in demo mode, in which case the client
- * store keeps its in-session dataset. Load failures also resolve to `null`
- * (logged, not thrown) so a schema problem can't white-screen the console.
+ * store keeps its in-session dataset. Order load failures clear demo rows;
+ * the Orders page reports sync failures and retries without hiding them behind
+ * demo records. Other collection failures retain their existing fallback.
  */
 export default async function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireAdminSection("dashboard");
@@ -44,7 +45,11 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
       console.error("[admin] Could not load products", error);
       return null;
     }),
-    getAdminOrders(),
+    getAdminOrders().catch((error: unknown) => {
+      console.error("[admin] Could not load orders", error);
+      // Never disguise a configured database failure as the demo order list.
+      return [];
+    }),
     getAdminCategories(),
   ]);
 

@@ -44,3 +44,7 @@ next-env.d.ts
 
 # Runtime uploads (Cloudinary is used when configured)
 /.uploads
+
+# Browser test artifacts
+/test-results/
+/playwright-report/

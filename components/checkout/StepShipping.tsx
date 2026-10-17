@@ -137,9 +137,7 @@ export function StepShipping() {
             if (address.address1) {
               setValue("address1", address.address1, { shouldDirty: true, shouldValidate: true });
             }
-            if (address.address2) {
-              setValue("address2", address.address2, { shouldDirty: true, shouldValidate: true });
-            }
+            setValue("address2", address.address2 ?? "", { shouldDirty: true, shouldValidate: true });
             const divisionMatch =
               BANGLADESH_DIVISIONS.find(
                 (option) =>
@@ -151,8 +149,11 @@ export function StepShipping() {
                   !!address.state &&
                   address.state.toLowerCase().includes(option.name.toLowerCase()),
               );
-            if (divisionMatch) {
-              setValue("state", divisionMatch.name, { shouldDirty: true, shouldValidate: true });
+            const matchedDivision = divisionMatch ?? BANGLADESH_DIVISIONS.find(
+              (option) => option.districts.some((district) => district.name === address.city),
+            );
+            if (matchedDivision) {
+              setValue("state", matchedDivision.name, { shouldDirty: true, shouldValidate: true });
               setValue("city", "", { shouldDirty: true, shouldValidate: true });
               setValue("postalCode", "", { shouldDirty: true, shouldValidate: true });
             }
