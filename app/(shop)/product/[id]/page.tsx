@@ -1,3 +1,4 @@
+import { FREE_SHIPPING_THRESHOLD } from "@/lib/cart";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -41,7 +42,7 @@ export async function generateMetadata({
   }
 
   const title = `${product.name} — Ages ${product.ageRange.replace("Y", "")} | Mukra`;
-  const description = `${product.name} for ages ${product.ageRange.replace("Y", "")}. ${product.tagline} ${product.material}. ${formatPrice(product.price, product.currency)} with free shipping over $50.`;
+  const description = `${product.name} for ages ${product.ageRange.replace("Y", "")}. ${product.tagline} ${product.material}. ${formatPrice(product.price, product.currency)} with free shipping over ${formatPrice(FREE_SHIPPING_THRESHOLD)}.`;
 
   return {
     title: { absolute: title },

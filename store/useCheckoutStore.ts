@@ -49,7 +49,7 @@ interface CheckoutState {
     items: readonly CartItem[],
     totals: CartTotals,
     /** Server response when `POST /api/orders` answered; demo values otherwise. */
-    meta?: { id?: string; orderNumber?: string; payment?: OrderPaymentSnapshot },
+    meta?: { id?: string; orderNumber?: string; estimatedDelivery?: string; payment?: OrderPaymentSnapshot },
   ) => PlacedOrder;
   reset: () => void;
 }
@@ -129,7 +129,7 @@ export const useCheckoutStore = create<CheckoutState>()((set, get) => ({
       payment: meta?.payment,
       email: contact?.email ?? "",
       placedAt: new Date().toISOString(),
-      estimatedDelivery: addBusinessDays(leadDays).toISOString(),
+      estimatedDelivery: meta?.estimatedDelivery ?? addBusinessDays(leadDays).toISOString(),
       items: [...items],
       totals: {
         subtotal: totals.subtotal,

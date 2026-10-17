@@ -43,7 +43,7 @@ export function InvoiceDocument({ order }: { order: DashboardOrder }) {
         <div className="text-right">
           <p className="font-semibold tracking-[0.16em] uppercase">Payment</p>
           <p className="mt-2">{order.payment.label}</p>
-          <p>{order.payment.status === "paid" ? "Paid" : "Refunded"}</p>
+          <p>{order.payment.status === "paid" ? "Paid" : order.payment.status === "refunded" ? "Refunded" : "Pending"}</p>
           <p className="mt-3 font-semibold tracking-[0.16em] uppercase">Carrier</p>
           <p className="mt-1">{order.shipping.carrier}</p>
           <p>{order.shipping.trackingNumber}</p>

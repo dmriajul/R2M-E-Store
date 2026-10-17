@@ -59,6 +59,20 @@ const nextConfig: NextConfig = {
         ],
       },
 
+      // Override the general policy for bearer-token URLs and verification pages.
+      {
+        source: "/api/auth/verify-email",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
+        source: "/auth/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "no-store, must-revalidate" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+
       /* ---------- Immutable build output ---------- */
       {
         source: "/_next/static/:path*",

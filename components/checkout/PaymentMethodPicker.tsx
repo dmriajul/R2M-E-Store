@@ -127,7 +127,7 @@ export function PaymentSecurityNote({ text }: { text?: string }) {
   return (
     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <Lock className="size-3.5 text-emerald-400" aria-hidden />
-      {text ?? "Encrypted end to end. This is a demo — no real money moves."}
+      {text ?? "Review your payment details before placing your order."}
     </p>
   );
 }

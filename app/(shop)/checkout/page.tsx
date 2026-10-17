@@ -1,10 +1,12 @@
+import { FREE_SHIPPING_THRESHOLD } from "@/lib/cart";
+import { formatPrice } from "@/lib/utils";
 import type { Metadata } from "next";
 import { CheckoutFlow } from "@/components/checkout/CheckoutFlow";
 
 export const metadata: Metadata = {
   title: { absolute: "Checkout | MUKRA" },
   description:
-    "Secure checkout for MUKRA kids fashion — card, bKash, Nagad or SSLCommerz. Free shipping over $50.",
+    `Secure checkout for MUKRA kids fashion — COD, bKash, Nagad or Rocket. Free shipping over ${formatPrice(FREE_SHIPPING_THRESHOLD)}.`,
   // Transactional screen: keep it out of search results.
   robots: { index: false, follow: false },
 };

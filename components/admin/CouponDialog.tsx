@@ -136,7 +136,7 @@ export function CouponDialog({
             {coupon ? `Edit ${coupon.code}` : "Create coupon"}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Discount codes are validated client-side in this demo — nothing is redeemed for real.
+            Review the discount rules before saving. Saving a code does not redeem it.
           </DialogDescription>
         </DialogHeader>
 

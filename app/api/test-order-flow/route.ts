@@ -69,17 +69,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   };
 
   try {
-    const { order } = await createOrder(input, {
+    const { order, source } = await createOrder(input, {
       id: session.user.id,
       name: session.user.name ?? "Test Staff",
       email: session.user.email ?? "staff@mukra.com",
     });
     report.orderCreated = true;
-    report.stockDeducted = true;
+    report.stockDeducted = source === "database";
 
     try {
-      after(() => {
-        void sendOrderConfirmationEmail(order).catch(() => {
+      after(async () => {
+        await sendOrderConfirmationEmail(order).catch(() => {
           // Swallowed.
         });
       });
@@ -93,7 +93,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ ...report, orderNumber: order.orderNumber });
   } catch (error) {
-    report.errors.push(error instanceof Error ? error.message : "Order creation failed");
+    void error;
+    report.errors.push("Order creation failed. Check storage configuration and available stock.");
     return NextResponse.json(report, { status: 500 });
   }
 }

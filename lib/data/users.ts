@@ -1,31 +1,16 @@
-/**
- * Users — database when configured, demo accounts otherwise.
- *
- * Passwords are hashed with bcrypt in the database path. In demo mode a set of
- * well-known accounts exists so **every console role can be tried without a
- * database**: the super admin (and the legacy `ADMIN` alias), one account per
- * manager role, and a shopper (`sarah@example.com`). All of them share the demo
- * password `password123`; any other email also works with it, mirroring the mock
- * auth the storefront shipped with — those sessions are always `CUSTOMER` unless
- * a demo account matches, so the extra accounts can't leak console access.
- */
+/** Durable accounts use Prisma User + bcrypt only. Demo directory below is UI-only development data, never a login source. */
 
+import type { NewVerificationTokenRecord } from "@/lib/verification-tokens";
 import { compare, hash } from "bcryptjs";
-import { withDatabase } from "@/lib/prisma";
-import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD, isDatabaseConfigured } from "@/lib/demo-mode";
+import { requireDatabase, DatabaseUnavailableError } from "@/lib/prisma";
+import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD } from "@/lib/demo-mode";
 import { isTrashExpired } from "@/lib/rbac";
-import type {
-  AdminRoleChange,
-  AdminUserAccount,
-  AuthRole,
-  AuthUser,
-  SessionRole,
-} from "@/types";
+import type { AdminRoleChange, AdminUserAccount, AuthRole, AuthUser, SessionRole } from "@/types";
 
 export const BCRYPT_ROUNDS = 10;
 
 export interface UserRecord extends AuthUser {
-  /** bcrypt hash in the database path, plain demo password otherwise. */
+  /** bcrypt hash for persisted accounts; UI-only demo directory is not authenticatable. */
   password: string;
 }
 
@@ -67,8 +52,10 @@ interface DemoTrashEntry {
  * exist once **per bundle** — a role change recorded by the action would be
  * invisible to the login route. One map per process keeps all three in step.
  */
-const demoRoleOverrides: Map<string, SessionRole> = (demoScope.__mukraDemoRoleOverrides ??=
-  new Map<string, SessionRole>());
+const demoRoleOverrides: Map<string, SessionRole> = (demoScope.__mukraDemoRoleOverrides ??= new Map<
+  string,
+  SessionRole
+>());
 
 /**
  * Trashed demo accounts and hard-deleted ones, keyed by normalised email and
@@ -174,74 +161,32 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   },
 ] as const;
 
-function demoUserFor(email: string, password: string): UserRecord | null {
-  const account = DEMO_ACCOUNTS.find((entry) => entry.email === normalise(email));
-
-  /*
-   * A trashed demo account is refused here *and* by `findUserByEmail`, so none
-   * of the sign-in paths (`verifyCredentialsDetailed`, the registration flow)
-   * can hand out a session for an account the console has parked in the trash.
-   */
-  if (account && password === account.password && isDemoAccountVisible(account.email)) {
-    return withDemoRole(account);
-  }
-
-  // Any other email works with the shared demo password.
-  if (!account && password === DEMO_PASSWORD) {
-    const local = normalise(email).split("@")[0] ?? "friend";
-    const name = local
-      .split(/[._-]/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
-
-    return {
-      id: `demo-${local}`,
-      name: name || "Demo Shopper",
-      email: normalise(email),
-      password,
-      role: "CUSTOMER",
-    };
-  }
-
-  return null;
-}
-
 /**
  * Looks a user up by email (no password check).
  *
  * **Trashed accounts are not found.** A row with `deletedAt` set (or a demo
  * account in the trash) is invisible here, which is what makes the soft delete
- * real: the account can't sign in, and its address is free for a new
- * registration — the console's trash then reports the clash if someone tries to
- * restore it.
+ * real: the account cannot sign in. Its email remains reserved by @unique
+ * until the account is permanently purged.
  */
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
   const address = normalise(email);
 
-  const { data } = await withDatabase<UserRecord | null>(
-    async (db) => {
-      const row = (await db.user.findUnique({ where: { email: address } })) as
-        | (AuthUser & { password: string; deletedAt?: Date | string | null })
-        | null;
-      if (!row || row.deletedAt) return null;
-
-      /* The trash column never leaves this module. */
-      const { deletedAt: _deletedAt, ...rest } = row;
-      void _deletedAt;
-      return rest;
-    },
-    () => {
-      const account = DEMO_ACCOUNTS.find((entry) => entry.email === address);
-      return account && isDemoAccountVisible(account.email) ? withDemoRole(account) : null;
-    },
-  );
-
-  return data;
+  return requireDatabase(async (db) => {
+    const row = (await db.user.findFirst({
+      where: { email: { equals: address, mode: "insensitive" }, deletedAt: null },
+      select: { id: true, name: true, email: true, phone: true, password: true,
+        role: true, avatar: true, emailVerified: true, deletedAt: true },
+    })) as (UserRecord & { deletedAt?: Date | string | null }) | null;
+    if (!row || row.deletedAt) return null;
+    const { deletedAt: _deletedAt, ...user } = row;
+    void _deletedAt;
+    return user;
+  });
 }
 
 /** Why a credentials check failed — surfaced to the login form as a code. */
-export type CredentialFailure = "unknown-email" | "wrong-password";
+export type CredentialFailure = "invalid-credentials";
 
 export interface CredentialResult {
   user: AuthUser | null;
@@ -260,27 +205,14 @@ export async function verifyCredentialsDetailed(
   password: string,
 ): Promise<CredentialResult> {
   const user = await findUserByEmail(email);
-
-  if (!user) {
-    // Demo mode: unknown emails still work with the shared demo password.
-    const demo = isDatabaseConfigured() ? null : demoUserFor(email, password);
-    return demo
-      ? { user: demo, failure: null }
-      : { user: null, failure: "unknown-email" };
-  }
-
-  if (user.password.startsWith("$2")) {
-    const matches = await compare(password, user.password).catch(() => false);
-    return matches
-      ? { user: stripPassword(user), failure: null }
-      : { user: null, failure: "wrong-password" };
-  }
-
-  if (password === user.password) return { user: stripPassword(user), failure: null };
-
-  // Database-configured install whose hash is missing — fall back to demo rules.
-  const demo = isDatabaseConfigured() ? null : demoUserFor(email, password);
-  return demo ? { user: demo, failure: null } : { user: null, failure: "wrong-password" };
+  // Always do one bcrypt comparison, including missing/trashed/invalid-hash rows.
+  // This reduces the obvious existence timing signal; DB/network latency is not constant-time.
+  const validHash = Boolean(user && /^\$2[aby]\$(?:0[4-9]|[12]\d|3[01])\$[./A-Za-z0-9]{53}$/.test(user.password));
+  const dummyHash = "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+  const matches = await compare(password, validHash && user ? user.password : dummyHash).catch(() => false);
+  return user && validHash && matches
+    ? { user: stripPassword(user), failure: null }
+    : { user: null, failure: "invalid-credentials" };
 }
 
 /** Boolean-only wrapper (kept for convenience and older call sites). */
@@ -296,39 +228,39 @@ export interface CreateUserInput {
   role?: AuthRole;
 }
 
-/** Registers a user, or returns a friendly error (duplicate email / demo rules). */
+/** Commits a durable account and its initial verification token atomically; never fabricates success. */
 export async function createUser(
   input: CreateUserInput,
-): Promise<{ user: AuthUser | null; error: string | null; source: "database" | "mock" }> {
+  verification?: NewVerificationTokenRecord,
+): Promise<{ user: AuthUser | null; error: string | null; source: "database" }> {
   const email = normalise(input.email);
-
-  const existing = await findUserByEmail(email);
-  if (existing) return { user: null, error: "That email is already registered", source: "mock" };
-
-  const passwordHash = await hash(input.password, BCRYPT_ROUNDS);
-
-  const { data, source } = await withDatabase<UserRecord>(
-    async (db) =>
-      (await db.user.create({
-        data: {
-          name: input.name,
-          email,
-          phone: input.phone ?? null,
-          password: passwordHash,
-          role: input.role ?? "CUSTOMER",
-        },
-      })) as UserRecord,
-    () => ({
-      id: `demo-${email.split("@")[0] ?? "user"}`,
-      name: input.name,
-      email,
-      phone: input.phone,
-      password: passwordHash,
-      role: input.role ?? "CUSTOMER",
-    }),
-  );
-
-  return { user: stripPassword(data), error: null, source };
+  try {
+    const user = await requireDatabase(async (db) => {
+      const passwordHash = await hash(input.password, BCRYPT_ROUNDS);
+      return db.$transaction(async (tx) => {
+        // Include trash: its unique email remains reserved. Normalize legacy mixed-case lookups too.
+        const existing = await tx.user.findFirst({
+          where: { email: { equals: email, mode: "insensitive" } }, select: { id: true },
+        });
+        if (existing) return null;
+        const created = (await tx.user.create({
+          data: { name: input.name, email, phone: input.phone ?? null,
+            password: passwordHash, role: input.role ?? "CUSTOMER" },
+        })) as UserRecord;
+        if (verification) {
+          await tx.verificationToken.upsert({ where: { identifier: email },
+            create: { ...verification, identifier: email }, update: { ...verification, identifier: email } });
+        }
+        return stripPassword(created);
+      });
+    });
+    return { user, error: user ? null : "EMAIL_ALREADY_EXISTS", source: "database" };
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+      return { user: null, error: "EMAIL_ALREADY_EXISTS", source: "database" };
+    }
+    throw error; // Storage, grants, schema and transaction failures become 503 at the API boundary.
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -380,6 +312,7 @@ function purgeExpiredDemoTrash(now: Date = new Date()): number {
  * column, so the same components drive both modes.
  */
 export function getDemoUserAccounts(): AdminUserAccount[] {
+  assertDevelopmentDirectory();
   purgeExpiredDemoTrash();
 
   return DEMO_ACCOUNTS.filter((account) => !demoPurged.has(account.email)).map(toDemoAccount);
@@ -390,6 +323,7 @@ export function getDemoUserAccounts(): AdminUserAccount[] {
  * sign-in agree. Returns the updated account, or `null` for an unknown id.
  */
 export function setDemoUserRole(id: string, role: SessionRole): AdminUserAccount | null {
+  assertDevelopmentDirectory();
   const account = DEMO_ACCOUNTS.find((entry) => entry.id === id);
   if (!account) return null;
 
@@ -422,6 +356,7 @@ export function recordDemoRoleChange(entry: {
   toRole: SessionRole;
   actorEmail: string;
 }): AdminRoleChange {
+  assertDevelopmentDirectory();
   demoRoleChangeSequence += 1;
 
   const row: AdminRoleChange = {
@@ -441,6 +376,7 @@ export function recordDemoRoleChange(entry: {
 
 /** One demo account's trail, newest first (empty when nothing was recorded). */
 export function getDemoRoleHistory(userId: string): AdminRoleChange[] {
+  assertDevelopmentDirectory();
   return demoRoleHistory.get(userId) ?? [];
 }
 
@@ -456,6 +392,7 @@ export function trashDemoUsers(
   deletedById: string,
   now: Date = new Date(),
 ): AdminUserAccount[] {
+  assertDevelopmentDirectory();
   const wanted = new Set(ids);
 
   for (const account of DEMO_ACCOUNTS) {
@@ -473,6 +410,7 @@ export function trashDemoUsers(
 
 /** Takes demo accounts back out of the trash. Returns the restored rows. */
 export function restoreDemoUsers(ids: readonly string[]): AdminUserAccount[] {
+  assertDevelopmentDirectory();
   const wanted = new Set(ids);
 
   for (const account of DEMO_ACCOUNTS) {
@@ -481,9 +419,7 @@ export function restoreDemoUsers(ids: readonly string[]): AdminUserAccount[] {
     demoPurged.delete(account.email);
   }
 
-  return getDemoUserAccounts().filter(
-    (account) => wanted.has(account.id) && !account.deletedAt,
-  );
+  return getDemoUserAccounts().filter((account) => wanted.has(account.id) && !account.deletedAt);
 }
 
 /**
@@ -491,6 +427,7 @@ export function restoreDemoUsers(ids: readonly string[]): AdminUserAccount[] {
  * sign in). Returns how many were removed; already-purged ids are not counted.
  */
 export function purgeDemoUsers(ids: readonly string[]): number {
+  assertDevelopmentDirectory();
   const wanted = new Set(ids);
   let removed = 0;
 
@@ -510,4 +447,18 @@ export function stripPassword(user: UserRecord): AuthUser {
   const { password: _password, ...rest } = user;
   void _password;
   return rest;
+}
+
+/** Server-derived session flag; Credentials enforces verification for new customer sessions. */
+export async function getUserEmailVerificationStatus(id: string): Promise<boolean> {
+  return requireDatabase(async (db) => {
+    const user = (await db.user.findUnique({ where: { id },
+      select: { emailVerified: true, deletedAt: true } })) as { emailVerified: Date | null; deletedAt: Date | null } | null;
+    return Boolean(user && !user.deletedAt && user.emailVerified);
+  });
+}
+
+/** Old demo staff directory remains development-only, never a production fallback. */
+function assertDevelopmentDirectory(): void {
+  if (process.env.NODE_ENV === "production") throw new DatabaseUnavailableError();
 }

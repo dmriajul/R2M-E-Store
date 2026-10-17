@@ -35,7 +35,7 @@ export default async function DashboardLayout({
   const { id, name, phone, role } = session.user;
   /* Auth.js types `email` as optional; a credentialed session always has one. */
   const email = session.user.email ?? "";
-  const isDemoIdentity = email.trim().toLowerCase() === DEMO_SHOPPER_EMAIL;
+  const isDemoIdentity = process.env.NODE_ENV !== "production" && email.trim().toLowerCase() === DEMO_SHOPPER_EMAIL;
 
   return (
     <DashboardSessionProvider

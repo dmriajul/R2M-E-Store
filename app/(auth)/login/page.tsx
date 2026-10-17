@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
+import { useTurnstile } from "@/hooks/useTurnstile";
+import { queueAuthSuccess } from "@/lib/auth-flash";
+import { loginErrorCode } from "@/lib/auth-messages";
+import { AuthFeedback } from "@/components/auth/AuthFeedback";
+import { useAuthFeedback } from "@/hooks/useAuthFeedback";
 import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,7 +15,7 @@ import { ArrowRight, Loader2, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { loginSchema, type LoginValues } from "@/lib/validations";
 import { clearIdentityCaches } from "@/lib/session-cache";
-import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD } from "@/lib/demo-mode";
+import { safeCallbackPath } from "@/lib/auth-redirect";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { SocialButtons } from "@/components/auth/SocialButtons";
@@ -18,24 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 
-/** Friendly copy for each failure code the credentials provider returns. */
-const ERROR_COPY: Readonly<Record<string, { title: string; description: string }>> = {
-  "unknown-email": {
-    title: "We couldn't find that account",
-    description: `No shopper uses that email yet. In demo mode try ${DEMO_ADMIN_EMAIL} — or register in a few seconds.`,
-  },
-  "wrong-password": {
-    title: "That password does not match",
-    description: `For this demo, use “${DEMO_PASSWORD}” — the same password unlocks the admin console accounts.`,
-  },
-  CredentialsSignin: {
-    title: "That password does not match",
-    description: `For this demo, use “${DEMO_PASSWORD}” — or sign in as an admin with ${DEMO_ADMIN_EMAIL}.`,
-  },
-};
-
 export default function LoginPage() {
-  const router = useRouter();
+  const captcha = useTurnstile();
+  const feedback = useAuthFeedback();
   const [pending, setPending] = useState(false);
   /* Set by `clearSessionCache()` — confirms the debug wipe actually ran. */
   const [cacheCleared, setCacheCleared] = useState(false);
@@ -49,40 +39,46 @@ export default function LoginPage() {
     }
   }, []);
 
+  const showFeedback = feedback.show;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("error")) showFeedback(loginErrorCode(params.get("code") ?? undefined));
+  }, [showFeedback]);
+
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isValid },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "", remember: true },
-    mode: "onTouched",
+    mode: "all",
   });
 
   const onSubmit = async (values: LoginValues) => {
+    if (!captcha.token) { feedback.show("SECURITY_CHECK_FAILED"); return; }
+    feedback.clear();
+    const turnstileToken = captcha.token;
+    captcha.clearToken();
     setPending(true);
 
     /* Where to land after a successful sign-in (middleware adds ?callbackUrl=). */
-    const callbackUrl =
+    const callbackUrl = safeCallbackPath(
       new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get(
         "callbackUrl",
-      ) ?? "/shop";
+      ), window.location.origin);
 
     const result = await signIn("credentials", {
       email: values.email,
       password: values.password,
+      turnstileToken,
       redirect: false,
-    }).catch(() => null);
+    }).catch(() => null).finally(captcha.reset);
 
-    if (!result || result.error) {
+    if (!result || result.error || !result.ok) {
       setPending(false);
 
-      const code = result?.code ?? result?.error ?? "CredentialsSignin";
-      const copy = ERROR_COPY[code] ?? ERROR_COPY.CredentialsSignin;
-
-      toast.error(copy?.title ?? "That password does not match", {
-        description: copy?.description,
-      });
+      feedback.show(loginErrorCode(result?.code));
       return;
     }
 
@@ -91,12 +87,9 @@ export default function LoginPage() {
        shopper never inherits an operator's session data. */
     clearIdentityCaches();
 
-    toast.success("Welcome back! 👋", {
-      description: `Signed in as ${values.email}`,
-    });
+    queueAuthSuccess("SIGNED_IN");
 
-    router.push(callbackUrl);
-    router.refresh();
+    window.location.assign(callbackUrl);
   };
 
   return (
@@ -128,7 +121,8 @@ export default function LoginPage() {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
+        <form onChangeCapture={feedback.clear} onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
+          <AuthFeedback message={feedback.message} warning={feedback.warning} onDismiss={feedback.clear} />
           {/* Email */}
           <div className="flex flex-col gap-2">
             <label
@@ -201,9 +195,12 @@ export default function LoginPage() {
             Keep me signed in on this device
           </label>
 
+          <TurnstileCaptcha key={captcha.generation} action="login" onVerify={captcha.onVerify} onError={captcha.onError} />
+
           <Button
             type="submit"
-            disabled={pending || isSubmitting}
+            disabled={pending || isSubmitting || !isValid || !captcha.token}
+            aria-busy={pending || isSubmitting}
             className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:scale-[1.01]"
           >
             {pending ? (
@@ -219,9 +216,6 @@ export default function LoginPage() {
             )}
           </Button>
 
-          <p className="text-center text-[11px] text-muted-foreground">
-            Demo tip: any email with <span className="text-primary">{DEMO_PASSWORD}</span>
-          </p>
         </form>
 
         {/* Divider */}

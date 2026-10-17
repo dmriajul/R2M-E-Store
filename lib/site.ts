@@ -32,7 +32,8 @@ export const NAV_LINKS: readonly NavLink[] = [
   { label: "Home", href: "/" },
   { label: "Shop", href: "/shop" },
   { label: "Collections", href: "/#collections" },
-  { label: "About", href: "/#about" },
+  { label: "About", href: "/about" },
+  { label: "Contact", href: "/contact" },
 ] as const;
 
 /** Outline text rolled in the home-page marquee. */
@@ -50,13 +51,14 @@ export const FOOTER_LINKS: Readonly<Record<string, readonly NavLink[]>> = {
     { label: "All Products", href: "/shop" },
     { label: "New Arrivals", href: "/shop?sort=newest" },
     { label: "Best Sellers", href: "/shop?sort=rating" },
-    { label: "Gift Cards", href: "/shop?category=accessories" },
+    { label: "Accessories", href: "/shop?category=accessories" },
   ],
   Support: [
-    { label: "Contact", href: "/#contact" },
-    { label: "Order Tracking", href: "/#tracking" },
+    { label: "Contact", href: "/contact" },
+    { label: "Order Tracking", href: "/dashboard/orders" },
     { label: "Shipping Info", href: "/shipping" },
     { label: "FAQ", href: "/faq" },
+    { label: "Size Guide", href: "/size-guide" },
   ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },

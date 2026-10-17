@@ -81,11 +81,11 @@ async function runPurge(request: Request): Promise<Response> {
   if (!isDatabaseConfigured()) {
     return NextResponse.json({
       ok: true,
-      source: "demo",
+      source: "unavailable",
       retentionDays: TRASH_RETENTION_DAYS,
       purged: 0,
       skipped: 0,
-      note: "No DATABASE_URL — nothing to purge (demo trash expires on read).",
+      note: "Account storage is not configured; no records were changed.",
       at: new Date().toISOString(),
     });
   }

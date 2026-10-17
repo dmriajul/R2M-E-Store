@@ -10,9 +10,20 @@
 import { CATEGORY_META, getProductById } from "@/lib/site";
 import { computeTotals, lookupCoupon } from "@/lib/cart";
 import { validateCoupon } from "@/lib/data/coupons";
-import { withDatabase } from "@/lib/prisma";
-import { generateOrderNumber, getPaymentMethod, initialOrderState, isManualPayment } from "@/lib/payments";
-import type { CartItem, CreateOrderInput, OrderRecord, PaymentKey, PaymentStatusKey } from "@/types";
+import { withDatabase, withRequiredDatabase } from "@/lib/prisma";
+import {
+  generateOrderNumber,
+  getPaymentMethod,
+  initialOrderState,
+  isManualPayment,
+} from "@/lib/payments";
+import type {
+  CartItem,
+  CreateOrderInput,
+  OrderRecord,
+  PaymentKey,
+  PaymentStatusKey,
+} from "@/types";
 
 /** Rounds money to cents, matching `lib/cart.ts`. */
 function round(value: number): number {
@@ -20,7 +31,12 @@ function round(value: number): number {
 }
 
 /** Demo-only order log (cleared on server restart). */
-const memoryOrders: OrderRecord[] = [];
+const orderScope = globalThis as typeof globalThis & {
+  __mukraDemoOrders?: OrderRecord[];
+  __mukraDemoOrderOwners?: Map<string, string>;
+};
+const memoryOrders = (orderScope.__mukraDemoOrders ??= []);
+const memoryOrderOwners = (orderScope.__mukraDemoOrderOwners ??= new Map<string, string>());
 
 function lineToCartItem(line: CreateOrderInput["items"][number], index: number): CartItem {
   const product = getProductById(line.productId);
@@ -78,11 +94,7 @@ export async function createOrder(
   const legacy = couponCode && !stored?.valid ? lookupCoupon(couponCode) : null;
 
   const discount = round(
-    stored?.valid
-      ? stored.discount
-      : legacy
-        ? (base.subtotal * legacy.percent) / 100
-        : 0,
+    stored?.valid ? stored.discount : legacy ? (base.subtotal * legacy.percent) / 100 : 0,
   );
   const freeShipping = stored?.valid && stored.coupon?.type === "free-shipping";
   const shipping = freeShipping ? 0 : base.shipping;
@@ -96,7 +108,9 @@ export async function createOrder(
 
   const { status, paymentStatus } = initialOrderState(method);
   const orderNumber = generateOrderNumber();
-  const estimated = new Date(Date.now() + (input.shipping.method === "express" ? 3 : 7) * 86_400_000);
+  const estimated = new Date(
+    Date.now() + (input.shipping.method === "express" ? 3 : 7) * 86_400_000,
+  );
 
   const record: OrderRecord = {
     id: orderNumber,
@@ -123,7 +137,7 @@ export async function createOrder(
     source: "mock",
   };
 
-  const { data, source } = await withDatabase<OrderRecord>(
+  const { data, source } = await withRequiredDatabase<OrderRecord>(
     async (db) => {
       // Aggregate requested quantities per product/variant so a single atomic
       // decrement is issued for each (prevents overselling on duplicate lines).
@@ -150,9 +164,16 @@ export async function createOrder(
           const product = (await tx.product.findUnique({
             where: { id: entry.productId },
             include: { variants: true },
-          })) as
-            | { id: string; name: string; variants: Array<{ id: string; color: string; size: string; stock: number }> }
-            | null;
+          })) as {
+            id: string;
+            name: string;
+            variants: Array<{
+              id: string;
+              color: string;
+              size: string;
+              stock: number;
+            }>;
+          } | null;
 
           if (!product) {
             throw new Error(`Product not found: ${entry.productId}`);
@@ -183,10 +204,26 @@ export async function createOrder(
           }
         }
 
+        if (!user.id) throw new Error("Sign in before placing an order");
+        if (input.shipping.saveAddress) {
+          const address = {
+            userId: user.id,
+            name: input.contact.name,
+            phone: input.contact.phone,
+            address1: input.shipping.address,
+            city: input.shipping.city,
+            state: input.shipping.state ?? null,
+            zip: input.shipping.zip,
+            country: input.shipping.country,
+          };
+          const existing = await tx.address.findFirst({ where: address });
+          if (!existing) await tx.address.create({ data: address });
+        }
+
         const row = (await tx.order.create({
           data: {
             orderNumber,
-            userId: user.id ?? "demo-guest",
+            userId: user.id,
             subtotal: totals.subtotal,
             shipping: totals.shipping,
             discount: totals.discount,
@@ -225,6 +262,7 @@ export async function createOrder(
     () => {
       const demo: OrderRecord = { ...record, id: `demo-${orderNumber}` };
       memoryOrders.unshift(demo);
+      if (user.id) memoryOrderOwners.set(demo.id, user.id);
       return demo;
     },
   );
@@ -235,18 +273,26 @@ export async function createOrder(
 /** Orders for the signed-in shopper (database) or the demo log (mock). */
 export async function listOrdersForEmail(
   email: string,
+  userId?: string,
 ): Promise<{ orders: OrderRecord[]; source: "database" | "mock" }> {
-  const { data, source } = await withDatabase<OrderRecord[]>(
+  const { data, source } = await withRequiredDatabase<OrderRecord[]>(
     async (db) => {
       const rows = (await db.order.findMany({
-        where: { shippingEmail: email },
+        where: userId ? { userId } : { shippingEmail: email },
         orderBy: { createdAt: "desc" },
-        include: { items: { include: { product: { select: { sizes: true, colors: true } } } } },
+        include: {
+          items: {
+            include: { product: { select: { sizes: true, colors: true } } },
+          },
+        },
       })) as unknown as Array<Record<string, unknown>>;
 
       return rows.map((row) => hydrate(row));
     },
-    () => memoryOrders.filter((order) => order.email === email),
+    () =>
+      memoryOrders.filter((order) =>
+        userId ? memoryOrderOwners.get(order.id) === userId : order.email === email,
+      ),
   );
 
   return { orders: data, source };
@@ -257,7 +303,11 @@ export async function findOrderByNumber(orderNumber: string): Promise<OrderRecor
     async (db) => {
       const row = (await db.order.findFirst({
         where: { orderNumber },
-        include: { items: { include: { product: { select: { sizes: true, colors: true } } } } },
+        include: {
+          items: {
+            include: { product: { select: { sizes: true, colors: true } } },
+          },
+        },
       })) as unknown as Record<string, unknown> | null;
       return row ? hydrate(row) : null;
     },
@@ -348,10 +398,10 @@ function hydrate(row: Record<string, unknown>): OrderRecord {
       quantity: Number(line.quantity),
       price: Number(line.price),
       availableSizes: Array.isArray((line.product as Record<string, unknown> | undefined)?.sizes)
-        ? (line.product as Record<string, unknown>).sizes as string[]
+        ? ((line.product as Record<string, unknown>).sizes as string[])
         : undefined,
       availableColors: Array.isArray((line.product as Record<string, unknown> | undefined)?.colors)
-        ? (line.product as Record<string, unknown>).colors as string[]
+        ? ((line.product as Record<string, unknown>).colors as string[])
         : undefined,
     })),
     customerName: String(row.shippingName),

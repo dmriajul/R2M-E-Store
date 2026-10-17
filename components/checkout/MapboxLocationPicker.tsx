@@ -51,12 +51,7 @@ function parseReverse(feature: {
     contextValue(context, "place") ??
     feature.text ??
     "";
-  const thana =
-    contextValue(context, "locality") ??
-    contextValue(context, "neighborhood") ??
-    contextValue(context, "postcode") === undefined
-      ? contextValue(context, "locality")
-      : undefined;
+  const thana = contextValue(context, "locality") ?? contextValue(context, "neighborhood");
   const region = contextValue(context, "region");
   const postcode = contextValue(context, "postcode");
 

@@ -736,7 +736,7 @@ export async function updateUserRoleAction(
 
   if (!database) {
     const updated = setDemoUserRole(target.id, role);
-    if (!updated) return { ok: false, error: "That demo account no longer exists" };
+    if (!updated) return { ok: false, error: "That account no longer exists" };
     recordDemoRoleChange({
       userId: updated.id,
       fromRole: target.role,

@@ -40,7 +40,7 @@ export function OrdersExplorer() {
         if (active && result.source === "database") setLiveOrders(result.data);
       })
       .catch((error: unknown) => {
-        console.warn("[dashboard] Showing demo orders because live orders could not be loaded", error);
+        console.warn("[dashboard] Orders could not be loaded", error);
       });
     return () => {
       active = false;
@@ -63,7 +63,7 @@ export function OrdersExplorer() {
 
   const activeCount =
     liveOrders !== null
-      ? allOrders.filter((order) => order.status === "processing" || order.status === "shipped")
+      ? allOrders.filter((order) => ["pending", "confirmed", "processing", "shipped"].includes(order.status))
           .length
       : isDemoIdentity
         ? getActiveOrderCount()

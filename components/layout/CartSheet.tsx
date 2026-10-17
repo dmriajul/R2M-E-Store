@@ -106,7 +106,7 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
           </div>
           <SheetDescription className="text-xs text-muted-foreground">
             {hasFreeShipping
-              ? "Free shipping on orders over $50! 🚚"
+              ? `Free shipping on orders over ${formatPrice(FREE_SHIPPING_THRESHOLD)}! 🚚`
               : `Add ${formatPrice(totals.amountToFreeShipping)} more for free shipping 🚚`}
           </SheetDescription>
 

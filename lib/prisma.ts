@@ -1,15 +1,4 @@
-/**
- * Prisma client singleton.
- *
- * Two things matter here:
- *
- * 1. **Next.js dev reloads** must not spawn a new pool on every HMR tick, hence
- *    the `globalThis` cache.
- * 2. **The client is optional.** When `DATABASE_URL` is missing — or the client
- *    has not been generated yet (`npx prisma generate`) — `getPrisma()` resolves
- *    to `null` and every caller falls back to the mock dataset instead of
- *    crashing the request.
- */
+/** Prisma singleton. Production reads/writes fail closed; account flows always require a database. */
 
 import { isDatabaseConfigured } from "@/lib/demo-mode";
 
@@ -29,6 +18,7 @@ export interface PrismaDelegate {
 
 export interface PrismaLikeClient {
   user: PrismaDelegate;
+  verificationToken: PrismaDelegate;
   /** Role-change audit trail (`RoleChange`) — see lib/data/admin-users.ts. */
   roleChange: PrismaDelegate;
   product: PrismaDelegate;
@@ -42,6 +32,7 @@ export interface PrismaLikeClient {
   wishlistItem: PrismaDelegate;
   address: PrismaDelegate;
   siteSettings: PrismaDelegate;
+  $disconnect?(): Promise<void>;
   $transaction<T>(operation: (transaction: PrismaLikeClient) => Promise<T>): Promise<T>;
 }
 
@@ -55,13 +46,15 @@ const globalForPrisma = globalThis as PrismaGlobal;
 let client: PrismaLikeClient | null = null;
 
 /**
- * Resolves the Prisma client, or `null` when the database is not configured.
- * The import is dynamic so a missing/ungenerated client can never break the
- * build — it only ever throws inside this try/catch.
+ * Resolves the Prisma client. Production configuration/client failures throw;
+ * development callers may receive null. Dynamic loading keeps the client out
+ * of browser bundles and allows static builds without a live connection.
  */
 export async function getPrisma(): Promise<PrismaLikeClient | null> {
-  if (!isDatabaseConfigured()) return null;
-  if (globalForPrisma.prismaUnavailable) return null;
+  if (!isDatabaseConfigured() || globalForPrisma.prismaUnavailable) {
+    if (process.env.NODE_ENV === "production") throw new DatabaseUnavailableError();
+    return null;
+  }
   if (client) return client;
   if (globalForPrisma.prisma) return globalForPrisma.prisma;
 
@@ -71,42 +64,35 @@ export async function getPrisma(): Promise<PrismaLikeClient | null> {
     };
     if (!mod.PrismaClient) throw new Error("@prisma/client exported no PrismaClient");
 
-    client = new mod.PrismaClient({ log: ["error"] });
+    client = new mod.PrismaClient({ log: [] });
     if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;
     return client;
-  } catch (error) {
-    // Not generated, unreachable host, bad credentials… all degrade to demo mode.
-    globalForPrisma.prismaUnavailable = true;
+  } catch {
+    // Do not latch initialization failures forever; a subsequent request may recover.
     if (process.env.NODE_ENV !== "production") {
       console.warn(
-        "[prisma] client unavailable — falling back to mock data:",
-        error instanceof Error ? error.message : error,
+        "[prisma] client unavailable:",
+        "Check database configuration and generated client.",
       );
     }
+    if (process.env.NODE_ENV === "production") throw new DatabaseUnavailableError();
     return null;
   }
 }
 
-/** Typed helper: run `query`, fall back to `fallback` on any failure. */
+/** Catalogue/read helper: development fallback only; production failures propagate. */
 export async function withDatabase<T>(
   query: (db: PrismaLikeClient) => Promise<T>,
   fallback: () => T | Promise<T>,
 ): Promise<{ data: T; source: "database" | "mock" }> {
-  const db = await getPrisma();
-
-  if (db) {
-    try {
-      return { data: await query(db), source: "database" };
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn(
-          "[prisma] query failed — serving mock data:",
-          error instanceof Error ? error.message : error,
-        );
-      }
-    }
+  if (process.env.NODE_ENV === "production") {
+    return { data: await requireDatabase(query), source: "database" };
   }
-
+  const db = await getPrisma();
+  if (db) {
+    try { return { data: await query(db), source: "database" }; }
+    catch { console.warn("[prisma] Development query failed; using development-only catalogue fallback."); }
+  }
   return { data: await fallback(), source: "mock" };
 }
 
@@ -116,5 +102,36 @@ export async function withDatabase<T>(
  * importing Prisma themselves.
  */
 export async function isDatabaseAvailable(): Promise<boolean> {
-  return (await getPrisma()) !== null;
+  try { return (await getPrisma()) !== null; } catch { return false; }
+}
+
+/** Authentication and transactional writes must never pretend a DB failure succeeded. */
+export class DatabaseUnavailableError extends Error {
+  constructor() {
+    super("Account service is temporarily unavailable. Please try again later.");
+    this.name = "DatabaseUnavailableError";
+  }
+}
+
+export async function withRequiredDatabase<T>(
+  query: (db: PrismaLikeClient) => Promise<T>,
+  demo: () => T | Promise<T>,
+): Promise<{ data: T; source: "database" | "mock" }> {
+  if (!isDatabaseConfigured()) {
+    // Production must not silently enable well-known demo administrator accounts.
+    if (process.env.NODE_ENV === "production") {
+      throw new DatabaseUnavailableError();
+    }
+    return { data: await demo(), source: "mock" };
+  }
+  const db = await getPrisma();
+  if (!db) throw new DatabaseUnavailableError();
+  return { data: await query(db), source: "database" };
+}
+
+/** Durable operations have NO development/demo fallback, including when ALLOW_DEMO_MODE is set. */
+export async function requireDatabase<T>(query: (db: PrismaLikeClient) => Promise<T>): Promise<T> {
+  const db = await getPrisma();
+  if (!db) throw new DatabaseUnavailableError();
+  return query(db);
 }

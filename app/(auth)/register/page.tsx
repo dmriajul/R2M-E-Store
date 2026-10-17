@@ -2,14 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
+import { useTurnstile } from "@/hooks/useTurnstile";
+import { authErrorMessage, isAuthErrorCode, type AuthErrorCode } from "@/lib/auth-messages";
+import { AuthFeedback } from "@/components/auth/AuthFeedback";
+import { useAuthFeedback } from "@/hooks/useAuthFeedback";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Mail, Phone, Sparkles, User } from "lucide-react";
-import { toast } from "sonner";
+import { queueAuthSuccess } from "@/lib/auth-flash";
 import { registerSchema, type RegisterValues } from "@/lib/validations";
-import { DEMO_PASSWORD } from "@/lib/demo-mode";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { PasswordStrength } from "@/components/auth/PasswordStrength";
@@ -22,14 +24,18 @@ const FIELD_CLASS =
   "h-12 rounded-xl border-glass-border bg-[#1A1A1A] pl-10 text-sm transition-colors duration-300 focus-visible:border-primary/60 focus-visible:ring-primary/25 aria-[invalid=true]:border-rose/60";
 
 export default function RegisterPage() {
-  const router = useRouter();
+  const captcha = useTurnstile();
+  const feedback = useAuthFeedback();
   const [pending, setPending] = useState(false);
+  const [captchaAttempted, setCaptchaAttempted] = useState(false);
 
   const {
     register,
     handleSubmit,
     watch,
-    formState: { errors },
+    setError,
+    clearErrors,
+    formState: { errors, isValid, isSubmitting },
   } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -40,16 +46,20 @@ export default function RegisterPage() {
       confirmPassword: "",
       acceptedTerms: false,
     },
-    mode: "onTouched",
+    mode: "all",
   });
 
   const password = watch("password");
 
   const onSubmit = async (values: RegisterValues) => {
+    if (!captcha.token) { setCaptchaAttempted(true); return; }
+    feedback.clear();
+    const turnstileToken = captcha.token;
+    captcha.clearToken();
     setPending(true);
 
     try {
-      /* 1 — create the account (Postgres via Prisma, or the demo user log). */
+      /* Create the durable account and token; never create a session implicitly. */
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -58,45 +68,37 @@ export default function RegisterPage() {
           email: values.email,
           phone: values.phone || undefined,
           password: values.password,
+          confirmPassword: values.confirmPassword,
+          acceptedTerms: values.acceptedTerms,
+          turnstileToken,
         }),
       });
 
-      const payload = (await response.json()) as { data?: unknown; error?: string };
+      const payload: { code?: unknown; fieldErrors?: Record<string, unknown> } = await response.json();
 
       if (!response.ok) {
-        setPending(false);
-        toast.error("We couldn't create that account", {
-          description: payload.error ?? "Please try again in a moment.",
-        });
+        const code: AuthErrorCode = isAuthErrorCode(payload.code) ? payload.code : "SERVER_ERROR";
+        const fields = { name: "fullName", email: "email", phone: "phone", password: "password", confirmPassword: "confirmPassword", acceptedTerms: "acceptedTerms" } as const;
+        let focus = true;
+        for (const [apiField, formField] of Object.entries(fields)) {
+          const fieldCode = payload.fieldErrors?.[apiField];
+          if (isAuthErrorCode(fieldCode)) {
+            setError(formField, { type: "server", message: authErrorMessage(fieldCode) }, { shouldFocus: focus });
+            focus = false;
+          }
+        }
+        feedback.show(code);
         return;
       }
 
-      /* 2 — sign the new shopper straight in. */
-      const result = await signIn("credentials", {
-        email: values.email,
-        password: values.password,
-        redirect: false,
-      }).catch(() => null);
-
-      if (!result || result.error) {
-        setPending(false);
-        toast.warning("Account created — please sign in", {
-          description: `Use your password on the sign-in page (demo tip: ${DEMO_PASSWORD}).`,
-        });
-        router.push("/login");
-        return;
-      }
-
-      toast.success("Account created! 🎉", {
-        description: `Welcome to the family, ${values.fullName.split(" ")[0]}.`,
-      });
-      router.push("/shop");
-      router.refresh();
+      queueAuthSuccess("ACCOUNT_CREATED");
+      // Customer sign-in requires verification. Existing checkout permissions are unchanged.
+      window.location.assign("/auth/verify-email-pending");
     } catch {
+      feedback.show("SERVER_ERROR");
+    } finally {
+      captcha.reset();
       setPending(false);
-      toast.error("Something went wrong", {
-        description: "We couldn't reach the account service — please try again.",
-      });
     }
   };
 
@@ -116,7 +118,21 @@ export default function RegisterPage() {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
+        <form onChangeCapture={() => {
+          feedback.clear();
+          for (const field of Object.keys(errors) as (keyof RegisterValues)[]) {
+            if (errors[field]?.type === "server") clearErrors(field);
+          }
+        }} onKeyDownCapture={(event) => {
+          // A disabled submit button can suppress the browser's implicit Enter submission.
+          if (event.key === "Enter" && event.target instanceof HTMLInputElement && !captcha.token && !pending) {
+            setCaptchaAttempted(true);
+          }
+        }} onSubmitCapture={() => {
+          // Also guide keyboard/programmatic submissions when other fields are invalid.
+          if (!captcha.token && !pending) setCaptchaAttempted(true);
+        }} onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
+          <AuthFeedback message={feedback.message} warning={feedback.warning} onDismiss={feedback.clear} />
           {/* Full name */}
           <div className="flex flex-col gap-2">
             <label htmlFor="register-name" className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
@@ -169,7 +185,7 @@ export default function RegisterPage() {
           {/* Phone */}
           <div className="flex flex-col gap-2">
             <label htmlFor="register-phone" className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-              Phone
+              Phone <span className="normal-case tracking-normal">(optional)</span>
             </label>
             <div className="relative">
               <Phone aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -242,11 +258,11 @@ export default function RegisterPage() {
               />
               <span>
                 I agree to the{" "}
-                <Link href="/#terms" className="text-primary underline-offset-4 hover:underline">
+                <Link href="/terms" className="text-primary underline-offset-4 hover:underline">
                   Terms
                 </Link>{" "}
                 &amp;{" "}
-                <Link href="/#privacy" className="text-primary underline-offset-4 hover:underline">
+                <Link href="/privacy" className="text-primary underline-offset-4 hover:underline">
                   Privacy Policy
                 </Link>
               </span>
@@ -258,9 +274,34 @@ export default function RegisterPage() {
             )}
           </div>
 
+          {/* Keep the visible captcha area immediately above the submit button. */}
+          <section aria-label="Captcha verification" className="flex flex-col gap-2">
+            <TurnstileCaptcha
+              key={captcha.generation}
+              action="register"
+              onVerify={(token) => {
+                captcha.onVerify(token);
+                if (token.trim()) setCaptchaAttempted(false);
+              }}
+              onError={captcha.onError}
+            />
+            <p
+              id="register-captcha-guidance"
+              role={captchaAttempted && !captcha.token && !pending ? "alert" : "status"}
+              className={`text-xs leading-5 ${captchaAttempted && !captcha.token && !pending ? "text-rose" : captcha.token ? "text-emerald-400" : "text-amber-200"}`}
+            >
+              {pending ? "Creating your account…" : captcha.token
+                ? "Captcha verified. Complete all required fields to create your account."
+                : captchaAttempted ? "Please complete the captcha verification."
+                  : "Captcha verification is required. Complete the security check above to enable Create Account."}
+            </p>
+          </section>
+
           <Button
             type="submit"
-            disabled={pending}
+            disabled={pending || isSubmitting || !isValid || !captcha.token}
+            aria-busy={pending || isSubmitting}
+            aria-describedby="register-captcha-guidance"
             className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:scale-[1.01]"
           >
             {pending ? (

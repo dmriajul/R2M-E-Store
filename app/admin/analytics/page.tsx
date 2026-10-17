@@ -47,7 +47,7 @@ export default function AdminAnalyticsPage() {
           <div>
             <h2 className="text-sm font-semibold text-foreground">Revenue</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              {range === "7d" ? "Mon–Sun of the current demo week" : "Daily takings, Sep 2 – Oct 1"}
+              {range === "7d" ? "Mon–Sun of the selected reporting week" : "Daily takings, Sep 2 – Oct 1"}
             </p>
           </div>
 

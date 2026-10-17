@@ -782,7 +782,7 @@ const faq: LegalContent = {
         title: "Do you offer gift wrapping?",
         icon: "🎁",
         paragraphs: [
-          "Yes — tick “Gift wrap” at checkout for a small ৳60 charge... in the demo store it adds $3.99. Your order arrives in kraft paper with a ribbon and a hand-written note, and the price is hidden.",
+          "When gift wrap is available, select it at checkout and review the displayed price before placing your order.",
           "Add the message you would like on the note in the order notes box. Birthdays, baby showers and Eid gifts are our favourite ones to pack.",
         ],
       },

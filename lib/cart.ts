@@ -1,11 +1,12 @@
+import { STORE_CURRENCY, STORE, SHIPPING_RATES } from "@/lib/config";
 import type { CartItem, CouponState, ShippingMethod } from "@/types";
 
 /** Bag maths shared by the cart drawer and the checkout summary. */
 
-export const FREE_SHIPPING_THRESHOLD = 50;
-export const STANDARD_SHIPPING_FEE = 4.99;
-export const EXPRESS_SHIPPING_FEE = 9.99;
-export const GIFT_WRAP_FEE = 3.99;
+export const FREE_SHIPPING_THRESHOLD = STORE.freeShippingThreshold;
+export const STANDARD_SHIPPING_FEE = STORE_CURRENCY === "BDT" ? SHIPPING_RATES.standard : 4.99;
+export const EXPRESS_SHIPPING_FEE = STORE_CURRENCY === "BDT" ? SHIPPING_RATES.express : 9.99;
+export const GIFT_WRAP_FEE = STORE_CURRENCY === "BDT" ? SHIPPING_RATES.giftWrap : 3.99;
 export const MAX_QUANTITY_PER_LINE = 10;
 
 /** Mock coupon table — a real implementation validates server-side. */
@@ -48,14 +49,12 @@ export function getSubtotal(items: readonly CartItem[]): number {
   return round(items.reduce((sum, item) => sum + item.price * item.quantity, 0));
 }
 
-export function getShippingCost(
-  method: ShippingMethod,
-  subtotal: number,
-): number {
+export function getShippingCost(method: ShippingMethod, subtotal: number): number {
   const option = SHIPPING_OPTIONS.find((entry) => entry.value === method);
   if (!option) return 0;
 
-  if (option.freeOverThreshold && subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
+  if ((option.freeOverThreshold || STORE_CURRENCY === "BDT") && subtotal >= FREE_SHIPPING_THRESHOLD)
+    return 0;
   return option.fee;
 }
 
@@ -80,10 +79,7 @@ export interface TotalsOptions {
   coupon?: CouponState | null;
 }
 
-export function computeTotals(
-  items: readonly CartItem[],
-  options: TotalsOptions = {},
-): CartTotals {
+export function computeTotals(items: readonly CartItem[], options: TotalsOptions = {}): CartTotals {
   const { method = "standard", giftWrap = false, coupon = null } = options;
 
   const subtotal = getSubtotal(items);

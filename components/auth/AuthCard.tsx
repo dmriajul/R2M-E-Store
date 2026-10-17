@@ -10,7 +10,7 @@ interface AuthCardProps {
 }
 
 /**
- * Shared card for the auth pages: warm glass panel that fades in and rises on
+ * Shared card for the auth pages: warm glass panel that remains visible and rises on
  * mount. Travel distance collapses to 0 when reduced motion is requested.
  */
 export function AuthCard({ children, className }: AuthCardProps) {
@@ -18,7 +18,7 @@ export function AuthCard({ children, className }: AuthCardProps) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: reducedMotion ? 0 : 28, scale: reducedMotion ? 1 : 0.985 }}
+      initial={{ opacity: 1, y: reducedMotion ? 0 : 28, scale: reducedMotion ? 1 : 0.985 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{
         duration: reducedMotion ? 0.3 : 0.7,

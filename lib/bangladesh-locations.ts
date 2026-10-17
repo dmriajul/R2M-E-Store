@@ -129,3 +129,15 @@ export function isBangladeshDivision(name: string): name is BangladeshDivisionNa
 export function isBangladeshDistrict(divisionName: string, districtName: string): boolean {
   return getBangladeshDistrict(divisionName, districtName) !== undefined;
 }
+
+/** Local post-office overrides; district defaults remain editable suggestions. */
+export function lookupBangladeshPostcode(code: string) {
+  if (code.trim() === "9204") {
+    return { division: "Khulna Division", district: "Khulna", postalArea: "Shiromoni" };
+  }
+  for (const division of BANGLADESH_DIVISIONS) {
+    const district = division.districts.find((entry) => entry.postalCode === code.trim());
+    if (district) return { division: division.name, district: district.name, postalArea: district.postalArea };
+  }
+  return undefined;
+}

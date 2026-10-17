@@ -3,6 +3,8 @@ export interface MailjetEmail {
   subject: string;
   html: string;
   text: string;
+  trackClicks?: boolean;
+  trackOpens?: boolean;
 }
 
 export class MailjetError extends Error {
@@ -35,9 +37,12 @@ export async function sendMailjetEmail(email: MailjetEmail): Promise<void> {
         Authorization: `Basic ${Buffer.from(`${apiKey}:${secretKey}`).toString("base64")}`,
         "Content-Type": "application/json",
       },
+      signal: AbortSignal.timeout(10_000),
       body: JSON.stringify({
         Messages: [
           {
+            TrackClicks: email.trackClicks === false ? "disabled" : undefined,
+            TrackOpens: email.trackOpens === false ? "disabled" : undefined,
             From: { Email: senderEmail, Name: "MUKRA" },
             To: [{ Email: email.to }],
             Subject: email.subject,
@@ -52,6 +57,18 @@ export async function sendMailjetEmail(email: MailjetEmail): Promise<void> {
   }
 
   if (!response.ok) {
-    throw new MailjetError("Mailjet rejected the receipt email.", 502);
+    throw new MailjetError("Mailjet rejected the email.", 502);
+  }
+  try {
+    const result = (await response.json()) as { Messages?: Array<{ Status?: string }> };
+    if (
+      !result.Messages?.length ||
+      result.Messages.some((message) => message.Status !== "success")
+    ) {
+      throw new Error("Email was not accepted");
+    }
+  } catch {
+    // Mailjet may report a per-message error even in a successful HTTP response.
+    throw new MailjetError("Mailjet did not confirm email acceptance.", 502);
   }
 }

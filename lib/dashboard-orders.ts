@@ -1,16 +1,24 @@
 import { CATEGORY_META, getProductById } from "@/lib/site";
-import { buildLineId, type Address, type CartItem, type DashboardOrder, type OrderTimelineStep } from "@/types";
+import {
+  buildLineId,
+  type Address,
+  type CartItem,
+  type DashboardOrder,
+  type OrderTimelineStep,
+} from "@/types";
 import type { OrderRecord } from "@/types";
 
 export function toDashboardOrder(order: OrderRecord): DashboardOrder {
-  const status: DashboardOrder["status"] =
-    order.status === "DELIVERED"
-      ? "delivered"
-      : order.status === "SHIPPED"
-        ? "shipped"
-        : order.status === "CANCELLED"
-          ? "cancelled"
-          : "processing";
+  const statuses: Record<OrderRecord["status"], DashboardOrder["status"]> = {
+    PENDING: "pending",
+    CONFIRMED: "confirmed",
+    PROCESSING: "processing",
+    SHIPPED: "shipped",
+    DELIVERED: "delivered",
+    CANCELLED: "cancelled",
+    REFUNDED: "refunded",
+  };
+  const status = statuses[order.status];
   const items: CartItem[] = order.items.map((line, index) => {
     const product = getProductById(line.productId);
     const category = product?.category ?? "Accessories";
@@ -46,27 +54,45 @@ export function toDashboardOrder(order: OrderRecord): DashboardOrder {
     isDefault: false,
   };
   const timeline: OrderTimelineStep[] = [
-    { key: "placed", label: "Order Placed", emoji: "🧾", timestamp: order.createdAt, state: "done" },
+    {
+      key: "placed",
+      label: "Order Placed",
+      emoji: "🧾",
+      timestamp: order.createdAt,
+      state: "done",
+    },
     {
       key: "paid",
       label: "Payment",
       emoji: "💳",
-      timestamp: order.paymentStatus === "PAID" ? order.createdAt : "",
+      timestamp: "",
       state: order.paymentStatus === "PAID" ? "done" : "pending",
     },
-    { key: "processing", label: "Processing", emoji: "📦", timestamp: "", state: "pending" },
+    {
+      key: "processing",
+      label: "Processing",
+      emoji: "📦",
+      timestamp: "",
+      state:
+        status === "processing"
+          ? "current"
+          : ["shipped", "delivered"].includes(status)
+            ? "done"
+            : "pending",
+    },
     {
       key: "shipped",
       label: "Shipped",
       emoji: "🚚",
-      timestamp: order.status === "SHIPPED" || order.status === "DELIVERED" ? order.createdAt : "",
-      state: order.status === "SHIPPED" ? "current" : order.status === "DELIVERED" ? "done" : "pending",
+      timestamp: "",
+      state:
+        order.status === "SHIPPED" ? "current" : order.status === "DELIVERED" ? "done" : "pending",
     },
     {
       key: "delivered",
       label: "Delivered",
       emoji: "🏠",
-      timestamp: status === "delivered" ? order.createdAt : "",
+      timestamp: "",
       state: status === "delivered" ? "done" : "pending",
     },
   ];
@@ -84,7 +110,18 @@ export function toDashboardOrder(order: OrderRecord): DashboardOrder {
       discount: order.discount,
       total: order.total,
     },
-    deliveryNote: status === "delivered" ? "Delivered" : status === "shipped" ? "On the way" : status === "cancelled" ? "Cancelled" : "Being prepared",
+    deliveryNote:
+      status === "delivered"
+        ? "Delivered"
+        : status === "shipped"
+          ? "On the way"
+          : status === "cancelled"
+            ? "Cancelled"
+            : status === "refunded"
+              ? "Refunded"
+              : status === "pending"
+                ? "Awaiting confirmation"
+                : "Being prepared",
     timeline,
     shipping: {
       fullName: order.customerName,
@@ -94,7 +131,12 @@ export function toDashboardOrder(order: OrderRecord): DashboardOrder {
     },
     payment: {
       label: order.paymentMethod,
-      status: order.paymentStatus === "REFUNDED" ? "refunded" : order.paymentStatus === "PAID" ? "paid" : "pending",
+      status:
+        order.paymentStatus === "REFUNDED"
+          ? "refunded"
+          : order.paymentStatus === "PAID"
+            ? "paid"
+            : "pending",
     },
   };
 }

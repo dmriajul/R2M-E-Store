@@ -58,8 +58,10 @@ export function SocialButtons() {
           type="button"
           variant="outline"
           onClick={() =>
-            toast.info(`${provider.label} sign-in is not connected yet`, {
-              description: "Use email and password for this demo.",
+            toast.warning(`${provider.label} sign-in is currently unavailable`, {
+              description: "Please sign in with your email and password.",
+              duration: Infinity,
+              closeButton: true,
             })
           }
           className="h-12 gap-2.5 rounded-full border-glass-border bg-glass text-sm font-medium transition-all duration-400 ease-[var(--ease-luxe)] hover:border-primary/40 hover:bg-white/8 hover:text-foreground"
