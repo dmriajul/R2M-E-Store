@@ -208,18 +208,30 @@ export function toAdminOrder(row: OrderRow): AdminOrder {
 
 /**
  * Every order in the console's shape, newest first.
- * Throws `AdminDataError` when no database is configured — the console layout
- * catches it and renders the empty tables.
+ *
+ * Throws `DatabaseUnavailableError` when no database is configured and
+ * `AdminDataError` with an operator-safe message when the read fails; the
+ * console layout catches either and renders its empty tables with a notice.
+ * There is no demo order list.
  */
 export async function getAdminOrders(): Promise<AdminOrder[]> {
   const db = await requireDatabase();
 
-  const rows = (await db.order.findMany({
-    include: orderInclude,
-    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-  })) as unknown as OrderRow[];
+  try {
+    const rows = (await db.order.findMany({
+      include: orderInclude,
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+    })) as unknown as OrderRow[];
 
-  return rows.map(toAdminOrder);
+    return rows.map(toAdminOrder);
+  } catch (error) {
+    // Never leak a driver/database message to the console UI; the layout
+    // renders its empty tables with this operator-safe explanation.
+    console.error("[admin/orders] Could not load orders", error);
+    throw new AdminDataError(
+      "Could not load live orders. Check the database connection and retry.",
+    );
+  }
 }
 
 /** A single order, freshly mapped. Throws when the row does not exist. */

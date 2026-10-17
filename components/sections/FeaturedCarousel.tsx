@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 import { cn } from "@/lib/utils";
 import { ProductCard } from "@/components/product/ProductCard";
-import { CatalogueEmptyState } from "@/components/sections/CatalogueEmptyState";
+import { CatalogueEmptyState } from "@/components/shop/CatalogueEmptyState";
 import { SectionHeading } from "@/components/sections/SectionHeading";
 import type { Product } from "@/types";
 
@@ -73,7 +73,7 @@ export function FeaturedCarousel({ products }: FeaturedCarouselProps) {
       <section
         id="featured"
         aria-labelledby="featured-title"
-        className="relative py-24 lg:py-32"
+        className="relative py-16 lg:py-20"
       >
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
           <SectionHeading
@@ -82,7 +82,7 @@ export function FeaturedCarousel({ products }: FeaturedCarouselProps) {
             titleKey="sections.featured"
             descriptionKey="sections.featuredDescription"
           />
-          <CatalogueEmptyState />
+          <CatalogueEmptyState variant="compact" className="mt-10" />
         </div>
       </section>
     );
@@ -107,7 +107,7 @@ export function FeaturedCarousel({ products }: FeaturedCarouselProps) {
     <section
       id="featured"
       aria-labelledby="featured-title"
-      className="relative py-24 lg:py-32"
+      className="relative py-16 lg:py-20"
     >
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
@@ -126,7 +126,7 @@ export function FeaturedCarousel({ products }: FeaturedCarouselProps) {
           aria-roledescription="carousel"
           aria-label="Featured products"
           onKeyDown={handleKeyDown}
-          className="mt-12 overflow-hidden [touch-action:pan-y_pinch-zoom]"
+          className="mt-10 overflow-hidden [touch-action:pan-y_pinch-zoom]"
         >
           <ul className="flex items-stretch">
             {products.map((product) => (

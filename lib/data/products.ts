@@ -9,7 +9,7 @@
  */
 
 import { CATEGORY_META } from "@/lib/site";
-import { requireDatabase } from "@/lib/prisma";
+import { isDatabaseConfigured, requireDatabase } from "@/lib/prisma";
 import type {
   Product,
   ProductBadge,
@@ -129,6 +129,79 @@ export interface ProductQuery {
   limit?: number;
   /** Products to leave out (used by the "you may also like" rail). */
   excludeId?: string;
+}
+
+/**
+ * Catalogue read outcome, surfaced to pages.
+ *
+ * `listProducts` deliberately throws `DatabaseUnavailableError` when the
+ * database cannot be read — tests and API routes depend on that contract.
+ * Pages, however, must tell three different situations apart so they can render
+ * the right surface:
+ *
+ *   • `empty`        — the database answered, there are simply no rows yet;
+ *   • `unconfigured` — no `DATABASE_URL` at all (fresh deploy / preview), which
+ *                      is a setup state, not an outage;
+ *   • `unavailable`  — a database *is* configured but the read failed, which is
+ *                      the only case that deserves the maintenance notice.
+ */
+export type CatalogueStatus = "ready" | "empty" | "unconfigured" | "unavailable";
+
+export interface CatalogueSnapshot {
+  products: Product[];
+  status: CatalogueStatus;
+}
+
+/** True only for a real, configured-but-failing database. */
+export function isCatalogueOutage(status: CatalogueStatus): boolean {
+  return status === "unavailable";
+}
+
+// One diagnostic per state per process minute — parallel sections on the home
+// page all read the catalogue and must not flood the server log.
+const warnedAt = new Map<CatalogueStatus, number>();
+
+function warnOnce(status: CatalogueStatus): void {
+  const now = Date.now();
+  if (now - (warnedAt.get(status) ?? -Infinity) < 60_000) return;
+  warnedAt.set(status, now);
+
+  if (status === "unconfigured") {
+    console.warn(
+      "[catalogue] DATABASE_URL is not configured — showing the curated-soon empty state. " +
+        "Add the Supabase connection string on the host to load real products.",
+    );
+  } else {
+    console.error(
+      "[catalogue] The database is configured but unreachable — showing the maintenance state. " +
+        "Check the connection string, network access and database status.",
+    );
+  }
+}
+
+/**
+ * Page-friendly catalogue read.
+ *
+ * Never throws for the two failure states above: an unconfigured or unreachable
+ * database resolves to an empty snapshot plus the matching status so the page
+ * can keep its layout and show the right message. Non-database errors still
+ * propagate — those are bugs, not a setup/outage condition.
+ */
+export async function getCatalogue(
+  query: ProductQuery = {},
+): Promise<CatalogueSnapshot> {
+  try {
+    const { products } = await listProducts(query);
+    return { products, status: products.length > 0 ? "ready" : "empty" };
+  } catch (error) {
+    if (!(error instanceof Error) || error.name !== "DatabaseUnavailableError") {
+      throw error;
+    }
+
+    const status: CatalogueStatus = isDatabaseConfigured() ? "unavailable" : "unconfigured";
+    warnOnce(status);
+    return { products: [], status };
+  }
 }
 
 /** Catalogue listing. An empty table means an empty list — never sample rows. */

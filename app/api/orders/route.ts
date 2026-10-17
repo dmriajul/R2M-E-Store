@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest, after } from "next/server";
 import { auth } from "@/lib/auth";
 import { createOrder, listOrdersForEmail } from "@/lib/data/orders";
@@ -151,6 +152,11 @@ export async function POST(
       order = result.order;
       source = result.source;
     } catch (error) {
+      // Log operational detail only — never shipping, contact or payment data.
+      console.error(
+        "[orders] Could not persist checkout order:",
+        error instanceof Error ? error.message : error,
+      );
       return NextResponse.json(
         {
           data: null,
@@ -170,6 +176,13 @@ export async function POST(
         },
       );
     }
+
+    // The console and shopper dashboards read fresh from Postgres; drop their
+    // cached RSC payloads so a durable order is visible immediately.
+    revalidatePath("/admin/orders");
+    revalidatePath("/admin");
+    revalidatePath("/dashboard/orders");
+    revalidatePath("/dashboard");
 
     // Fire-and-forget receipt email — must never delay or fail the 201 response.
     try {

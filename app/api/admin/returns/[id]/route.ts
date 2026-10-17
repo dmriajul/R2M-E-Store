@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireActionRole } from "@/lib/auth";
 import { rolesForPermission } from "@/lib/rbac";
@@ -7,6 +8,7 @@ import { returnAdminActionSchema } from "@/lib/validations";
 import type { ApiResponse, ReturnRequestRecord } from "@/types";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -86,6 +88,8 @@ export async function PATCH(
       return hydrateReturnRequest(row);
     });
 
+    revalidatePath("/admin/returns");
+    revalidatePath("/dashboard/orders");
     const notification = updated.status === "APPROVED"
       ? "Your return request has been approved. We will contact you with the next steps."
       : updated.status === "REJECTED"
@@ -108,6 +112,7 @@ export async function PATCH(
     if (message === "INVALID_STATUS") {
       return NextResponse.json({ data: null, error: "This request has already been reviewed or cannot be completed yet", success: false }, { status: 409 });
     }
-    throw error;
+    console.error("[admin/returns] Update failed", error);
+    return NextResponse.json({ data: null, error: "Could not update return request. Try again.", success: false }, { status: 503 });
   }
 }

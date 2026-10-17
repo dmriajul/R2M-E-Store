@@ -10,9 +10,12 @@ import {
   BANGLADESH_DIVISIONS,
   getBangladeshDistrict,
   getBangladeshDivision,
-  lookupBangladeshPostcode,
 } from "@/lib/bangladesh-locations";
-import { COUNTRIES, shippingSchema, type ShippingValues } from "@/lib/validations";
+import {
+  COUNTRIES,
+  shippingSchema,
+  type ShippingValues,
+} from "@/lib/validations";
 import {
   FREE_SHIPPING_THRESHOLD,
   GIFT_WRAP_FEE,
@@ -27,16 +30,8 @@ import { Input } from "@/components/ui/input";
 import dynamic from "next/dynamic";
 
 const MapboxLocationPicker = dynamic(
-  () =>
-    import("@/components/checkout/MapboxLocationPicker").then((mod) => mod.MapboxLocationPicker),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-[300px] items-center justify-center rounded-2xl border border-glass-border bg-glass">
-        <span className="text-sm text-muted-foreground">Loading map…</span>
-      </div>
-    ),
-  },
+  () => import("@/components/checkout/MapboxLocationPicker").then((mod) => mod.MapboxLocationPicker),
+  { ssr: false, loading: () => <div className="flex h-[300px] items-center justify-center rounded-2xl border border-glass-border bg-glass"><span className="text-sm text-muted-foreground">Loading map…</span></div> },
 );
 
 const checkoutSelectClass = cn(
@@ -86,7 +81,6 @@ export function StepShipping() {
   const country = watch("country");
   const division = watch("state") ?? "";
   const city = watch("city") ?? "";
-  const postalCode = watch("postalCode");
   const method = watch("method");
   const giftWrap = watch("giftWrap");
   const countryField = register("country");
@@ -102,30 +96,15 @@ export function StepShipping() {
   }, [getValues, profileName, setValue, status]);
 
   useEffect(() => {
-    if (country !== "Bangladesh" || !postalSuggestion || getValues("postalCode").trim()) {
+    if (
+      country !== "Bangladesh" ||
+      !postalSuggestion ||
+      getValues("postalCode").trim()
+    ) {
       return;
     }
-    setValue("postalCode", postalSuggestion.postalCode, {
-      shouldValidate: true,
-    });
+    setValue("postalCode", postalSuggestion.postalCode, { shouldValidate: true });
   }, [country, getValues, postalSuggestion, setValue]);
-
-  useEffect(() => {
-    if (country !== "Bangladesh") return;
-    const match = lookupBangladeshPostcode(postalCode);
-    if (!match) return;
-    setValue("state", match.division, { shouldValidate: true });
-    setValue("city", match.district, { shouldValidate: true });
-    if (postalCode === "9204" && !getValues("address2")) {
-      setValue("address2", match.postalArea, { shouldValidate: true });
-    }
-  }, [country, postalCode, getValues, setValue]);
-
-  useEffect(() => {
-    if (country === "Bangladesh" && city) {
-      setValue("method", city.toLowerCase() === "dhaka" ? "standard" : "express");
-    }
-  }, [country, city, setValue]);
 
   const onSubmit = (values: ShippingValues) => {
     setShipping(values);
@@ -156,51 +135,33 @@ export function StepShipping() {
         <MapboxLocationPicker
           onAddressChange={(address) => {
             if (address.address1) {
-              setValue("address1", address.address1, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
+              setValue("address1", address.address1, { shouldDirty: true, shouldValidate: true });
             }
-            if (address.address2) {
-              setValue("address2", address.address2, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-            }
+            setValue("address2", address.address2 ?? "", { shouldDirty: true, shouldValidate: true });
             const divisionMatch =
               BANGLADESH_DIVISIONS.find(
                 (option) =>
                   !!address.state &&
-                  option.name.toLowerCase().replace(/ division$/, "") ===
-                    address.state.toLowerCase().replace(/ division$/, ""),
+                  option.name.toLowerCase() === address.state.toLowerCase(),
               ) ??
               BANGLADESH_DIVISIONS.find(
                 (option) =>
                   !!address.state &&
                   address.state.toLowerCase().includes(option.name.toLowerCase()),
               );
-            if (divisionMatch) {
-              setValue("state", divisionMatch.name, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
+            const matchedDivision = divisionMatch ?? BANGLADESH_DIVISIONS.find(
+              (option) => option.districts.some((district) => district.name === address.city),
+            );
+            if (matchedDivision) {
+              setValue("state", matchedDivision.name, { shouldDirty: true, shouldValidate: true });
               setValue("city", "", { shouldDirty: true, shouldValidate: true });
-              setValue("postalCode", "", {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
+              setValue("postalCode", "", { shouldDirty: true, shouldValidate: true });
             }
             if (address.city) {
-              setValue("city", address.city, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
+              setValue("city", address.city, { shouldDirty: true, shouldValidate: true });
             }
             if (address.postalCode) {
-              setValue("postalCode", address.postalCode, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
+              setValue("postalCode", address.postalCode, { shouldDirty: true, shouldValidate: true });
             }
           }}
         />
@@ -257,14 +218,8 @@ export function StepShipping() {
                 {...divisionField}
                 onChange={(event) => {
                   void divisionField.onChange(event);
-                  setValue("city", "", {
-                    shouldDirty: true,
-                    shouldValidate: true,
-                  });
-                  setValue("postalCode", "", {
-                    shouldDirty: true,
-                    shouldValidate: true,
-                  });
+                  setValue("city", "", { shouldDirty: true, shouldValidate: true });
+                  setValue("postalCode", "", { shouldDirty: true, shouldValidate: true });
                 }}
               >
                 <option value="" className="bg-[#1A1A1A]">
@@ -283,10 +238,7 @@ export function StepShipping() {
                 id="ship-city"
                 autoComplete="address-level2"
                 aria-invalid={Boolean(errors.city)}
-                className={cn(
-                  checkoutSelectClass,
-                  "disabled:cursor-not-allowed disabled:opacity-50",
-                )}
+                className={cn(checkoutSelectClass, "disabled:cursor-not-allowed disabled:opacity-50")}
                 disabled={!districtOptions.length}
                 {...cityField}
                 onChange={(event) => {
@@ -325,7 +277,11 @@ export function StepShipping() {
               />
             </Field>
 
-            <Field label="State / Province" htmlFor="ship-state" error={errors.state?.message}>
+            <Field
+              label="State / Province"
+              htmlFor="ship-state"
+              error={errors.state?.message}
+            >
               <Input
                 id="ship-state"
                 autoComplete="address-level1"
@@ -354,10 +310,7 @@ export function StepShipping() {
           <Input
             id="ship-zip"
             autoComplete="postal-code"
-            placeholder={
-              postalSuggestion?.postalCode ??
-              (country === "Bangladesh" ? "4-digit code" : "Postal code")
-            }
+            placeholder={postalSuggestion?.postalCode ?? (country === "Bangladesh" ? "4-digit code" : "Postal code")}
             aria-invalid={Boolean(errors.postalCode)}
             className={checkoutInputClass}
             {...register("postalCode")}
@@ -375,18 +328,9 @@ export function StepShipping() {
               const nextCountry = event.currentTarget.value;
               void countryField.onChange(event);
               if (nextCountry !== country) {
-                setValue("state", "", {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                });
-                setValue("city", "", {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                });
-                setValue("postalCode", "", {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                });
+                setValue("state", "", { shouldDirty: true, shouldValidate: true });
+                setValue("city", "", { shouldDirty: true, shouldValidate: true });
+                setValue("postalCode", "", { shouldDirty: true, shouldValidate: true });
               }
             }}
           >
@@ -411,11 +355,7 @@ export function StepShipping() {
           Shipping method
         </legend>
 
-        {SHIPPING_OPTIONS.filter(
-          (option) =>
-            country !== "Bangladesh" ||
-            option.value === (city.toLowerCase() === "dhaka" ? "standard" : "express"),
-        ).map((option) => {
+        {SHIPPING_OPTIONS.map((option) => {
           const cost = option.value === "standard" ? standardCost : expressCost;
           const selected = method === option.value;
 
@@ -450,14 +390,10 @@ export function StepShipping() {
               </span>
 
               <span className="flex-1">
-                <span className="block text-sm font-semibold">
-                  {country === "Bangladesh"
-                    ? option.value === "standard"
-                      ? "Inside Dhaka"
-                      : "Outside Dhaka"
-                    : option.label}
+                <span className="block text-sm font-semibold">{option.label}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {option.description}
                 </span>
-                <span className="block text-xs text-muted-foreground">{option.description}</span>
               </span>
 
               <span
@@ -474,7 +410,8 @@ export function StepShipping() {
 
         {standardCost === 0 && (
           <p className="text-xs text-emerald-400">
-            Free shipping unlocked — your order is over {formatPrice(FREE_SHIPPING_THRESHOLD)} 🚚
+            Free shipping unlocked — your order is over{" "}
+            {formatPrice(FREE_SHIPPING_THRESHOLD)} 🚚
           </p>
         )}
       </fieldset>

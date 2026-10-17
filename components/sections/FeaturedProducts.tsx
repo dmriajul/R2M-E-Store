@@ -259,7 +259,7 @@ export function FeaturedProducts({
   if (products.length === 0) return null;
 
   return (
-    <section id={id} className="relative w-full overflow-hidden py-24 lg:py-32">
+    <section id={id} className="relative w-full overflow-hidden py-16 lg:py-20">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <header className="flex flex-wrap items-end justify-between gap-6">
           <div>

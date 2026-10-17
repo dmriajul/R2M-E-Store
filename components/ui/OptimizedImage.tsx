@@ -89,7 +89,6 @@ export function OptimizedImage({
   onError,
 }: OptimizedImageProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
 
   const presetConfig = IMAGE_PRESETS[preset];
   const renderable = isRenderableImage(src);
@@ -123,14 +122,17 @@ export function OptimizedImage({
   }
 
   const delivery = imageDeliveryProps(src);
-  const isLoading = loadedSrc !== src;
   const dimensions = fill
     ? { fill: true as const }
     : { width: width ?? presetConfig.width, height: height ?? presetConfig.height };
 
   return (
     <div className={cn("relative overflow-hidden rounded-lg", className)} style={style}>
-      {isLoading && <div aria-hidden className="absolute inset-0 animate-pulse bg-gray-900" />}
+      {/* Placeholder sits *behind* the photo, never on top of it. The image is
+          visible the moment it paints — no `opacity: 0` state to clear from
+          JavaScript — so a failed hydration, a cached image whose `onLoad`
+          never fires, or a slow chunk can never leave a tile blank. */}
+      <div aria-hidden className="absolute inset-0 bg-gray-900/80" />
 
       <Image
         src={src}
@@ -144,17 +146,11 @@ export function OptimizedImage({
         className={cn(
           !fill && "h-full w-full",
           objectFit === "contain" ? "object-contain" : "object-cover",
-          "transition-opacity duration-300",
-          isLoading ? "opacity-0" : "opacity-100",
           imageClassName,
         )}
-        onLoad={() => {
-          setLoadedSrc(src);
-          onLoad?.();
-        }}
+        onLoad={onLoad}
         onError={() => {
           setFailedSrc(src);
-          setLoadedSrc(src);
           onError?.();
         }}
       />

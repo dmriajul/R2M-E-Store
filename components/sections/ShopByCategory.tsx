@@ -166,7 +166,7 @@ export function ShopByCategory({ images = {} }: ShopByCategoryProps) {
   }, [emblaApi]);
 
   return (
-    <section id="collections" className="relative py-24 lg:py-32">
+    <section id="collections" className="relative py-16 lg:py-20">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* ---------- Header ---------- */}
         <div>
@@ -187,7 +187,7 @@ export function ShopByCategory({ images = {} }: ShopByCategoryProps) {
             mobile while Embla owns horizontal drag gestures. */}
         <div
           ref={emblaRef}
-          className="mt-12 overflow-hidden [touch-action:pan-y_pinch-zoom]"
+          className="mt-10 overflow-hidden [touch-action:pan-y_pinch-zoom]"
         >
           <ul className="flex items-stretch">
             {CATEGORY_TILES.map((tile) => {
@@ -244,7 +244,7 @@ export function ShopByCategory({ images = {} }: ShopByCategoryProps) {
         </div>
 
         {/* ---------- Snap indicators (no arrow buttons — wheel + drag only) ---------- */}
-        <div className="mt-8 flex items-center justify-center gap-2.5">
+        <div className="mt-7 flex items-center justify-center gap-2.5">
           {scrollSnaps.map((_, index) => (
             <button
               key={index}
