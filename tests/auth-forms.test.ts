@@ -117,9 +117,10 @@ test("registration captcha: visible directly above submit; unsolved attempts gui
     const area = view.element.querySelector<HTMLElement>('section[aria-label="Captcha verification"]')!;
     const guidance = () => view.element.querySelector("#register-captcha-guidance")!;
     assert.ok(area.querySelector('[data-turnstile-action="register"] [id^="mukra-turnstile-"]'));
+    assert.match(area.textContent ?? "", /Please complete the security check to continue\./);
     assert.equal(submit.previousElementSibling, area);
     assert.equal(submit.getAttribute("aria-describedby"), "register-captcha-guidance");
-    assert.match(guidance().textContent ?? "", /Captcha verification is required/);
+    assert.equal(guidance().textContent, "", "The widget card carries the standing instruction");
     assert.equal(submit.disabled, true);
     await act(async () => view.element.querySelector("#register-email")!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     assert.equal(guidance().getAttribute("role"), "alert", "Enter explains the requirement even when the disabled button suppresses native submit");
@@ -142,7 +143,8 @@ test("registration captcha: visible directly above submit; unsolved attempts gui
     assert.equal(guidance().textContent, "", "The widget's success state makes duplicate green confirmation copy unnecessary");
     await act(async () => [...widgets.values()].at(-1)!["expired-callback"]());
     assert.equal(submit.disabled, true);
-    assert.match(guidance().textContent ?? "", /Captcha verification is required/);
+    assert.match(view.element.textContent ?? "", /Security check expired/);
+    assert.equal(guidance().textContent, "", "The widget card announces the expiry inline");
     assert.equal(requests, 0);
   } finally { globalThis.fetch = originalFetch; await view.unmount(); }
 });
@@ -157,7 +159,8 @@ test("registration missing site key: neutral fallback, no internal configuration
     const submit = view.element.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     const area = submit.previousElementSibling!;
     assert.ok(area.querySelector('[data-turnstile-action="register"]'));
-    assert.match(area.textContent ?? "", /Security check unavailable. Please refresh./);
+    assert.match(area.textContent ?? "", /Verification unavailable/);
+    assert.doesNotMatch(area.textContent ?? "", /Security check unavailable/);
     assert.doesNotMatch(view.element.textContent ?? "", /TURNSTILE DEBUG|Site Key|NEXT_PUBLIC_TURNSTILE_SITE_KEY|Development setup|\.env\.local/);
     assert.equal(submit.disabled, true);
     assert.equal(widgets.size, 0);
