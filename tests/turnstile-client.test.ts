@@ -62,7 +62,7 @@ test("never renders debug banners, key values or internal configuration hints", 
     assert.ok(!missing.includes("Site Key"));
     assert.ok(!missing.includes("NEXT_PUBLIC_TURNSTILE_SITE_KEY"));
     assert.ok(!missing.includes("Development setup"));
-    assert.match(missing, /Security check unavailable/);
+    assert.match(missing, /Verification unavailable/);
     process.env = { ...process.env, NODE_ENV: "production", NEXT_PUBLIC_TURNSTILE_SITE_KEY: "debug-public-key-do-not-display" };
     const production = render();
     assert.ok(!production.includes("TURNSTILE DEBUG"));
@@ -87,7 +87,8 @@ test("missing site key is a visible error, never a silently hidden widget", asyn
   delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const { root, element } = mount();
   await act(async () => { root.render(createElement(Form)); });
-  assert.ok(element.textContent?.includes("Security check unavailable. Please refresh."));
+  assert.ok(element.textContent?.includes("Verification unavailable"));
+  assert.doesNotMatch(element.textContent ?? "", /Security check unavailable/);
   assert.equal(element.querySelector("button")?.disabled, true);
   await act(async () => root.unmount());
   element.remove();
@@ -112,6 +113,8 @@ test("SSR hydrates without warnings; Strict Mode deduplicates script, expiry/res
     assert.equal(widget.action, "login");
     assert.equal(widget.theme, "dark");
     assert.equal(widget.size, "flexible");
+    assert.ok(element.textContent?.includes("Please complete the security check to continue."),
+      "A visible instruction guides the user while the widget awaits verification");
     await act(async () => widget.callback("token-one"));
     assert.equal(element.querySelector("button")?.disabled, false);
     await act(async () => widget["expired-callback"]());
@@ -127,7 +130,7 @@ test("SSR hydrates without warnings; Strict Mode deduplicates script, expiry/res
     await act(async () => current.callback("token-three"));
     await act(async () => current["error-callback"]());
     assert.equal(element.querySelector("button")?.disabled, true);
-    assert.ok(element.textContent?.includes("Security check unavailable. Please refresh."));
+    assert.ok(element.textContent?.includes("Verification unavailable"));
     await act(async () => root.unmount());
     assert.equal(widgets.size, 0);
     await act(async () => current.callback("late-token"));
@@ -144,7 +147,7 @@ test("blocked script presents fallback and keeps submit disabled", async () => {
   assert.ok(script);
   await act(async () => script.dispatchEvent(new dom.window.Event("error")));
   assert.equal(element.querySelector("button")?.disabled, true);
-  assert.ok(element.textContent?.includes("Security check unavailable. Please refresh."));
+  assert.ok(element.textContent?.includes("Verification unavailable"));
   await act(async () => root.unmount());
   element.remove();
 });
@@ -170,7 +173,7 @@ test("script/render watchdog fails visibly rather than leaving an endless loadin
   try {
     await act(async () => root.render(createElement(Form)));
     await act(async () => context.mock.timers.tick(5_000));
-    assert.ok(element.textContent?.includes("Security check unavailable. Please refresh."));
+    assert.ok(element.textContent?.includes("Verification unavailable"));
     assert.equal(element.querySelector("button")?.disabled, true);
   } finally {
     Object.assign(dom.window, { turnstile: api });
@@ -186,6 +189,8 @@ for (const action of ["login", "register"] as const) {
     const ssr = document.createElement("div");
     ssr.innerHTML = renderToString(createElement(TurnstileCaptcha, props));
     assert.ok(ssr.querySelector(`[data-turnstile-action="${action}"] [id^="mukra-turnstile-"]`));
+    assert.ok(ssr.textContent?.includes("Loading security check..."),
+      "SSR renders an elegant loading state, never broken-fallback copy");
     const { root, element } = mount();
     await act(async () => root.render(createElement(TurnstileCaptcha, props)));
     assert.ok(element.querySelector(`[data-turnstile-action="${action}"] [id^="mukra-turnstile-"]`));

@@ -285,15 +285,20 @@ export default function RegisterPage() {
               }}
               onError={captcha.onError}
             />
+            {/* The widget card carries the standing instruction; this line only
+                surfaces attempt feedback so the two never stack redundant copy. */}
             <p
               id="register-captcha-guidance"
               role={captchaAttempted && !captcha.token && !pending ? "alert" : "status"}
-              className={`text-xs leading-5 ${captchaAttempted && !captcha.token && !pending ? "text-rose" : captcha.token ? "text-emerald-400" : "text-amber-200"}`}
+              className={`min-h-5 text-xs leading-5 ${captchaAttempted && !captcha.token && !pending ? "text-rose" : "text-muted-foreground"}`}
             >
-              {pending ? "Creating your account…" : captcha.token
-                ? ""
-                : captchaAttempted ? "Please complete the captcha verification."
-                  : "Captcha verification is required. Complete the security check above to enable Create Account."}
+              {pending
+                ? "Creating your account…"
+                : captcha.token
+                  ? ""
+                  : captchaAttempted
+                    ? "Please complete the captcha verification."
+                    : ""}
             </p>
           </section>
 
