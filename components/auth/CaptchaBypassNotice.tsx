@@ -20,7 +20,7 @@ export function CaptchaBypassNotice({ className }: { className?: string }) {
       <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-200/70" />
       <span>
         <strong className="font-semibold text-amber-100">
-          Security check bypassed in local development.
+          Security check bypassed in development.
         </strong>{" "}
         CAPTCHA is enforced in production builds.
       </span>

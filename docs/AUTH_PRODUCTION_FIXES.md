@@ -29,7 +29,7 @@ Updated 2026-10-16. This guide supersedes the **demo-auth and HTTP fixture comma
 - Invalid email/password combinations share **“Email or password is incorrect. Check your details or create an account.”** This helps users without revealing which emails are registered. Outages use **“Account service is temporarily unavailable. Please try again later.”** Rate limiting and captcha have their own messages.
 - Successful real customer/admin authentication retains the Credentials provider, bcrypt cost, JWT/cookie and role behavior. No new verification gate, no password rewrite, no RLS/RBAC removal.
 - Turnstile uses dark/compact/always-visible settings in a gold-bordered container. Missing key/script/render failure displays **“Security check unavailable. Please refresh.”** A `<noscript>` warning explains the JavaScript requirement.
-- Startup watchdog is now **five seconds**. **It does not allow unverified submission.** The requested fail-open fallback conflicts with the acceptance criteria (“blocked until captcha solved”) and prior mandatory server enforcement. Missing/invalid tokens still fail at the server, so enabling only a client button would be misleading rather than a usable fallback.
+- The fixed startup watchdog was removed: a slow CDN is not a failed CAPTCHA. Actual script failures remain fail-closed in production, while `next dev` uses a clearly labelled client/server bypass. Missing/invalid tokens still fail at the production server.
 - Tokens expire, are cleared before submission and widgets reset after the request settles. Siteverify still enforces strict boolean success, single use/expiry, action, hostname and a bounded request. Network/provider/configuration errors fail closed.
 
 ## 2. Verification results and remaining acceptance work
@@ -40,7 +40,7 @@ Updated 2026-10-16. This guide supersedes the **demo-auth and HTTP fixture comma
 | Unit/component suite | **70 passed** via `npm test` |
 | Registration regression | Real registration handler → independently inspect **test database contract adapter** row → bcrypt compare → credentials service succeeds. Also checks token digest, CUSTOMER role, nullable defaults, transaction rollback, duplicate concurrency and no-DB rejection. Not a live Prisma/Supabase proof. |
 | Login regression | Unknown email and wrong password fail consistently; valid customer/persisted admin/legacy role succeed. Distinct outage and rate/security message mapping checked. Actual Auth.js cookies/session/RBAC also exercised by HTTP tests. |
-| Turnstile regression | Actual wrapper + jsdom/React SSR/hydration/Strict Mode: login/register widget containers exist with a mocked public key, CDN script tag is emitted, script deduplicates, cleanup/late callbacks/expiry/reset/errors work, five-second warning does **not** enable submit, no debug banner exists in any environment. No hydration/widget console errors in the test. Not a real CDN/browser visual test. |
+| Turnstile regression | Actual wrapper + jsdom/React SSR/hydration/Strict Mode: login/register widget containers exist with a mocked public key, CDN script tag is emitted, script deduplicates, cleanup/late callbacks/expiry/reset/errors work, slow loads do **not** enable submit, no debug banner exists in any environment. No hydration/widget console errors in the test. Not a real CDN/browser visual test. |
 | API-level customer journey | **66 HTTP checks** against production standalone, configured-database code path, **external test-only DB adapter and mocked Cloudflare**: registration, fresh chosen-password login, customer/admin sessions/RBAC, checkout and owned order retrieval. Cart behavior separately covered by store tests. Not browser automation. |
 | Direct security requests | **48 HTTP checks**: missing/invalid/expired/replayed tokens, wrong action/host, provider failure, no session/account creation, fresh verification with wrong/correct credentials and SUPER_ADMIN access. Same external fixtures. |
 | Email journey | Dedicated development HTTP test passed: deferred email, actual captcha-protected resend Server Action (3/hour), rotation, verification/replay and session flag refresh. Test-only DB adapter; no inbox delivery claim. |
@@ -78,7 +78,7 @@ Updated 2026-10-16. This guide supersedes the **demo-auth and HTTP fixture comma
 
 1. Configure keys and trusted hosts, restart/rebuild, then open `/register` and `/login` directly in a private browser window. The only CAPTCHA UI is the dark Turnstile widget inside its gold-bordered container; no debug banner, key-presence indicator or client-side key log exists in any environment. If the public key is missing, the neutral “Security check unavailable. Please refresh.” fallback replaces the widget and submit stays disabled; deployment logs carry the server-side configuration warning. No raw secret or token is logged.
 2. If no widget container appears, verify deployed commit, correct URL/page, JavaScript bundle loading and stale browser/CDN assets. Auth card should be visible even before animation. If the neutral fallback is shown, verify exact variable name, no empty/whitespace value, project-root env file and **build-time** deployment settings.
-3. With PRESENT, Network should show `https://challenges.cloudflare.com/turnstile/v0/api.js?...`. No request means inspect JavaScript/hydration and script blockers first. A blocked script must show the warning within five seconds; submit remains disabled. Fully refresh after unblocking. Do not inject a second API script beside the wrapper.
+3. With PRESENT, Network should show `https://challenges.cloudflare.com/turnstile/v0/api.js?...`. No request means inspect JavaScript/hydration and script blockers first. A script error shows the fallback and submit remains disabled; slow loading alone does not show an error. Fully refresh after unblocking. Do not inject a second API script beside the wrapper.
 4. With correct dashboard mode and hostname allowlists, confirm visible compact dark challenge inside the gold container at narrow mobile/desktop widths. Complete it: submit enables. Wait beyond the local 250-second lifetime: submit disables; fresh verification enables it again. Navigate between auth pages repeatedly and inspect for duplicate-script/widget or hydration warnings.
 5. Register a unique customer using a strong chosen password. Expect 201 with `source: database`; look up the same returned id/email in Supabase Table Editor **public.User**, confirming NULL `deletedAt`, NULL `emailVerified`, CUSTOMER role. Never copy/share hashes. No database row means the test fails regardless of the UI message.
 6. Log in immediately with a fresh login challenge. Verify session id matches the stored id. Login should work before email verification; verification and resend flow still work independently, including token rotation/single use and the three/hour quota.
@@ -181,7 +181,7 @@ Earlier uncommitted audit/email work was preserved. This list isolates this task
 - `app/(auth)/login/page.tsx` — map safe server error messages.
 - `app/api/auth/register/route.ts` — correct durable-only route documentation; existing failure response retained.
 - `lib/turnstile.ts` — non-disclosing server configuration readiness helper.
-- `components/TurnstileCaptcha.tsx` — direct key-present render, dev public-key log, five-second warning, noscript message.
+- `components/TurnstileCaptcha.tsx` — direct key-present render, script-error fallback, slow-load tolerance, noscript message.
 - `components/auth/AuthCard.tsx` — visible initial SSR card.
 - `lib/config.ts`, `lib/demo-mode.ts`, `app/api/health/route.ts` — no production fallback secret/demo health claim; distinguish configuration from readiness.
 - `.env.example`, `.env.production.example` — required auth/database configuration and safe rollout guidance.
@@ -199,7 +199,7 @@ Earlier uncommitted audit/email work was preserved. This list isolates this task
 - `tests/fixtures/database.mjs`, `tests/fixtures/auth.mjs` — external isolated DB fixture and combined preload.
 - `tests/fixtures/turnstile-provider.mjs`, `tests/turnstile-http-token.ts` — explicit isolated-provider guard, no application demo assumption.
 - `tests/customer-journey.test.ts`, `tests/email-verification.test.ts` — move former demo-account tests onto explicit DB contract fixtures.
-- `tests/turnstile-client.test.ts` — action-specific immediate-render/CDN-container checks and five-second fail-closed timing.
+- `tests/turnstile-client.test.ts` — action-specific immediate-render/CDN-container checks and slow-load recovery and fail-closed script errors.
 - `tests/http-customer-journey.ts`, `tests/http-email-verification.ts`, `tests/http-turnstile.ts` — configured-database path with external fixtures and accurate claims.
 - `tests/http-live-auth.ts` — opt-in actual database/Cloudflare/API/store staging regression, no mocks.
 - `supabase/tests/auth-storage.test.mjs` — disposable real PostgreSQL/WASM additive-schema/transaction/RLS smoke.

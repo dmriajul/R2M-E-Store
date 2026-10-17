@@ -75,8 +75,9 @@ their maintenance state and auth answers a real error — nothing is faked. Poin
 and create the first admin, then sign in and add your products:
 
 ```bash
-cp .env.example .env.local     # set DATABASE_URL (Supabase pooled URI works)
-npm run db:push                # create the tables
+cp .env.example .env.local     # set DATABASE_URL to your local/staging Postgres URI
+npx prisma generate            # download/generate Prisma Client (requires engine access)
+npm run db:push                # create the tables ONLY on a database you own
 
 # Bootstrap the one account the seed creates — a SUPER_ADMIN for you:
 ADMIN_NAME="Your Name" \
@@ -84,6 +85,20 @@ ADMIN_EMAIL="you@example.com" \
 ADMIN_PASSWORD="a-long-random-password" \
 npm run db:seed
 ```
+
+Prisma CLI commands load `.env.local` through `prisma.config.ts`, just like
+`next dev`. Restart the dev server after changing the URL. Use a direct database
+URI for schema pushes: if your application URL points at a transaction pooler,
+set `DIRECT_URL` and enable `directUrl = env("DIRECT_URL")` in
+`prisma/schema.prisma` before running `db:push` (or temporarily supply a direct
+`DATABASE_URL` to the CLI). Never push an unreviewed schema to production.
+A missing/empty URL causes the maintenance page; a malformed URL, unreachable
+host, incorrect password, missing tables/columns or exhausted connection pool
+is reported in the **server console** with a safe Prisma code/hint (no URI or
+password). `/api/ready` probes database tables and reports only a fixed status.
+A healthy database is required for registration and login even though `next dev`
+bypasses the CAPTCHA. If Prisma engine downloads are blocked, run generate and
+push from a network that can reach `binaries.prisma.sh`.
 
 There are no default credentials: the seed reads `ADMIN_NAME`, `ADMIN_EMAIL`
 and `ADMIN_PASSWORD` from the environment and refuses to run without them.

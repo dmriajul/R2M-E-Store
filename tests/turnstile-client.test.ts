@@ -130,7 +130,9 @@ test("SSR hydrates without warnings; Strict Mode deduplicates script, expiry/res
     await act(async () => current.callback("token-three"));
     await act(async () => current["error-callback"]());
     assert.equal(element.querySelector("button")?.disabled, true);
-    assert.ok(element.textContent?.includes("Verification unavailable"));
+    assert.ok(element.textContent?.includes("Loading security check..."));
+    await act(async () => current.callback("recovered-token"));
+    assert.equal(element.querySelector("button")?.disabled, false);
     await act(async () => root.unmount());
     assert.equal(widgets.size, 0);
     await act(async () => current.callback("late-token"));
@@ -165,21 +167,20 @@ test("local token lifetime clears and remounts before Cloudflare's five-minute e
   element.remove();
 });
 
-test("script/render watchdog fails visibly rather than leaving an endless loading state", async (context) => {
+test("slow widget remains mounted and accepts success after five seconds", async (context) => {
   context.mock.timers.enable({ apis: ["setTimeout"] });
   const { root, element } = mount();
-  const api = dom.window.turnstile;
-  Object.assign(dom.window, { turnstile: undefined });
-  try {
-    await act(async () => root.render(createElement(Form)));
-    await act(async () => context.mock.timers.tick(5_000));
-    assert.ok(element.textContent?.includes("Verification unavailable"));
-    assert.equal(element.querySelector("button")?.disabled, true);
-  } finally {
-    Object.assign(dom.window, { turnstile: api });
-    await act(async () => root.unmount());
-    element.remove();
-  }
+  await act(async () => root.render(createElement(Form)));
+  await flush();
+  const widget = latestWidget();
+  await act(async () => context.mock.timers.tick(15_000));
+  assert.ok(!element.textContent?.includes("Verification unavailable"));
+  assert.equal(element.querySelector("button")?.disabled, true);
+  assert.ok(element.querySelector('[id^="mukra-turnstile-"]'));
+  await act(async () => widget.callback("late-token"));
+  assert.equal(element.querySelector("button")?.disabled, false);
+  await act(async () => root.unmount());
+  element.remove();
 });
 
 for (const action of ["login", "register"] as const) {

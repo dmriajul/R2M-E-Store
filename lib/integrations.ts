@@ -7,7 +7,7 @@
  */
 
 /** True when a Postgres connection string is present. */
-export const isDatabaseConfigured = (): boolean => Boolean(process.env.DATABASE_URL);
+export const isDatabaseConfigured = (): boolean => Boolean(process.env.DATABASE_URL?.trim());
 
 /** Cloudinary uploads need all three keys; otherwise we write to /public/uploads. */
 export const isCloudinaryConfigured = (): boolean =>
