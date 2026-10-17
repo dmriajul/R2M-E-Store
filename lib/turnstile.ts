@@ -1,7 +1,6 @@
 import type { TurnstileAction } from "@/lib/turnstile-shared";
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
-const TURNSTILE_DUMMY_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
 const TURNSTILE_ALWAYS_PASS_TEST_SECRET = "1x0000000000000000000000000000000AA";
 const TURNSTILE_TEST_SITE_KEYS = new Set([
   "1x00000000000000000000AA",
@@ -97,18 +96,23 @@ function allowedHostnames(): Set<string> {
   return hosts;
 }
 
-function isOfficialLocalTestResponse(secret: string, token: string): boolean {
+function isOfficialLocalTestConfiguration(secret: string): boolean {
   return process.env.NODE_ENV !== "production" &&
     secret === TURNSTILE_ALWAYS_PASS_TEST_SECRET &&
-    TURNSTILE_TEST_SITE_KEYS.has(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "") &&
-    token === TURNSTILE_DUMMY_TOKEN;
+    TURNSTILE_TEST_SITE_KEYS.has(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "");
 }
 
-function rejected(reason: TurnstileFailureReason): false {
-  // A safe local diagnostic identifies the failed gate without exposing the
-  // token, secret, submitted credentials, provider payload, action or hostname.
+type SafeProviderDiagnostic = {
+  errorCodes?: string[];
+  action?: string;
+  hostname?: string;
+};
+
+function rejected(reason: TurnstileFailureReason, diagnostic?: SafeProviderDiagnostic): false {
+  // Local-only diagnostics expose only Siteverify's relevant binding/error
+  // fields; never log the token, secret, credentials, IP or entire response.
   if (process.env.NODE_ENV !== "production") {
-    console.warn(`[turnstile] Verification rejected: ${reason}.`);
+    console.warn(`[turnstile] Verification rejected: ${reason}.`, diagnostic ?? "");
   }
   return false;
 }
@@ -146,19 +150,29 @@ export async function verifyTurnstileToken(
       return rejected("invalid-provider-response");
     }
     const verdict = result as Record<string, unknown>;
-    if (verdict.success !== true) return rejected("provider-rejected-token");
+    const diagnostic: SafeProviderDiagnostic = {
+      errorCodes: Array.isArray(verdict["error-codes"])
+        ? verdict["error-codes"].filter((code): code is string =>
+          typeof code === "string" && /^[a-z-]{1,64}$/.test(code),
+        ).slice(0, 8)
+        : undefined,
+      action: typeof verdict.action === "string" ? verdict.action.slice(0, 64) : undefined,
+      hostname: typeof verdict.hostname === "string" ? verdict.hostname.slice(0, 253) : undefined,
+    };
+    if (verdict.success !== true) return rejected("provider-rejected-token", diagnostic);
 
-    const officialLocalTest = isOfficialLocalTestResponse(secret, normalizedToken);
-    // Cloudflare's official dummy token has static metadata (`action: "test"`),
-    // so it cannot echo the widget action. Permit that documented value only
-    // for the exact official test key pair outside production. Real tokens
-    // remain strictly bound to their per-form action.
+    const officialLocalTest = isOfficialLocalTestConfiguration(secret);
+    // The official test widget may return provider-static `test` metadata (or
+    // omit action) instead of echoing `login`. Permit only that metadata with
+    // the exact public test site/secret pair outside production. Do not require
+    // the widget token to equal Cloudflare's separate documented dummy sample:
+    // the browser widget can issue its own successful test token.
     const actionMatches = verdict.action === options.action ||
-      (officialLocalTest && verdict.action === "test");
-    if (!actionMatches) return rejected("action-mismatch");
+      (officialLocalTest && (verdict.action === "test" || verdict.action === undefined || verdict.action === null));
+    if (!actionMatches) return rejected("action-mismatch", diagnostic);
 
     const hostname = providerHostname(verdict.hostname);
-    if (!hostname || !hosts.has(hostname)) return rejected("hostname-mismatch");
+    if (!hostname || !hosts.has(hostname)) return rejected("hostname-mismatch", diagnostic);
     return true;
   } catch {
     // Never log tokens, keys, provider response bodies, or request details.

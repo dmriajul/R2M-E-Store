@@ -68,7 +68,7 @@ test("localhost, 127.0.0.1 and URL-shaped local configuration compare as one loo
   assert.equal(await verifyTurnstileToken("token", { action: "login" }), true);
 });
 
-test("Cloudflare's official passing test pair accepts its static local metadata only outside production", async () => {
+test("Cloudflare's official local test pair accepts widget tokens with static metadata only outside production", async () => {
   process.env = {
     ...process.env,
     NODE_ENV: "development",
@@ -77,7 +77,12 @@ test("Cloudflare's official passing test pair accepts its static local metadata 
     TURNSTILE_ALLOWED_HOSTNAMES: "localhost",
   };
   reply({ success: true, action: "test", hostname: "localhost" });
-  assert.equal(await verifyTurnstileToken("XXXX.DUMMY.TOKEN.XXXX", { action: "login" }), true);
+  // The interactive browser widget may produce a token other than Cloudflare's
+  // separately documented XXXX.DUMMY.TOKEN.XXXX Siteverify sample.
+  assert.equal(await verifyTurnstileToken("browser-widget-test-token", { action: "login" }), true);
+
+  reply({ success: true, hostname: "localhost" });
+  assert.equal(await verifyTurnstileToken("browser-widget-test-token", { action: "login" }), true);
 
   // Static test metadata must never weaken checks for a real widget.
   process.env.TURNSTILE_SECRET_KEY = "real-looking-unit-secret";
