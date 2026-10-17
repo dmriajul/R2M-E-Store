@@ -20,6 +20,9 @@ export const AUTH_MESSAGES = {
   INVALID_PHONE: "Please enter a valid phone number.",
   TERMS_REQUIRED: "Please accept the Terms & Privacy Policy.",
   INVALID_REQUEST: "Please check your details and try again.",
+  // Compatibility names retained for consumers introduced on the base branch.
+  MISSING_FIELDS: "Please fill in all required fields.",
+  RATE_LIMITED: "Too many failed attempts. Please try again later or reset your password.",
   SECURITY_CHECK_FAILED: TURNSTILE_ERROR,
 } as const;
 export const AUTH_SUCCESS_MESSAGES = {
@@ -57,5 +60,5 @@ export function loginErrorMessage(code: string | undefined): string {
   return AUTH_MESSAGES[loginErrorCode(code)];
 }
 export function isAuthWarning(code: AuthErrorCode): boolean {
-  return code === "EMAIL_NOT_VERIFIED" || code === "ACCOUNT_LOCKED";
+  return code === "EMAIL_NOT_VERIFIED" || code === "ACCOUNT_LOCKED" || code === "RATE_LIMITED";
 }

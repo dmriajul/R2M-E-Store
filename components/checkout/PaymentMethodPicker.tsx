@@ -122,7 +122,7 @@ export function CopyableValue({
   );
 }
 
-/** Small "demo mode" reassurance strip shared by the payment + confirmation steps. */
+/** Small security reassurance strip shared by the payment + confirmation steps. */
 export function PaymentSecurityNote({ text }: { text?: string }) {
   return (
     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">

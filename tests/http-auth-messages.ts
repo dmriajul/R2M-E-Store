@@ -45,6 +45,26 @@ async function main() {
   assert.equal(authErrorMessage((await duplicate.json() as { code: string }).code), AUTH_MESSAGES.EMAIL_ALREADY_EXISTS);
   checks += 3;
 
+  // The incoming dedicated login API must not become a captcha/verification bypass.
+  for (const [values, status, code] of [
+    [{ email: valid.email, password: valid.password, turnstileToken: undefined }, 403, "SECURITY_CHECK_FAILED"],
+    [{ email: valid.email, password: valid.password, turnstileToken: fixtureToken("register") }, 403, "SECURITY_CHECK_FAILED"],
+    [{ email: `api-unknown-${crypto.randomUUID()}@example.com`, password: valid.password }, 401, "INVALID_CREDENTIALS"],
+    [{ email: valid.email, password: "incorrect" }, 401, "INVALID_CREDENTIALS"],
+    [{ email: "not-an-email", password: valid.password }, 401, "INVALID_CREDENTIALS"],
+    [{ email: valid.email, password: valid.password }, 403, "EMAIL_NOT_VERIFIED"],
+    [{ email: "admin@mukra.com", password: "password123" }, 200, null],
+  ] as const) {
+    const response = await fetch(new URL("/api/auth/login", base), { method: "POST",
+      headers: { "Content-Type": "application/json", "x-forwarded-for": crypto.randomUUID() },
+      body: JSON.stringify(Object.assign({ turnstileToken: fixtureToken("login") }, values)) });
+    assert.equal(response.status, status);
+    assert.equal((await response.json() as { code: string | null }).code, code);
+    assert.equal(response.headers.getSetCookie().length, 0, "Preflight must not create a session");
+    assert.match(response.headers.get("cache-control") ?? "", /(?:^|[,\s])no-store(?:$|[,\s])/);
+    checks += 4;
+  }
+
   const cookies = new Map<string, string>();
   async function request(path: string, options: RequestInit = {}) {
     const headers = new Headers(options.headers);
@@ -57,9 +77,10 @@ async function main() {
     }
     return response;
   }
+  // Exercise the total-request IP limiter separately from the new shared failed-password lockout.
   for (let attempt = 0; attempt < 21; attempt++) {
     const csrf = await (await request("/api/auth/csrf")).json() as { csrfToken: string };
-    const values = attempt === 0 ? { email: "", password: "" } : attempt === 1 ? { email: "not-an-email", password: "incorrect" } : { email: "unknown@example.com", password: "incorrect" };
+    const values = attempt === 0 ? { email: "", password: "" } : attempt === 1 ? { email: "not-an-email", password: "incorrect" } : { email: `invalid-format-${attempt}`, password: "incorrect" };
     const response = await request("/api/auth/callback/credentials", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Auth-Return-Redirect": "1" },
       body: new URLSearchParams({ ...values, csrfToken: csrf.csrfToken, turnstileToken: fixtureToken("login"), callbackUrl: new URL("/dashboard", base).href }) });
     const url = new URL((await response.json() as { url: string }).url);
@@ -72,6 +93,6 @@ async function main() {
   process.stdout.write(`PASS: ${checks} production HTTP message/validation/rate-limit checks.\n`);
 }
 main().catch(() => {
-  console.error("Auth message HTTP contract failed. No credentials or token URLs are printed.");
+  console.error(`Auth message HTTP contract failed after ${checks} completed checks. No credentials or token URLs are printed.`);
   process.exitCode = 1;
 });

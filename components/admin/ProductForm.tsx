@@ -197,7 +197,7 @@ interface ProductFormProps {
  * Add / edit sheet.
  *
  * Product photos upload through `POST /api/admin/upload` into Cloudinary's
- * `mukra/products` folder (local `.uploads/` in demo mode) and are saved as the
+ * `mukra/products` folder (or local `.uploads/` fallback) and are saved as the
  * `images` array — first image = cover. Uploads abandoned by cancelling the
  * sheet are deleted again (`useMediaSession`); photos removed from a saved
  * product are cleaned up server-side after the save.
@@ -234,7 +234,7 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
   const variants = watch("variants") ?? [];
   const images = watch("images") ?? [];
 
-  /* ---------- Media (Cloudinary mukra/products, or .uploads/ in demo mode) ---------- */
+  /* ---------- Media (Cloudinary mukra/products, or .uploads/ fallback) ---------- */
   const media = useMediaSession();
   const [uploading, setUploading] = useState(false);
   const category = watch("category");
@@ -302,7 +302,7 @@ export function ProductForm({ open, onOpenChange, product = null }: ProductFormP
    *
    * With Postgres configured the action persists the row (including
    * `featuredOrder`, the display placements and `active`) and hands back the
-   * saved record, which updates the local cache. In demo mode nothing is
+   * saved record, which updates the local cache. Without a database nothing is
    * persisted, so the same values are applied to the in-session store — the
    * console behaves exactly as it did before a database existed.
    */

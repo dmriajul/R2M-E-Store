@@ -7,6 +7,10 @@ import { DEMO_ADMIN_EMAIL, DEMO_PASSWORD } from "@/lib/demo-mode";
 import { isTrashExpired } from "@/lib/rbac";
 import type { AdminRoleChange, AdminUserAccount, AuthRole, AuthUser, SessionRole } from "@/types";
 
+import { isAccountLocked, recordFailedLoginAttempt, clearFailedLoginAttempts } from "@/lib/auth-attempts";
+export { isAccountLocked, clearFailedLoginAttempts, resetLoginRateLimits, getFailedLoginAuditLog, MAX_LOGIN_ATTEMPTS, LOGIN_LOCKOUT_WINDOW_MS } from "@/lib/auth-attempts";
+export type { FailedLoginAuditEntry } from "@/lib/auth-attempts";
+
 export const BCRYPT_ROUNDS = 10;
 
 export interface UserRecord extends AuthUser {
@@ -186,7 +190,7 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
 }
 
 /** Why a credentials check failed — surfaced to the login form as a code. */
-export type CredentialFailure = "invalid-credentials";
+export type CredentialFailure = "invalid-credentials" | "too-many-attempts";
 
 export interface CredentialResult {
   user: AuthUser | null;
@@ -203,16 +207,21 @@ export interface CredentialResult {
 export async function verifyCredentialsDetailed(
   email: string,
   password: string,
+  options?: { ip?: string },
 ): Promise<CredentialResult> {
+  if (isAccountLocked(email, options?.ip)) return { user: null, failure: "too-many-attempts" };
   const user = await findUserByEmail(email);
   // Always do one bcrypt comparison, including missing/trashed/invalid-hash rows.
   // This reduces the obvious existence timing signal; DB/network latency is not constant-time.
   const validHash = Boolean(user && /^\$2[aby]\$(?:0[4-9]|[12]\d|3[01])\$[./A-Za-z0-9]{53}$/.test(user.password));
   const dummyHash = "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
   const matches = await compare(password, validHash && user ? user.password : dummyHash).catch(() => false);
-  return user && validHash && matches
-    ? { user: stripPassword(user), failure: null }
-    : { user: null, failure: "invalid-credentials" };
+  if (!user || !validHash || !matches) {
+    const locked = recordFailedLoginAttempt(email, options?.ip);
+    return { user: null, failure: locked ? "too-many-attempts" : "invalid-credentials" };
+  }
+  clearFailedLoginAttempts(email);
+  return { user: stripPassword(user), failure: null };
 }
 
 /** Boolean-only wrapper (kept for convenience and older call sites). */

@@ -15,7 +15,7 @@ interface RouteContext {
  * Admin decision on a manual (bKash / Nagad / Rocket) payment.
  *
  * `approve` → CONFIRMED + PAID, `reject` → CANCELLED + FAILED, `collect-cash`
- * (COD) → DELIVERED + PAID. Requires the ADMIN role; in demo mode the console
+ * (COD) → DELIVERED + PAID. Requires the ADMIN role; without a database the console
  * applies the same change to its local order list.
  */
 export async function PATCH(

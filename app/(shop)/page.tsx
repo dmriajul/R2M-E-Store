@@ -83,7 +83,7 @@ export default async function HomePage() {
     // scroll at 3-up on desktop once more products get flagged. <NewArrivalsGrid />
     // fetches its own data server-side, so it is not queried here.
     listProducts({ featured: true, limit: 8 }),
-    // Category covers uploaded in the console ({} in demo mode / on error).
+    // Category covers uploaded in the console ({} in fallback mode / on error).
     getCategoryImageMap(),
   ]);
   return (

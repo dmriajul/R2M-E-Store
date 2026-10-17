@@ -75,7 +75,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         let result;
         try {
-          result = await verifyCredentialsDetailed(parsed.data.email, parsed.data.password);
+          result = await verifyCredentialsDetailed(parsed.data.email, parsed.data.password, { ip: clientIp(request.headers) });
         } catch {
           console.error("[auth] Credential storage unavailable");
           throw new LoginError("account-service-unavailable");

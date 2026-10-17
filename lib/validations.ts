@@ -6,6 +6,40 @@ import {
 } from "@/lib/bangladesh-locations";
 import { mediaKindFromUrl } from "@/lib/images";
 import { PRODUCT_IMAGES_MAX } from "@/lib/media";
+export {
+  AUTH_ERROR_CODES,
+  EMAIL_REGEX,
+  LOGIN_ERROR_MESSAGES,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_RULES,
+  PHONE_REGEX,
+  REGISTER_ERROR_MESSAGES,
+  checkPasswordStrength,
+  constantTimeCompare,
+  forgotPasswordSchema,
+  getLoginErrorMessage,
+  getRegisterErrorMessage,
+  isValidEmail,
+  loginSchema,
+  registerApiSchema,
+  registerSchema,
+  sanitizeEmail,
+  sanitizeInput,
+  sanitizePhone,
+  scorePassword,
+  validateEmail,
+  validateLoginServerInput,
+  validateRegistrationServerInput,
+  type AuthErrorCode,
+  type AuthErrorCopy,
+  type ForgotPasswordValues,
+  type LoginValues,
+  type PasswordStrengthResult,
+  type RegisterApiValues,
+  type RegisterValues,
+  type ServerLoginValidationResult,
+  type ServerRegisterValidationResult,
+} from "@/lib/validations/auth";
 
 /**
  * Shared Zod schemas. The client forms and the checkout store use the same
@@ -149,9 +183,6 @@ export const paymentSchema = z
 
 export type PaymentValues = z.infer<typeof paymentSchema>;
 
-export { registerApiSchema, loginSchema, registerSchema, PASSWORD_RULES, scorePassword } from "@/lib/validations/auth";
-export type { RegisterApiValues, LoginValues, RegisterValues } from "@/lib/validations/auth";
-
 /** `POST /api/orders` payload — prices are re-checked server-side. */
 export const createOrderSchema = z.object({
   items: z
@@ -260,14 +291,8 @@ export function formatExpiry(value: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Auth                                                                      */
+/*  Auth (schemas and helpers re-exported from @/lib/validations/auth)        */
 /* -------------------------------------------------------------------------- */
-
-export const forgotPasswordSchema = z.object({
-  email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
-});
-
-export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 
 /* -------------------------------------------------------------------------- */
 /*  Account area (dashboard)                                                  */
