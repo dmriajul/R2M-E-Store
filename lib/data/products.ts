@@ -17,24 +17,65 @@ import type {
   ProductInventoryVariant,
 } from "@/types";
 
-/** The row shape we read back from Postgres. */
+/* -------------------------------------------------------------------------- */
+/*  Row normalization                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Postgres hands back `null` for these columns, even though Prisma says it can't.
+ *
+ * `prisma/schema.prisma` declares `categories`/`colors`/`sizes`/`images` as
+ * non-null `String[]`, but the deployed DDL (`supabase/tests/schema.sql`)
+ * created them as plain nullable `TEXT[]` with no `NOT NULL`. Any row written
+ * outside Prisma — a SQL import, a backfill, a restore — can therefore hold
+ * NULL, while the *generated* client types still promise `string[]`. The
+ * compiler cannot warn about it, so the first dereference
+ * (`row.images.some(…)`) throws inside the Server Component render and takes
+ * the whole storefront down to the error boundary.
+ *
+ * Every row → domain mapper normalizes through these helpers so the `Product`
+ * invariants the UI relies on actually hold. `lib/data/returns.ts` and
+ * `lib/data/orders.ts` already did this inline; these are the shared versions.
+ */
+export function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === "string");
+}
+
+/** Text column that the DDL may allow NULL on. */
+export function toText(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+/** Numeric column that the DDL may allow NULL on. */
+export function toNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * The row shape we read back from Postgres.
+ *
+ * Fields the deployed DDL allows NULL on are typed nullable on purpose — a
+ * generated Prisma type claiming `string[]` is what hid this in the first
+ * place. Normalize with the helpers above before building a `Product`.
+ */
 export interface ProductRow {
   id: string;
   name: string;
   slug: string;
-  description: string;
-  price: number;
+  description: string | null;
+  price: number | null;
   originalPrice: number | null;
-  category: string;
-  categories?: string[];
-  gender: string;
-  ageRange: string;
+  category: string | null;
+  categories?: string[] | null;
+  gender: string | null;
+  ageRange: string | null;
   material: string | null;
-  colors: string[];
-  sizes: string[];
-  images: string[];
-  stock: number;
-  variants?: ProductInventoryVariant[];
+  colors: string[] | null;
+  sizes: string[] | null;
+  images: string[] | null;
+  stock: number | null;
+  variants?: ProductInventoryVariant[] | null;
   badge: string | null;
   featured: boolean;
   featuredOrder?: number;
@@ -47,47 +88,51 @@ export interface ProductRow {
 
 const CATEGORIES = Object.keys(CATEGORY_META) as ProductCategory[];
 
-export function toProductCategory(value: string): ProductCategory {
+export function toProductCategory(value: string | null | undefined): ProductCategory {
   return CATEGORIES.includes(value as ProductCategory) ? (value as ProductCategory) : "Accessories";
 }
 
-function toGender(value: string): ProductGender {
+function toGender(value: string | null | undefined): ProductGender {
   return value === "Boys" || value === "Unisex" ? value : "Girls";
 }
 
 /** Database row → storefront `Product`. */
 export function rowToProduct(row: ProductRow): Product {
   const category = toProductCategory(row.category);
-  const variants = row.variants?.length
-    ? row.variants.map(({ size, color, stock }) => ({ size, color, stock }))
+  const variantRows = Array.isArray(row.variants) ? row.variants : [];
+  const variants = variantRows.length
+    ? variantRows.map(({ size, color, stock }) => ({ size, color, stock }))
     : undefined;
   const stock = variants
-    ? variants.reduce((total, variant) => total + variant.stock, 0)
-    : row.stock;
-  const images = row.images.some(isRenderableImage)
-    ? row.images
-    : [...(PRODUCT_IMAGES[row.slug] ?? row.images)];
+    ? variants.reduce((total, variant) => total + toNumber(variant.stock), 0)
+    : toNumber(row.stock);
+  /* `images` is nullable in the deployed DDL — normalizing here is what keeps
+     `/`, `/shop`, `/product/[id]` and `/sitemap.xml` rendering when a row has
+     no gallery. */
+  const gallery = toStringArray(row.images);
+  const images = gallery.some(isRenderableImage)
+    ? gallery
+    : [...(PRODUCT_IMAGES[row.slug] ?? gallery)];
+  const description = toText(row.description);
+  const extraCategories = toStringArray(row.categories).map(toProductCategory);
 
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
-    tagline: row.description.slice(0, 96),
-    description: row.description,
-    price: row.price,
+    tagline: description.slice(0, 96),
+    description,
+    price: toNumber(row.price),
     originalPrice: row.originalPrice ?? undefined,
     compareAtPrice: row.originalPrice ?? undefined,
     currency: "BDT",
     images,
     category,
-    categories:
-      row.categories?.length
-        ? row.categories.map(toProductCategory)
-        : [category],
-    ageRange: row.ageRange,
+    categories: extraCategories.length ? extraCategories : [category],
+    ageRange: toText(row.ageRange, "0-12Y"),
     gender: toGender(row.gender),
-    colors: row.colors,
-    sizes: row.sizes,
+    colors: toStringArray(row.colors),
+    sizes: toStringArray(row.sizes),
     material: row.material ?? "Organic cotton",
     badge: (row.badge as ProductBadge | null) ?? undefined,
     tags: [],

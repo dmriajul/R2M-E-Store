@@ -7,7 +7,10 @@ import {
   type AdminProductValues,
 } from "@/lib/validations";
 import {
+  toNumber,
   toProductCategory,
+  toStringArray,
+  toText,
   type ProductRow,
 } from "@/lib/data/products";
 import type { AdminProduct, ProductBadge, ProductGender } from "@/types";
@@ -19,11 +22,12 @@ interface AdminVariantRow {
   sku: string | null;
 }
 
-interface AdminProductRow extends Omit<ProductRow, "variants"> {
+interface AdminProductRow extends Omit<ProductRow, "variants" | "categories"> {
   sku: string | null;
   costPrice: number;
-  categories: string[];
-  variants: AdminVariantRow[];
+  /** Nullable in the deployed DDL — see `toStringArray` in lib/data/products.ts. */
+  categories?: string[] | null;
+  variants?: AdminVariantRow[] | null;
   lowStockThreshold: number;
   trackInventory: boolean;
   metaTitle: string | null;
@@ -36,42 +40,49 @@ interface AdminProductRow extends Omit<ProductRow, "variants"> {
 
 function toAdminProduct(row: AdminProductRow): AdminProduct {
   const category = toProductCategory(row.category);
-  const colors = row.colors.length ? row.colors : ["Pink"];
-  const stock = row.variants.length
-    ? row.variants.reduce((total, variant) => total + variant.stock, 0)
-    : row.stock;
+  /* Every one of these normalizations is load-bearing: the deployed DDL allows
+     NULL on the array/text columns, so an unguarded `row.colors.length` throws
+     and the console silently loses the whole product list. */
+  const rowColors = toStringArray(row.colors);
+  const colors = rowColors.length ? rowColors : ["Pink"];
+  const variantRows = Array.isArray(row.variants) ? row.variants : [];
+  const rowStock = toNumber(row.stock);
+  const stock = variantRows.length
+    ? variantRows.reduce((total, variant) => total + toNumber(variant.stock), 0)
+    : rowStock;
+  const rowImages = toStringArray(row.images);
+  const rowCategories = toStringArray(row.categories).map(toProductCategory);
+  const description = toText(row.description);
 
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
-    tagline: row.description.slice(0, 96),
-    description: row.description,
-    price: row.price,
+    tagline: description.slice(0, 96),
+    description,
+    price: toNumber(row.price),
     originalPrice: row.originalPrice ?? undefined,
     compareAtPrice: row.originalPrice ?? undefined,
     currency: "BDT",
-    images: row.images.length ? row.images : [`${row.slug}-1`],
+    images: rowImages.length ? rowImages : [`${row.slug}-1`],
     category,
-    categories: row.categories.length
-      ? row.categories.map(toProductCategory)
-      : [category],
-    ageRange: row.ageRange,
+    categories: rowCategories.length ? rowCategories : [category],
+    ageRange: toText(row.ageRange, "0-12Y"),
     gender: (row.gender === "Boys" || row.gender === "Unisex"
       ? row.gender
       : "Girls") as ProductGender,
     colors,
-    sizes: row.sizes,
+    sizes: toStringArray(row.sizes),
     material: row.material ?? "Organic cotton",
     badge: (row.badge as ProductBadge | null) ?? undefined,
     tags: [],
     rating: 5,
     reviewCount: 0,
     stock,
-    variants: row.variants.map((variant) => ({
+    variants: variantRows.map((variant) => ({
       size: variant.size,
       color: variant.color,
-      stock: variant.stock,
+      stock: toNumber(variant.stock),
       ...(variant.sku ? { sku: variant.sku } : {}),
     })),
     inStock: stock > 0 && row.active,
@@ -90,7 +101,7 @@ function toAdminProduct(row: AdminProductRow): AdminProduct {
     lowStockThreshold: row.lowStockThreshold,
     trackInventory: row.trackInventory,
     metaTitle: row.metaTitle ?? `${row.name} | Mukra`,
-    metaDescription: row.metaDescription ?? row.description.slice(0, 160),
+    metaDescription: row.metaDescription ?? description.slice(0, 160),
   };
 }
 
@@ -206,7 +217,7 @@ async function writeAdminProduct(
       })) as AdminProductRow;
 
   // Photos dropped from the gallery are deleted once nothing else uses them.
-  scheduleImageCleanup(previousImages, row.images);
+  scheduleImageCleanup(previousImages, toStringArray(row.images));
   return toAdminProduct(row);
 }
 
@@ -219,8 +230,8 @@ async function readProductImages(db: AdminDatabase, id: string): Promise<string[
     const row = (await db.product.findUnique({
       where: { id },
       select: { images: true },
-    })) as { images: string[] } | null;
-    return row?.images ?? [];
+    })) as { images: string[] | null } | null;
+    return toStringArray(row?.images);
   } catch (error) {
     console.error("[admin/products] Could not read the current gallery", error);
     return [];
@@ -390,24 +401,29 @@ export async function duplicateAdminProduct(id: string): Promise<AdminProduct> {
     throw new AdminDataError("That product no longer exists — reload the console");
   }
 
+  const sourceCategories = toStringArray(source.categories);
+  const sourceVariants = Array.isArray(source.variants) ? source.variants : [];
+
   const row = (await db.product.create({
     data: {
       name: `${source.name} (Copy)`,
       slug: await uniqueCopySlug(db, source.slug),
       sku: await uniqueCopySku(db, source.sku),
-      description: source.description,
-      price: source.price,
+      description: toText(source.description),
+      price: toNumber(source.price),
       costPrice: source.costPrice,
       originalPrice: source.originalPrice,
       category: source.category,
-      categories: source.categories.length ? source.categories : [source.category],
+      categories: sourceCategories.length ? sourceCategories : [source.category],
       gender: source.gender,
-      ageRange: source.ageRange,
+      ageRange: toText(source.ageRange, "0-12Y"),
       material: source.material,
-      colors: source.colors,
-      sizes: source.sizes,
-      images: source.images,
-      stock: source.stock,
+      /* Normalized on the way out as well: copying a drifted row must not write
+         another NULL back into the catalogue. */
+      colors: toStringArray(source.colors),
+      sizes: toStringArray(source.sizes),
+      images: toStringArray(source.images),
+      stock: toNumber(source.stock),
       lowStockThreshold: source.lowStockThreshold,
       trackInventory: source.trackInventory,
       badge: source.badge,
@@ -421,10 +437,10 @@ export async function duplicateAdminProduct(id: string): Promise<AdminProduct> {
       metaTitle: source.metaTitle,
       metaDescription: source.metaDescription,
       variants: {
-        create: source.variants.map((variant) => ({
+        create: sourceVariants.map((variant) => ({
           size: variant.size,
           color: variant.color,
-          stock: variant.stock,
+          stock: toNumber(variant.stock),
           sku: variant.sku,
         })),
       },
@@ -499,16 +515,17 @@ export async function restockAdminProduct(
     throw new AdminDataError("That product no longer exists — reload the console");
   }
 
-  const variantCount = row.variants.length;
-  const variantStock = row.variants.reduce((total, variant) => total + variant.stock, 0);
-  const stock = (variantCount > 0 ? variantStock : row.stock) + units;
+  const variants = Array.isArray(row.variants) ? row.variants : [];
+  const variantCount = variants.length;
+  const variantStock = variants.reduce((total, variant) => total + toNumber(variant.stock), 0);
+  const stock = (variantCount > 0 ? variantStock : toNumber(row.stock)) + units;
 
   if (variantCount > 0) {
     const perVariant = Math.floor(units / variantCount);
     const remainder = units % variantCount;
 
     await Promise.all(
-      row.variants.map((variant, index) =>
+      variants.map((variant, index) =>
         db.productVariant.updateMany({
           where: { productId: id, size: variant.size, color: variant.color },
           data: { stock: variant.stock + perVariant + (index < remainder ? 1 : 0) },
