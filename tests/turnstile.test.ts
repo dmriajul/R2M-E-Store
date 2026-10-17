@@ -46,13 +46,49 @@ test("production requires trusted host configuration", async () => {
   reply({ success: true, action: "login", hostname: "shop.example.com" });
   assert.equal(await verifyTurnstileToken("token", { action: "login" }), true);
 });
-test("localhost is implicitly trusted only outside production; explicit allowlist takes precedence", async () => {
+test("local development trusts loopback even with an explicit non-local allowlist", async () => {
   delete process.env.TURNSTILE_ALLOWED_HOSTNAMES;
   process.env = { ...process.env, NODE_ENV: "development" };
   reply({ success: true, action: "register", hostname: "localhost" });
   assert.equal(await verifyTurnstileToken("token", { action: "register" }), true);
+
+  // Previously the early return for an explicit allowlist dropped every
+  // implicit local hostname and rejected a valid local Cloudflare verdict.
   process.env.TURNSTILE_ALLOWED_HOSTNAMES = "shop.example.com";
-  assert.equal(await verifyTurnstileToken("token", { action: "register" }), false);
+  assert.equal(await verifyTurnstileToken("token", { action: "register" }), true);
+});
+
+test("localhost, 127.0.0.1 and URL-shaped local configuration compare as one loopback host", async () => {
+  process.env.TURNSTILE_ALLOWED_HOSTNAMES = "http://localhost:3000";
+  reply({ success: true, action: "login", hostname: "127.0.0.1" });
+  assert.equal(await verifyTurnstileToken("token", { action: "login" }), true);
+
+  process.env.TURNSTILE_ALLOWED_HOSTNAMES = "127.0.0.1:3000";
+  reply({ success: true, action: "login", hostname: "localhost" });
+  assert.equal(await verifyTurnstileToken("token", { action: "login" }), true);
+});
+
+test("Cloudflare's official passing test pair accepts its static local metadata only outside production", async () => {
+  process.env = {
+    ...process.env,
+    NODE_ENV: "development",
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+    TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+    TURNSTILE_ALLOWED_HOSTNAMES: "localhost",
+  };
+  reply({ success: true, action: "test", hostname: "localhost" });
+  assert.equal(await verifyTurnstileToken("XXXX.DUMMY.TOKEN.XXXX", { action: "login" }), true);
+
+  // Static test metadata must never weaken checks for a real widget.
+  process.env.TURNSTILE_SECRET_KEY = "real-looking-unit-secret";
+  reply({ success: true, action: "test", hostname: "localhost" });
+  assert.equal(await verifyTurnstileToken("XXXX.DUMMY.TOKEN.XXXX", { action: "login" }), false);
+
+  // Official dummy secrets are deliberately unusable in production.
+  process.env.TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
+  process.env = { ...process.env, NODE_ENV: "production" };
+  globalThis.fetch = async () => { throw new Error("Production test keys must fail before fetching"); };
+  assert.equal(await verifyTurnstileToken("XXXX.DUMMY.TOKEN.XXXX", { action: "login" }), false);
 });
 for (const [name, payload] of [
   ["invalid token", { success: false, "error-codes": ["invalid-input-response"] }],
