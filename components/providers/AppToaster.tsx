@@ -1,6 +1,8 @@
 "use client";
 
-import { Toaster } from "sonner";
+import { useEffect } from "react";
+import { Toaster, toast } from "sonner";
+import { consumeAuthSuccess, AUTH_SUCCESS_DURATION } from "@/lib/auth-flash";
 import { AlertTriangle, CheckCircle2, Info, Loader2, XCircle } from "lucide-react";
 
 /**
@@ -12,6 +14,11 @@ import { AlertTriangle, CheckCircle2, Info, Loader2, XCircle } from "lucide-reac
  * - Error toasts raised via `authToast` remain visible until dismissed or fixed.
  */
 export function AppToaster() {
+  useEffect(() => {
+    const message = consumeAuthSuccess();
+    if (message) toast.success(message, { id: "auth-success", duration: AUTH_SUCCESS_DURATION });
+  }, []);
+
   return (
     <Toaster
       theme="dark"

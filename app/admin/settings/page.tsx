@@ -77,7 +77,7 @@ export default function AdminSettingsPage() {
       </section>
 
       <p className="text-[11px] text-muted-foreground">
-        Homepage hero changes are stored in the database. Other settings sections are saved for the current session.
+        Homepage hero changes are saved to the database. Other settings are not yet connected and are not saved.
       </p>
     </div>
   );

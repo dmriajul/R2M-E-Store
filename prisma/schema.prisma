@@ -1,13 +1,8 @@
 // MUKRA — Postgres schema (Supabase-compatible).
 //
-// The app runs without a database: every query in `lib/data/*` is wrapped in a
-// try/catch and falls back to the mock dataset. Add DATABASE_URL, then run
-//
-//   npx prisma generate
-//   npx prisma db push
-//   npm run db:seed
-//
-// to switch the storefront onto live data.
+// Production data paths and all account flows require a durable database.
+// Apply reviewed SQL/migrations first, then regenerate the client. Never blindly
+// db-push or seed production. See docs/AUTH_PRODUCTION_FIXES.md.
 
 generator client {
   provider = "prisma-client-js"
@@ -92,6 +87,7 @@ model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
+  emailVerified DateTime?
   phone     String?
   password  String
   role      Role     @default(CUSTOMER)
@@ -118,6 +114,19 @@ model User {
 
   @@index([role])
   @@index([deletedAt])
+}
+
+/// One active verification link per normalized email. Token is SHA-256, never the bearer secret.
+/// Resend counters live here so limits work across serverless instances.
+model VerificationToken {
+  id                String   @id @default(cuid())
+  identifier        String   @unique
+  token             String   @unique
+  expires           DateTime
+  resendCount       Int      @default(0)
+  resendWindowStart DateTime @default(now())
+
+  @@index([identifier, token])
 }
 
 /// One row per **successful** role change from *Staff & Roles*.

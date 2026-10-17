@@ -1,12 +1,5 @@
-/**
- * Demo-mode switch.
- *
- * The whole backend is optional: every integration (Postgres via Prisma,
- * NextAuth credentials, Cloudinary uploads, live payments) degrades to the
- * in-memory mock data the storefront already ships with. That's how the app
- * runs in this sandbox with **no environment variables at all**, and how it
- * flips to the real backend the moment credentials are added.
- */
+/** Development catalogue/UI fixtures only. Account flows always require Prisma;
+ * production data helpers fail closed even if ALLOW_DEMO_MODE is set. */
 
 /** True when no Postgres connection string is configured. */
 export const IS_DEMO = !process.env.DATABASE_URL;
@@ -28,7 +21,7 @@ export const isSSLCommerzEnabled = (): boolean =>
   Boolean(process.env.SSLCOMMERZ_STORE_ID);
 
 /** Human label used in the UI and in API payloads. */
-export const dataSourceLabel = (): string => (IS_DEMO ? "demo" : "database");
+export const dataSourceLabel = (): string => (IS_DEMO ? (process.env.NODE_ENV === "production" ? "unconfigured" : "demo") : "database");
 
 /** The password for every demo account — staff roles included. */
 export const DEMO_PASSWORD = "password123";

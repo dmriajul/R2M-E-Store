@@ -58,8 +58,10 @@ export function SocialButtons() {
           type="button"
           variant="outline"
           onClick={() =>
-            toast.info(`${provider.label} sign-in is not available right now`, {
-              description: "Please sign in using your email and password.",
+            toast.warning(`${provider.label} sign-in is currently unavailable`, {
+              description: "Please sign in with your email and password.",
+              duration: Infinity,
+              closeButton: true,
             })
           }
           className="h-12 gap-2.5 rounded-full border-glass-border bg-glass text-sm font-medium transition-all duration-400 ease-[var(--ease-luxe)] hover:border-primary/40 hover:bg-white/8 hover:text-foreground"

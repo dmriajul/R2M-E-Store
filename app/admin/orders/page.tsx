@@ -101,7 +101,7 @@ export default function AdminOrdersPage() {
       viewDetails: language === "bn" ? "বিস্তারিত দেখুন" : "View details",
       printInvoice: language === "bn" ? "ইনভয়েস প্রিন্ট করুন" : "Print invoice",
       noOrders: language === "bn" ? "এই ফিল্টারে কোনো অর্ডার নেই।" : "No orders match these filters.",
-      demoDate: language === "bn" ? "হালনাগাদ: " : "as of ",
+      demoDate: language === "bn" ? "তথ্যের তারিখ, " : "Data as of ",
     };
     return translations[key] ?? key;
   };

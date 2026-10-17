@@ -107,7 +107,7 @@ export const FEATURES = {
   database: isDatabaseConfigured(),
   cloudinary: isCloudinaryConfigured(),
   sslcommerz: SSLCOMMERZ.enabled,
-  /** Auth always works — NextAuth with the demo credential fallback. */
+  /** Auth provider available; login also requires configured Turnstile verification. */
   auth: true,
 
   /* ---------------------------------------------------------------------- */
@@ -133,18 +133,19 @@ export const FEATURES = {
 
 /** Auth.js needs a secret; the demo fallback keeps local/dev builds signed-in-able. */
 export const AUTH_SECRET =
-  process.env.AUTH_SECRET ??
-  process.env.NEXTAUTH_SECRET ??
-  "mukra-demo-secret-change-me-in-production";
+  process.env.AUTH_SECRET ||
+  process.env.NEXTAUTH_SECRET ||
+  (process.env.NODE_ENV !== "production"
+    ? "mukra-demo-secret-change-me-in-production"
+    : undefined);
 
-export const AUTH_URL =
-  process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+export const AUTH_URL = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
 /** Server-side summary shown by `/api/health` and the admin console footer. */
 export function integrationStatus() {
   return {
-    demoMode: !FEATURES.database,
-    database: FEATURES.database ? "configured" : "mock",
+    demoMode: process.env.NODE_ENV !== "production" && !FEATURES.database,
+    database: FEATURES.database ? "configured" : "unconfigured",
     cloudinary: FEATURES.cloudinary ? "configured" : "local-disk",
     sslcommerz: FEATURES.sslcommerz ? "enabled" : "disabled",
     currency: STORE_CURRENCY,

@@ -13,7 +13,7 @@ import { normalizeRole, SECTION_ROLES, sectionForPath } from "@/lib/rbac";
 export const authConfig = {
   secret: AUTH_SECRET,
   trustHost: true,
-  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 30 },
+  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
   pages: {
     signIn: "/login",
     error: "/login",
@@ -62,6 +62,7 @@ export const authConfig = {
         token.role = normalizeRole(user.role);
         token.name = user.name ?? token.name;
         token.phone = user.phone;
+        token.emailVerified = Boolean(user.emailVerified);
       }
       return token;
     },
@@ -71,7 +72,7 @@ export const authConfig = {
         session.user.role = normalizeRole(typeof token.role === "string" ? token.role : null);
         session.user.phone = typeof token.phone === "string" ? token.phone : undefined;
       }
-      return session;
+      return { ...session, user: { ...session.user, emailVerified: token.emailVerified === true } };
     },
   },
 } satisfies NextAuthConfig;

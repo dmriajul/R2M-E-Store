@@ -12,10 +12,12 @@ declare module "next-auth" {
       /** Already normalised: never the legacy `ADMIN` value. */
       role: SessionRole;
       phone?: string;
+      emailVerified?: boolean;
     } & DefaultSession["user"];
   }
 
   interface User {
+    emailVerified?: Date | boolean | null;
     role?: AuthRole;
     phone?: string;
   }
@@ -23,6 +25,7 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
+    emailVerified?: boolean;
     id?: string;
     role?: SessionRole;
     phone?: string;

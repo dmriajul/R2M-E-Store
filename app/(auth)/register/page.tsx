@@ -1,24 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
+import { useTurnstile } from "@/hooks/useTurnstile";
+import { authErrorMessage, isAuthErrorCode, type AuthErrorCode } from "@/lib/auth-messages";
+import { AuthFeedback } from "@/components/auth/AuthFeedback";
+import { useAuthFeedback } from "@/hooks/useAuthFeedback";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Mail, Phone, Sparkles, User } from "lucide-react";
-import {
-  AUTH_ERROR_CODES,
-  getRegisterErrorMessage,
-  registerSchema,
-  type AuthErrorCopy,
-  type RegisterValues,
-} from "@/lib/validations/auth";
+import { queueAuthSuccess } from "@/lib/auth-flash";
+import { registerSchema, type RegisterValues } from "@/lib/validations";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { PasswordStrength } from "@/components/auth/PasswordStrength";
 import { SocialButtons } from "@/components/auth/SocialButtons";
-import { Toast, authToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -27,17 +24,18 @@ const FIELD_CLASS =
   "h-12 rounded-xl border-glass-border bg-[#1A1A1A] pl-10 text-sm transition-colors duration-300 focus-visible:border-primary/60 focus-visible:ring-primary/25 aria-[invalid=true]:border-rose/60";
 
 export default function RegisterPage() {
-  const router = useRouter();
+  const captcha = useTurnstile();
+  const feedback = useAuthFeedback();
   const [pending, setPending] = useState(false);
-  const [serverError, setServerError] = useState<AuthErrorCopy | null>(null);
-  const activeToastId = useRef<string | number | undefined>(undefined);
+  const [captchaAttempted, setCaptchaAttempted] = useState(false);
 
   const {
     register,
     handleSubmit,
     watch,
-    trigger,
-    formState: { errors, isSubmitting, isValid, touchedFields },
+    setError,
+    clearErrors,
+    formState: { errors, isValid, isSubmitting },
   } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -52,42 +50,16 @@ export default function RegisterPage() {
   });
 
   const password = watch("password");
-  const confirmPassword = watch("confirmPassword");
-
-  // Re-validate confirmPassword whenever password changes so mismatch updates immediately.
-  useEffect(() => {
-    if (confirmPassword || touchedFields.confirmPassword) {
-      void trigger("confirmPassword");
-    }
-  }, [password, confirmPassword, touchedFields.confirmPassword, trigger]);
-
-  // Clear visible server errors as soon as the user starts fixing the inputs.
-  useEffect(() => {
-    const subscription = watch(() => {
-      setServerError((current) => {
-        if (current && activeToastId.current !== undefined) {
-          authToast.dismiss(activeToastId.current);
-          activeToastId.current = undefined;
-        }
-        return null;
-      });
-    });
-    return () => subscription.unsubscribe();
-  }, [watch]);
-
-  const dismissServerError = () => {
-    setServerError(null);
-    if (activeToastId.current !== undefined) {
-      authToast.dismiss(activeToastId.current);
-      activeToastId.current = undefined;
-    }
-  };
 
   const onSubmit = async (values: RegisterValues) => {
+    if (!captcha.token) { setCaptchaAttempted(true); return; }
+    feedback.clear();
+    const turnstileToken = captcha.token;
+    captcha.clearToken();
     setPending(true);
-    dismissServerError();
 
     try {
+      /* Create the durable account and token; never create a session implicitly. */
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -97,74 +69,38 @@ export default function RegisterPage() {
           phone: values.phone || undefined,
           password: values.password,
           confirmPassword: values.confirmPassword,
+          acceptedTerms: values.acceptedTerms,
+          turnstileToken,
         }),
       });
 
-      const payload = (await response.json()) as {
-        data?: unknown;
-        error?: string | null;
-        code?: string | null;
-        field?: string;
-      };
+      const payload: { code?: unknown; fieldErrors?: Record<string, unknown> } = await response.json();
 
       if (!response.ok) {
-        setPending(false);
-        const copy = getRegisterErrorMessage(payload.code ?? payload.error);
-        setServerError(copy);
-        activeToastId.current =
-          copy.severity === "warning"
-            ? authToast.warning(copy.title, copy.message)
-            : authToast.error(copy.title, copy.message);
+        const code: AuthErrorCode = isAuthErrorCode(payload.code) ? payload.code : "SERVER_ERROR";
+        const fields = { name: "fullName", email: "email", phone: "phone", password: "password", confirmPassword: "confirmPassword", acceptedTerms: "acceptedTerms" } as const;
+        let focus = true;
+        for (const [apiField, formField] of Object.entries(fields)) {
+          const fieldCode = payload.fieldErrors?.[apiField];
+          if (isAuthErrorCode(fieldCode)) {
+            setError(formField, { type: "server", message: authErrorMessage(fieldCode) }, { shouldFocus: focus });
+            focus = false;
+          }
+        }
+        feedback.show(code);
         return;
       }
 
-      const result = await signIn("credentials", {
-        email: values.email,
-        password: values.password,
-        redirect: false,
-      }).catch(() => null);
-
-      const firstName = values.fullName.trim().split(" ")[0] || "there";
-
-      if (!result || result.error) {
-        setPending(false);
-        authToast.success(
-          "Account created! Verification email sent.",
-          "Your account is ready. Please sign in with your email and password.",
-        );
-        router.push("/login");
-        return;
-      }
-
-      authToast.success(
-        "Account created! Verification email sent.",
-        `Welcome to the family, ${firstName}. A verification email has been sent to ${values.email}.`,
-      );
-      router.push("/dashboard");
-      router.refresh();
+      queueAuthSuccess("ACCOUNT_CREATED");
+      // Customer sign-in requires verification. Existing checkout permissions are unchanged.
+      window.location.assign("/auth/verify-email-pending");
     } catch {
+      feedback.show("SERVER_ERROR");
+    } finally {
+      captcha.reset();
       setPending(false);
-      const copy = getRegisterErrorMessage(AUTH_ERROR_CODES.SERVER_ERROR);
-      setServerError(copy);
-      activeToastId.current = authToast.error(copy.title, copy.message);
     }
   };
-
-  const fullNameError =
-    errors.fullName?.message ??
-    (serverError?.field === "fullName" ? serverError.message : undefined);
-  const emailError =
-    errors.email?.message ??
-    (serverError?.field === "email" ? serverError.message : undefined);
-  const phoneError =
-    errors.phone?.message ??
-    (serverError?.field === "phone" ? serverError.message : undefined);
-  const passwordError =
-    errors.password?.message ??
-    (serverError?.field === "password" ? serverError.message : undefined);
-  const confirmPasswordError =
-    errors.confirmPassword?.message ??
-    (serverError?.field === "confirmPassword" ? serverError.message : undefined);
 
   return (
     <>
@@ -182,16 +118,21 @@ export default function RegisterPage() {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
-          {serverError && (
-            <Toast
-              variant={serverError.severity}
-              title={serverError.title}
-              message={serverError.message}
-              onDismiss={dismissServerError}
-            />
-          )}
-
+        <form onChangeCapture={() => {
+          feedback.clear();
+          for (const field of Object.keys(errors) as (keyof RegisterValues)[]) {
+            if (errors[field]?.type === "server") clearErrors(field);
+          }
+        }} onKeyDownCapture={(event) => {
+          // A disabled submit button can suppress the browser's implicit Enter submission.
+          if (event.key === "Enter" && event.target instanceof HTMLInputElement && !captcha.token && !pending) {
+            setCaptchaAttempted(true);
+          }
+        }} onSubmitCapture={() => {
+          // Also guide keyboard/programmatic submissions when other fields are invalid.
+          if (!captcha.token && !pending) setCaptchaAttempted(true);
+        }} onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
+          <AuthFeedback message={feedback.message} warning={feedback.warning} onDismiss={feedback.clear} />
           {/* Full name */}
           <div className="flex flex-col gap-2">
             <label htmlFor="register-name" className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
@@ -201,17 +142,17 @@ export default function RegisterPage() {
               <User aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="register-name"
-                aria-describedby={fullNameError ? "register-name-error" : undefined}
+                aria-describedby={errors.fullName ? "register-name-error" : undefined}
                 autoComplete="name"
                 placeholder="Alex Parker"
-                aria-invalid={Boolean(fullNameError)}
+                aria-invalid={Boolean(errors.fullName)}
                 className={FIELD_CLASS}
                 {...register("fullName")}
               />
             </div>
-            {fullNameError && (
+            {errors.fullName && (
               <p id="register-name-error" role="alert" className="text-xs text-rose">
-                {fullNameError}
+                {errors.fullName.message}
               </p>
             )}
           </div>
@@ -225,18 +166,18 @@ export default function RegisterPage() {
               <Mail aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="register-email"
-                aria-describedby={emailError ? "register-email-error" : undefined}
+                aria-describedby={errors.email ? "register-email-error" : undefined}
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
-                aria-invalid={Boolean(emailError)}
+                aria-invalid={Boolean(errors.email)}
                 className={FIELD_CLASS}
                 {...register("email")}
               />
             </div>
-            {emailError && (
+            {errors.email && (
               <p id="register-email-error" role="alert" className="text-xs text-rose">
-                {emailError}
+                {errors.email.message}
               </p>
             )}
           </div>
@@ -244,24 +185,24 @@ export default function RegisterPage() {
           {/* Phone */}
           <div className="flex flex-col gap-2">
             <label htmlFor="register-phone" className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-              Phone
+              Phone <span className="normal-case tracking-normal">(optional)</span>
             </label>
             <div className="relative">
               <Phone aria-hidden className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="register-phone"
-                aria-describedby={phoneError ? "register-phone-error" : undefined}
+                aria-describedby={errors.phone ? "register-phone-error" : undefined}
                 type="tel"
                 autoComplete="tel"
                 placeholder="+880 1700 000000"
-                aria-invalid={Boolean(phoneError)}
+                aria-invalid={Boolean(errors.phone)}
                 className={FIELD_CLASS}
                 {...register("phone")}
               />
             </div>
-            {phoneError && (
+            {errors.phone && (
               <p id="register-phone-error" role="alert" className="text-xs text-rose">
-                {phoneError}
+                {errors.phone.message}
               </p>
             )}
           </div>
@@ -273,16 +214,16 @@ export default function RegisterPage() {
             </label>
             <PasswordInput
               id="register-password"
-              aria-describedby={passwordError ? "register-password-error" : undefined}
+              aria-describedby={errors.password ? "register-password-error" : undefined}
               autoComplete="new-password"
               placeholder="••••••••"
-              invalid={Boolean(passwordError)}
+              invalid={Boolean(errors.password)}
               {...register("password")}
             />
             <PasswordStrength value={password ?? ""} className="mt-1" />
-            {passwordError && (
+            {errors.password && (
               <p id="register-password-error" role="alert" className="text-xs text-rose">
-                {passwordError}
+                {errors.password.message}
               </p>
             )}
           </div>
@@ -294,15 +235,15 @@ export default function RegisterPage() {
             </label>
             <PasswordInput
               id="register-confirm"
-              aria-describedby={confirmPasswordError ? "register-confirm-error" : undefined}
+              aria-describedby={errors.confirmPassword ? "register-confirm-error" : undefined}
               autoComplete="new-password"
               placeholder="••••••••"
-              invalid={Boolean(confirmPasswordError)}
+              invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
-            {confirmPasswordError && (
+            {errors.confirmPassword && (
               <p id="register-confirm-error" role="alert" className="text-xs text-rose">
-                {confirmPasswordError}
+                {errors.confirmPassword.message}
               </p>
             )}
           </div>
@@ -333,10 +274,35 @@ export default function RegisterPage() {
             )}
           </div>
 
+          {/* Keep the visible captcha area immediately above the submit button. */}
+          <section aria-label="Captcha verification" className="flex flex-col gap-2">
+            <TurnstileCaptcha
+              key={captcha.generation}
+              action="register"
+              onVerify={(token) => {
+                captcha.onVerify(token);
+                if (token.trim()) setCaptchaAttempted(false);
+              }}
+              onError={captcha.onError}
+            />
+            <p
+              id="register-captcha-guidance"
+              role={captchaAttempted && !captcha.token && !pending ? "alert" : "status"}
+              className={`text-xs leading-5 ${captchaAttempted && !captcha.token && !pending ? "text-rose" : captcha.token ? "text-emerald-400" : "text-amber-200"}`}
+            >
+              {pending ? "Creating your account…" : captcha.token
+                ? "Captcha verified. Complete all required fields to create your account."
+                : captchaAttempted ? "Please complete the captcha verification."
+                  : "Captcha verification is required. Complete the security check above to enable Create Account."}
+            </p>
+          </section>
+
           <Button
             type="submit"
-            disabled={pending || isSubmitting || !isValid}
-            className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 motion-safe:hover:scale-[1.01]"
+            disabled={pending || isSubmitting || !isValid || !captcha.token}
+            aria-busy={pending || isSubmitting}
+            aria-describedby="register-captcha-guidance"
+            className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:scale-[1.01]"
           >
             {pending ? (
               <>

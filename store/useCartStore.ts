@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { toast } from "sonner";
 import { buildLineId, type CartItem, type Product, type ProductVariant } from "@/types";
-import { MAX_QUANTITY_PER_LINE, computeTotals } from "@/lib/cart";
+import { MAX_QUANTITY_PER_LINE, FREE_SHIPPING_THRESHOLD, computeTotals } from "@/lib/cart";
 import { CATEGORY_META } from "@/lib/site";
 
 export { MAX_QUANTITY_PER_LINE } from "@/lib/cart";
@@ -89,7 +89,12 @@ export const useCartStore = create<CartState>()(
 
     const color = variant.color ?? product.colors[0] ?? "Default";
     const size = variant.size ?? product.sizes[0] ?? "One Size";
-    const stock = variant.stock ?? product.stock;
+    const selected = product.variants?.find((entry) => entry.color === color && entry.size === size);
+    const stock = product.variants?.length ? (selected?.stock ?? 0) : product.stock;
+    if (stock <= 0) {
+      toast.error("This size and colour is out of stock");
+      return;
+    }
     const lineId = buildLineId(product.id, color, size);
 
     const { items, total: previousTotal } = get();
@@ -131,7 +136,7 @@ export const useCartStore = create<CartState>()(
     });
 
     // Celebrate crossing the free-shipping line, once.
-    if (previousTotal < 50 && nextTotal >= 50) {
+    if (previousTotal < FREE_SHIPPING_THRESHOLD && nextTotal >= FREE_SHIPPING_THRESHOLD) {
       toast.info("Free shipping unlocked! 🚚", {
         description: "Your order ships free — nice one.",
       });

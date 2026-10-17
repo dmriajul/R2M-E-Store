@@ -9,7 +9,13 @@
     "lint": "eslint",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test": "tsx --tsconfig tests/tsconfig.json --test tests/*.test.ts",
+    "test:http": "tsx tests/http-customer-journey.ts",
+    "test:verification:http": "tsx tests/http-email-verification.ts",
+    "test:turnstile:http": "tsx tests/http-turnstile.ts",
+    "test:auth:live": "tsx tests/http-live-auth.ts",
+    "test:auth:contracts": "node tests/run-auth-contracts.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
@@ -43,11 +49,13 @@
     "@eslint/eslintrc": "^3",
     "@fontsource-variable/inter": "^5.3.0",
     "@tailwindcss/postcss": "^4",
+    "@types/jsdom": "^21.1.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.27",
+    "jsdom": "^26.1.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"

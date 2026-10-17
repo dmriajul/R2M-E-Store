@@ -1,50 +1,53 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
+import { useTurnstile } from "@/hooks/useTurnstile";
+import { queueAuthSuccess } from "@/lib/auth-flash";
+import { loginErrorCode } from "@/lib/auth-messages";
+import { AuthFeedback } from "@/components/auth/AuthFeedback";
+import { useAuthFeedback } from "@/hooks/useAuthFeedback";
 import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Loader2, Mail, ShieldCheck } from "lucide-react";
-import {
-  AUTH_ERROR_CODES,
-  getLoginErrorMessage,
-  loginSchema,
-  type AuthErrorCopy,
-  type LoginValues,
-} from "@/lib/validations/auth";
+import { toast } from "sonner";
+import { loginSchema, type LoginValues } from "@/lib/validations";
 import { clearIdentityCaches } from "@/lib/session-cache";
+import { safeCallbackPath } from "@/lib/auth-redirect";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { SocialButtons } from "@/components/auth/SocialButtons";
-import { Toast, authToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 
 export default function LoginPage() {
-  const router = useRouter();
+  const captcha = useTurnstile();
+  const feedback = useAuthFeedback();
   const [pending, setPending] = useState(false);
-  const [serverError, setServerError] = useState<AuthErrorCopy | null>(null);
-  const activeToastId = useRef<string | number | undefined>(undefined);
   /* Set by `clearSessionCache()` — confirms the debug wipe actually ran. */
   const [cacheCleared, setCacheCleared] = useState(false);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("cleared") === "1") {
       setCacheCleared(true);
-      authToast.info(
-        "Session and caches cleared",
-        "Cookies, localStorage and cached data have been removed for this site.",
-      );
+      toast.info("Session and caches cleared", {
+        description: "Cookies, localStorage and cached data have been removed for this site.",
+      });
     }
   }, []);
+
+  const showFeedback = feedback.show;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("error")) showFeedback(loginErrorCode(params.get("code") ?? undefined));
+  }, [showFeedback]);
 
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting, isValid },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -52,92 +55,42 @@ export default function LoginPage() {
     mode: "all",
   });
 
-  // Clear visible server errors as soon as the user starts fixing the inputs.
-  useEffect(() => {
-    const subscription = watch(() => {
-      setServerError((current) => {
-        if (current && activeToastId.current !== undefined) {
-          authToast.dismiss(activeToastId.current);
-          activeToastId.current = undefined;
-        }
-        return null;
-      });
-    });
-    return () => subscription.unsubscribe();
-  }, [watch]);
-
-  const dismissServerError = () => {
-    setServerError(null);
-    if (activeToastId.current !== undefined) {
-      authToast.dismiss(activeToastId.current);
-      activeToastId.current = undefined;
-    }
-  };
-
   const onSubmit = async (values: LoginValues) => {
+    if (!captcha.token) { feedback.show("SECURITY_CHECK_FAILED"); return; }
+    feedback.clear();
+    const turnstileToken = captcha.token;
+    captcha.clearToken();
     setPending(true);
-    dismissServerError();
 
     /* Where to land after a successful sign-in (middleware adds ?callbackUrl=). */
-    const callbackUrl =
+    const callbackUrl = safeCallbackPath(
       new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get(
         "callbackUrl",
-      ) ?? "/dashboard";
+      ), window.location.origin);
 
-    try {
-      const result = await signIn("credentials", {
-        email: values.email,
-        password: values.password,
-        redirect: false,
-      });
+    const result = await signIn("credentials", {
+      email: values.email,
+      password: values.password,
+      turnstileToken,
+      redirect: false,
+    }).catch(() => null).finally(captcha.reset);
 
-      if (!result || result.error) {
-        setPending(false);
-
-        const rawCode = !result
-          ? AUTH_ERROR_CODES.SERVER_ERROR
-          : result.code
-            ? result.code
-            : result.error === "CredentialsSignin"
-              ? AUTH_ERROR_CODES.INVALID_CREDENTIALS
-              : AUTH_ERROR_CODES.SERVER_ERROR;
-
-        const copy = getLoginErrorMessage(rawCode);
-        setServerError(copy);
-
-        activeToastId.current =
-          copy.severity === "warning"
-            ? authToast.warning(copy.title, copy.message)
-            : authToast.error(copy.title, copy.message);
-        return;
-      }
-
-      /* Drop whatever the previous identity left cached *before* the next page
-         loads — so an admin never opens the console on a shopper's data, and a
-         shopper never inherits an operator's session data. */
-      clearIdentityCaches();
-
-      authToast.success("Welcome back! 👋", `Signed in as ${values.email}`);
-
-      router.push(callbackUrl);
-      router.refresh();
-    } catch {
+    if (!result || result.error || !result.ok) {
       setPending(false);
-      const copy = getLoginErrorMessage(AUTH_ERROR_CODES.SERVER_ERROR);
-      setServerError(copy);
-      activeToastId.current = authToast.error(copy.title, copy.message);
+
+      feedback.show(loginErrorCode(result?.code));
+      return;
     }
+
+    /* Drop whatever the previous identity left cached *before* the next page
+       loads — so an admin never opens the console on a shopper's data, and a
+       shopper never inherits an operator's session data. */
+    clearIdentityCaches();
+
+    queueAuthSuccess("SIGNED_IN");
+
+    window.location.assign(callbackUrl);
   };
-
-  const emailInlineError =
-    errors.email?.message ??
-    (serverError?.field === "email" ? serverError.message : undefined);
-
-  const passwordInlineError =
-    errors.password?.message ??
-    (serverError?.code === AUTH_ERROR_CODES.INVALID_CREDENTIALS
-      ? serverError.message
-      : undefined);
 
   return (
     <>
@@ -168,16 +121,8 @@ export default function LoginPage() {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
-          {serverError && (
-            <Toast
-              variant={serverError.severity}
-              title={serverError.title}
-              message={serverError.message}
-              onDismiss={dismissServerError}
-            />
-          )}
-
+        <form onChangeCapture={feedback.clear} onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
+          <AuthFeedback message={feedback.message} warning={feedback.warning} onDismiss={feedback.clear} />
           {/* Email */}
           <div className="flex flex-col gap-2">
             <label
@@ -193,26 +138,18 @@ export default function LoginPage() {
               />
               <Input
                 id="login-email"
-                aria-describedby={emailInlineError ? "login-email-error" : undefined}
+                aria-describedby={errors.email ? "login-email-error" : undefined}
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
-                aria-invalid={Boolean(emailInlineError)}
+                aria-invalid={Boolean(errors.email)}
                 className="h-12 rounded-xl border-glass-border bg-[#1A1A1A] pl-10 text-sm transition-colors duration-300 focus-visible:border-primary/60 focus-visible:ring-primary/25 aria-[invalid=true]:border-rose/60"
                 {...register("email")}
               />
             </div>
-            {emailInlineError && (
-              <p
-                id="login-email-error"
-                role="alert"
-                className={
-                  serverError?.field === "email" && serverError.severity === "warning"
-                    ? "text-xs text-amber-400"
-                    : "text-xs text-rose"
-                }
-              >
-                {emailInlineError}
+            {errors.email && (
+              <p id="login-email-error" role="alert" className="text-xs text-rose">
+                {errors.email.message}
               </p>
             )}
           </div>
@@ -235,15 +172,15 @@ export default function LoginPage() {
             </div>
             <PasswordInput
               id="login-password"
-              aria-describedby={passwordInlineError ? "login-password-error" : undefined}
+              aria-describedby={errors.password ? "login-password-error" : undefined}
               autoComplete="current-password"
               placeholder="••••••••"
-              invalid={Boolean(passwordInlineError)}
+              invalid={Boolean(errors.password)}
               {...register("password")}
             />
-            {passwordInlineError && (
+            {errors.password && (
               <p id="login-password-error" role="alert" className="text-xs text-rose">
-                {passwordInlineError}
+                {errors.password.message}
               </p>
             )}
           </div>
@@ -258,10 +195,13 @@ export default function LoginPage() {
             Keep me signed in on this device
           </label>
 
+          <TurnstileCaptcha key={captcha.generation} action="login" onVerify={captcha.onVerify} onError={captcha.onError} />
+
           <Button
             type="submit"
-            disabled={pending || isSubmitting || !isValid}
-            className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 motion-safe:hover:scale-[1.01]"
+            disabled={pending || isSubmitting || !isValid || !captcha.token}
+            aria-busy={pending || isSubmitting}
+            className="h-13 w-full gap-2 rounded-full bg-primary text-sm font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 ease-[var(--ease-luxe)] hover:shadow-[0_0_40px_-8px_rgba(212,175,55,0.95)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:hover:scale-[1.01]"
           >
             {pending ? (
               <>
@@ -275,6 +215,7 @@ export default function LoginPage() {
               </>
             )}
           </Button>
+
         </form>
 
         {/* Divider */}

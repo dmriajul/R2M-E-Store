@@ -1,81 +1,91 @@
+import { createRateLimiter, clientIp } from "@/lib/rate-limit";
+import { verifyTurnstileToken } from "@/lib/turnstile";
+import { LOGIN_MESSAGES, type LoginFailure } from "@/lib/auth-messages";
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { redirect } from "next/navigation";
 import { authConfig } from "@/lib/auth.config";
 import {
-  isAccountLocked,
   verifyCredentialsDetailed,
-  type CredentialFailure,
+  getUserEmailVerificationStatus,
 } from "@/lib/data/users";
-import { clientIp } from "@/lib/rate-limit";
-import {
-  AUTH_ERROR_CODES,
-  sanitizeEmail,
-  validateLoginServerInput,
-} from "@/lib/validations/auth";
-import {
-  canAccessSection,
-  normalizeRole,
-  pathForSection,
-  type AdminSection,
-} from "@/lib/rbac";
+import { loginSchema } from "@/lib/validations";
+import { canAccessSection, normalizeRole, pathForSection, type AdminSection } from "@/lib/rbac";
 import type { AdminRole, AdminUser, SessionRole } from "@/types";
 
 /**
  * Auth.js (NextAuth v5) instance.
  *
- * Uses constant-time password comparison, per-account/IP rate limiting, and
- * generic error codes (`INVALID_CREDENTIALS`, `EMAIL_NOT_VERIFIED`,
- * `ACCOUNT_LOCKED`, `SERVER_ERROR`) that the client maps to user-friendly
- * messages without leaking account existence.
+ * Credentials + bcrypt against the durable Prisma User table only.
+ * Missing database/configuration never enables demo accounts or fake registration.
+ *
+ * The JWT carries `role`, normalised through `normalizeRole()` so a legacy
+ * `ADMIN` row reads as `SUPER_ADMIN` everywhere downstream.
  */
+const loginLimiter = createRateLimiter({ max: 20, windowMs: 15 * 60 * 1000 });
+
 class LoginError extends CredentialsSignin {
-  constructor(reason: CredentialFailure) {
+  constructor(reason: LoginFailure) {
     super();
     this.code = reason;
+    this.message = LOGIN_MESSAGES[reason];
+    // Fixed code only: no email, password, token, IP or provider response.
+    console.warn(`[auth] Sign-in rejected: ${reason}`);
   }
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    async jwt(args) {
+      const token = authConfig.callbacks.jwt(args);
+      if (typeof token.id === "string" && token.emailVerified !== true) {
+        try {
+          token.emailVerified = await getUserEmailVerificationStatus(token.id);
+        } catch {
+          // Refresh status for existing sessions without revoking staff/legacy sessions.
+          // New customer sign-ins are checked separately after password verification.
+          token.emailVerified = false;
+        }
+      }
+      return token;
+    },
+  },
   providers: [
     Credentials({
       name: "Email and password",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        turnstileToken: { label: "Security check", type: "hidden" },
       },
       async authorize(raw, request) {
-        const ip = request?.headers ? clientIp(request.headers) : "anonymous";
-        const rawEmail = sanitizeEmail(raw?.email);
-
-        if (rawEmail && isAccountLocked(rawEmail, ip)) {
-          throw new LoginError(AUTH_ERROR_CODES.ACCOUNT_LOCKED);
+        if (!loginLimiter.check(clientIp(request.headers)).ok)
+          throw new LoginError("too-many-attempts");
+        if (!await verifyTurnstileToken(raw?.turnstileToken, { action: "login" })) {
+          throw new LoginError("security-verification-failed");
         }
-
-        const validation = validateLoginServerInput({
+        const parsed = loginSchema.safeParse({
           email: raw?.email,
           password: raw?.password,
           remember: true,
         });
+        if (!parsed.success) throw new LoginError("invalid-credentials");
 
-        if (!validation.ok) {
-          throw new LoginError(
-            validation.code === AUTH_ERROR_CODES.MISSING_FIELDS ||
-              validation.code === AUTH_ERROR_CODES.INVALID_EMAIL
-              ? validation.code
-              : AUTH_ERROR_CODES.INVALID_CREDENTIALS,
-          );
+        let result;
+        try {
+          result = await verifyCredentialsDetailed(parsed.data.email, parsed.data.password, { ip: clientIp(request.headers) });
+        } catch {
+          console.error("[auth] Credential storage unavailable");
+          throw new LoginError("account-service-unavailable");
         }
-
-        const { user, failure } = await verifyCredentialsDetailed(
-          validation.data.email,
-          validation.data.password,
-          { ip },
-        );
-
-        if (!user) {
-          throw new LoginError(failure ?? AUTH_ERROR_CODES.INVALID_CREDENTIALS);
+        const { user, failure } = result;
+        if (!user) throw new LoginError(failure ?? "invalid-credentials");
+        // Existence/status is disclosed only after a successful password check.
+        // Preserve established staff/admin access, including nullable legacy records.
+        if (normalizeRole(user.role) === "CUSTOMER" && !user.emailVerified) {
+          throw new LoginError("email-not-verified");
         }
 
         return {
@@ -84,6 +94,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           phone: user.phone,
           role: normalizeRole(user.role),
+          emailVerified: Boolean(user.emailVerified),
           image: user.avatar ?? null,
         };
       },

@@ -44,3 +44,6 @@ next-env.d.ts
 
 # Runtime uploads (Cloudinary is used when configured)
 /.uploads
+
+# Local-only verification test logs may contain bearer links.
+/.cache/

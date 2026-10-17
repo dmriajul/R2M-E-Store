@@ -137,6 +137,9 @@ export const RECOMMENDED_IDS: readonly string[] = [
 export const ORDER_STATUS_META: Readonly<
   Record<OrderStatus, { label: string; emoji: string; className: string; dot: string }>
 > = {
+  pending: { label: "Pending", emoji: "⏳", className: "border-amber-400/30 bg-amber-400/12 text-amber-300", dot: "bg-amber-400" },
+  confirmed: { label: "Confirmed", emoji: "✅", className: "border-sky-400/30 bg-sky-400/12 text-sky-300", dot: "bg-sky-400" },
+  refunded: { label: "Refunded", emoji: "↩️", className: "border-rose/35 bg-rose-soft text-rose", dot: "bg-rose" },
   processing: {
     label: "Processing",
     emoji: "⏳",
@@ -165,10 +168,13 @@ export const ORDER_STATUS_META: Readonly<
 
 export const ORDER_FILTERS: readonly { value: OrderStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "confirmed", label: "Confirmed" },
   { value: "processing", label: "Processing" },
   { value: "shipped", label: "Shipped" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
+  { value: "refunded", label: "Refunded" },
 ] as const;
 
 export type StockStatusKey = "in-stock" | "low-stock" | "out-of-stock";
@@ -492,13 +498,13 @@ export function countOrdersByStatus(status: OrderStatus): number {
 
 export function getActiveOrderCount(): number {
   return MOCK_ORDERS.filter(
-    (order) => order.status === "processing" || order.status === "shipped",
+    (order) => ["pending", "confirmed", "processing", "shipped"].includes(order.status),
   ).length;
 }
 
 /** True for orders still travelling, which can show a "Track" action. */
 export function isTrackable(status: OrderStatus): boolean {
-  return status === "processing" || status === "shipped";
+  return ["pending", "confirmed", "processing", "shipped"].includes(status);
 }
 
 /** The last delivered order — used by the "Reorder Last Purchase" shortcut. */

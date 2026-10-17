@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { isBangladeshDistrict, isBangladeshDivision } from "@/lib/bangladesh-locations";
+import {
+  BANGLADESH_DIVISIONS,
+  isBangladeshDistrict,
+  isBangladeshDivision,
+} from "@/lib/bangladesh-locations";
 import { mediaKindFromUrl } from "@/lib/images";
 import { PRODUCT_IMAGES_MAX } from "@/lib/media";
 export {
@@ -43,26 +47,22 @@ export {
  */
 
 const requiredString = (field: string, min = 2) =>
-  z
-    .string()
-    .trim()
-    .min(min, `${field} must be at least ${min} characters`);
+  z.string().trim().min(min, `${field} must be at least ${min} characters`);
 
 /* -------------------------------------------------------------------------- */
 /*  Checkout                                                                  */
 /* -------------------------------------------------------------------------- */
 
 export const contactSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .min(1, "Email is required")
-    .email("Enter a valid email address"),
+  email: z.string().trim().min(1, "Email is required").email("Enter a valid email address"),
   phone: z
     .string()
     .trim()
     .min(1, "Phone number is required")
-    .regex(/^[+()\-\s0-9]{7,20}$/, "Enter a valid phone number"),
+    .refine(
+      (value) => /^(?:\+?88)?01[3-9]\d{8}$/.test(value.replace(/[\s()-]/g, "")),
+      "Enter a Bangladesh mobile number (01XXXXXXXXX)",
+    ),
   marketingOptIn: z.boolean(),
 });
 
@@ -152,7 +152,8 @@ export const paymentSchema = z
   })
   .superRefine((values, ctx) => {
     if (values.method === "COD") return;
-    if (!MANUAL_PAYMENT_KEYS.includes(values.method as (typeof MANUAL_PAYMENT_KEYS)[number])) return;
+    if (!MANUAL_PAYMENT_KEYS.includes(values.method as (typeof MANUAL_PAYMENT_KEYS)[number]))
+      return;
 
     const digits = (values.senderNumber ?? "").replace(/[^\d]/g, "");
     if (digits.length < 11) {
@@ -199,21 +200,65 @@ export const createOrderSchema = z.object({
   contact: z.object({
     name: z.string().trim().min(2, "Enter your name"),
     email: z.string().trim().email("Enter a valid email"),
-    phone: z.string().trim().min(7, "Enter a phone number"),
+    phone: z
+      .string()
+      .trim()
+      .transform((value) => value.replace(/[\s()-]/g, ""))
+      .pipe(
+        z
+          .string()
+          .regex(/^(?:\+?88)?01[3-9]\d{8}$/, "Enter a Bangladesh mobile number (01XXXXXXXXX)"),
+      ),
   }),
-  shipping: z.object({
-    address: z.string().trim().min(5, "Enter the delivery address"),
-    city: z.string().trim().min(2, "Enter the city"),
-    zip: z.string().trim().min(3, "Enter the postal code"),
-    country: z.string().trim().min(2, "Enter the country"),
-    method: z.enum(["standard", "express"]),
-    giftWrap: z.boolean(),
-  }),
-  payment: z.object({
-    method: z.enum(PAYMENT_METHOD_KEYS),
-    senderNumber: z.string().trim().optional(),
-    screenshotUrl: z.string().trim().optional(),
-  }),
+  shipping: z
+    .object({
+      address: z.string().trim().min(5, "Enter the delivery address"),
+      city: z.string().trim().min(2, "Enter the city"),
+      zip: z.string().trim().min(3, "Enter the postal code"),
+      country: z.string().trim().min(2, "Enter the country"),
+      method: z.enum(["standard", "express"]),
+      giftWrap: z.boolean(),
+      state: z.string().trim().optional(),
+      saveAddress: z.boolean().optional(),
+    })
+    .superRefine((shipping, ctx) => {
+      if (shipping.country !== "Bangladesh") return;
+      if (!/^\d{4}$/.test(shipping.zip))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["zip"],
+          message: "Use a 4-digit Bangladesh postal code",
+        });
+      const validDistrict = shipping.state
+        ? isBangladeshDistrict(shipping.state, shipping.city)
+        : BANGLADESH_DIVISIONS.some((division) =>
+            division.districts.some((district) => district.name === shipping.city),
+          );
+      if (!validDistrict)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["city"],
+          message: "Select a valid Bangladesh district",
+        });
+    }),
+  payment: z
+    .object({
+      method: z.enum(PAYMENT_METHOD_KEYS),
+      senderNumber: z.string().trim().optional(),
+      screenshotUrl: z.string().trim().optional(),
+    })
+    .superRefine((payment, ctx) => {
+      if (
+        MANUAL_PAYMENT_KEYS.includes(payment.method as (typeof MANUAL_PAYMENT_KEYS)[number]) &&
+        (!payment.screenshotUrl ||
+          !/^(?:\+?88)?01[3-9]\d{8}$/.test((payment.senderNumber ?? "").replace(/[\s()-]/g, "")))
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Provide a valid sender number and payment screenshot",
+        });
+      }
+    }),
   couponCode: z.string().trim().optional(),
 });
 
@@ -273,12 +318,7 @@ export const addressSchema = z.object({
 
 export type AddressValues = z.infer<typeof addressSchema>;
 
-export const GENDER_OPTIONS = [
-  "Female",
-  "Male",
-  "Non-binary",
-  "Prefer not to say",
-] as const;
+export const GENDER_OPTIONS = ["Female", "Male", "Non-binary", "Prefer not to say"] as const;
 
 /** Profile details. Email is read-only in the UI but still validated. */
 export const profileSchema = z.object({
@@ -329,34 +369,56 @@ export const RETURN_REASONS = [
   "Other",
 ] as const;
 
-export const returnRequestSchema = z.object({
-  orderId: z.string().min(1),
-  orderItemIds: z.array(z.string().min(1)).min(1).max(20),
-  type: z.enum(["REFUND", "EXCHANGE"]),
-  reason: z.enum(RETURN_REASONS),
-  details: z.string().trim().max(1000).optional(),
-  requestedSize: z.string().trim().max(40).optional(),
-  requestedColor: z.string().trim().max(60).optional(),
-  images: z.array(z.string().refine(
-    (value) =>
-      (value.startsWith("https://res.cloudinary.com/")) ||
-      (value.startsWith("/uploads/") && !value.includes("..")),
-    "Use an uploaded proof image",
-  )).max(5),
-}).superRefine((values, ctx) => {
-  if (values.reason === "Other" && (values.details ?? "").length < 10) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["details"], message: "Tell us a little more (10+ characters)" });
-  }
-  if (values.type === "EXCHANGE" && !values.requestedSize && !values.requestedColor) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["requestedSize"], message: "Select a requested size or color" });
-  }
-});
+export const returnRequestSchema = z
+  .object({
+    orderId: z.string().min(1),
+    orderItemIds: z.array(z.string().min(1)).min(1).max(20),
+    type: z.enum(["REFUND", "EXCHANGE"]),
+    reason: z.enum(RETURN_REASONS),
+    details: z.string().trim().max(1000).optional(),
+    requestedSize: z.string().trim().max(40).optional(),
+    requestedColor: z.string().trim().max(60).optional(),
+    images: z
+      .array(
+        z
+          .string()
+          .refine(
+            (value) =>
+              value.startsWith("https://res.cloudinary.com/") ||
+              (value.startsWith("/uploads/") && !value.includes("..")),
+            "Use an uploaded proof image",
+          ),
+      )
+      .max(5),
+  })
+  .superRefine((values, ctx) => {
+    if (values.reason === "Other" && (values.details ?? "").length < 10) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["details"],
+        message: "Tell us a little more (10+ characters)",
+      });
+    }
+    if (values.type === "EXCHANGE" && !values.requestedSize && !values.requestedColor) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["requestedSize"],
+        message: "Select a requested size or color",
+      });
+    }
+  });
 
 export type ReturnRequestValues = z.infer<typeof returnRequestSchema>;
 
 export const returnAdminActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("approve"), restock: z.boolean().default(false) }),
-  z.object({ action: z.literal("reject"), adminNote: z.string().trim().min(5).max(1000) }),
+  z.object({
+    action: z.literal("approve"),
+    restock: z.boolean().default(false),
+  }),
+  z.object({
+    action: z.literal("reject"),
+    adminNote: z.string().trim().min(5).max(1000),
+  }),
   z.object({ action: z.literal("complete") }),
 ]);
 
@@ -445,9 +507,7 @@ export const adminProductSchema = z
       .union([z.enum(PRODUCT_CATEGORY_NAMES), z.literal("")])
       .refine(
         (value): value is (typeof PRODUCT_CATEGORY_NAMES)[number] =>
-          PRODUCT_CATEGORY_NAMES.includes(
-            value as (typeof PRODUCT_CATEGORY_NAMES)[number],
-          ),
+          PRODUCT_CATEGORY_NAMES.includes(value as (typeof PRODUCT_CATEGORY_NAMES)[number]),
         "Pick a category",
       ),
     categories: z.array(z.enum(PRODUCT_CATEGORY_NAMES)).min(1, "Assign at least one category"),
@@ -477,9 +537,7 @@ export const adminProductSchema = z
 
     /* Variants */
     colors: z.array(colourSchema).min(1, "Add at least one colour"),
-    sizes: z
-      .array(z.enum(PRODUCT_SIZE_OPTIONS))
-      .min(1, "Pick at least one size"),
+    sizes: z.array(z.enum(PRODUCT_SIZE_OPTIONS)).min(1, "Pick at least one size"),
     variants: z.array(adminProductVariantSchema),
 
     /*
@@ -526,14 +584,10 @@ export const adminProductSchema = z
     path: ["ageMax"],
     message: "Max age must be at least the min age",
   })
-  .refine(
-    (values) =>
-      values.compareAtPrice === undefined || values.compareAtPrice > values.price,
-    {
-      path: ["compareAtPrice"],
-      message: "Compare-at price should be higher than the price",
-    },
-  );
+  .refine((values) => values.compareAtPrice === undefined || values.compareAtPrice > values.price, {
+    path: ["compareAtPrice"],
+    message: "Compare-at price should be higher than the price",
+  });
 
 export type AdminProductValues = z.infer<typeof adminProductSchema>;
 /** Raw form values — numeric fields arrive as strings before Zod coerces them. */
@@ -553,11 +607,7 @@ export const adminProductSeoSchema = z.object({
     .min(3, "Slug needs at least 3 characters")
     .regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers and hyphens")
     .optional(),
-  metaTitle: z
-    .string()
-    .trim()
-    .max(70, "Keep the meta title under 70 characters")
-    .optional(),
+  metaTitle: z.string().trim().max(70, "Keep the meta title under 70 characters").optional(),
   metaDescription: z
     .string()
     .trim()
@@ -585,7 +635,9 @@ export const adminCouponSchema = z
       .trim()
       .min(3, "Codes need at least 3 characters")
       .regex(/^[A-Za-z0-9-]+$/, "Letters, numbers and hyphens only"),
-    type: z.enum(COUPON_TYPES, { errorMap: () => ({ message: "Pick a coupon type" }) }),
+    type: z.enum(COUPON_TYPES, {
+      errorMap: () => ({ message: "Pick a coupon type" }),
+    }),
     value: z.coerce.number().min(0, "Value can't be negative"),
     minOrder: z.coerce.number().min(0, "Minimum order can't be negative"),
     usageLimit: z.coerce.number().int("Whole numbers only").min(0, "Use 0 for unlimited"),
@@ -594,10 +646,10 @@ export const adminCouponSchema = z
     categories: z.array(z.string()),
     active: z.boolean(),
   })
-  .refine(
-    (values) => values.type !== "percentage" || (values.value > 0 && values.value <= 100),
-    { path: ["value"], message: "A percentage must be between 1 and 100" },
-  )
+  .refine((values) => values.type !== "percentage" || (values.value > 0 && values.value <= 100), {
+    path: ["value"],
+    message: "A percentage must be between 1 and 100",
+  })
   .refine((values) => values.type !== "fixed" || values.value > 0, {
     path: ["value"],
     message: "Enter the amount to take off",
@@ -626,7 +678,10 @@ export const adminCategorySchema = z.object({
     .string()
     .trim()
     .max(2048, "Image URL is too long")
-    .refine((value) => value === "" || isSafeImageReference(value), "Upload an image or use an http(s) URL")
+    .refine(
+      (value) => value === "" || isSafeImageReference(value),
+      "Upload an image or use an http(s) URL",
+    )
     .optional(),
 });
 
@@ -713,34 +768,32 @@ const safeHeroMediaUrl = (value: string) =>
   value === "" || isSafeLocalPath(value) || isHttpUrl(value);
 
 const safeHeroLink = (value: string) =>
-  value === "" ||
-  value.startsWith("#") ||
-  isSafeLocalPath(value) ||
-  isHttpUrl(value);
+  value === "" || value.startsWith("#") || isSafeLocalPath(value) || isHttpUrl(value);
 
-export const settingsHeroSchema = z.object({
-  heroTitle: z.string().trim().max(160, "Keep the title under 160 characters"),
-  heroSubtitle: z.string().trim().max(500, "Keep the subtitle under 500 characters"),
-  heroBadgeText: z.string().trim().max(100, "Keep the badge under 100 characters"),
-  heroMediaUrl: z
-    .string()
-    .trim()
-    .max(2048, "Media URL is too long")
-    .refine(safeHeroMediaUrl, "Use an http(s) URL or a local path"),
-  heroMediaType: z.enum(["video", "image"]),
-  primaryCtaText: z.string().trim().max(80, "Keep the button label under 80 characters"),
-  primaryCtaLink: z
-    .string()
-    .trim()
-    .max(2048, "Link is too long")
-    .refine(safeHeroLink, "Use an http(s) URL, local path, or anchor"),
-  secondaryCtaText: z.string().trim().max(80, "Keep the button label under 80 characters"),
-  secondaryCtaLink: z
-    .string()
-    .trim()
-    .max(2048, "Link is too long")
-    .refine(safeHeroLink, "Use an http(s) URL, local path, or anchor"),
-})
+export const settingsHeroSchema = z
+  .object({
+    heroTitle: z.string().trim().max(160, "Keep the title under 160 characters"),
+    heroSubtitle: z.string().trim().max(500, "Keep the subtitle under 500 characters"),
+    heroBadgeText: z.string().trim().max(100, "Keep the badge under 100 characters"),
+    heroMediaUrl: z
+      .string()
+      .trim()
+      .max(2048, "Media URL is too long")
+      .refine(safeHeroMediaUrl, "Use an http(s) URL or a local path"),
+    heroMediaType: z.enum(["video", "image"]),
+    primaryCtaText: z.string().trim().max(80, "Keep the button label under 80 characters"),
+    primaryCtaLink: z
+      .string()
+      .trim()
+      .max(2048, "Link is too long")
+      .refine(safeHeroLink, "Use an http(s) URL, local path, or anchor"),
+    secondaryCtaText: z.string().trim().max(80, "Keep the button label under 80 characters"),
+    secondaryCtaLink: z
+      .string()
+      .trim()
+      .max(2048, "Link is too long")
+      .refine(safeHeroLink, "Use an http(s) URL, local path, or anchor"),
+  })
   .superRefine((values, context) => {
     // The storefront renders `<img>` or `<video>` from heroMediaType, so a
     // mismatched URL would show a broken hero. Unknown kinds are allowed.

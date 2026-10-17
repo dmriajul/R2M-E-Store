@@ -241,7 +241,7 @@ export interface Review {
 /* -------------------------------------------------------------------------- */
 
 /** Statuses shown on the order list, the filter tabs and the badge colours. */
-export type OrderStatus = "processing" | "shipped" | "delivered" | "cancelled";
+export type OrderStatus = "pending" | "confirmed" | "processing" | "shipped" | "delivered" | "cancelled" | "refunded";
 
 /** How one row of the tracking timeline should read. */
 export type OrderStepState = "done" | "current" | "pending" | "cancelled";
@@ -602,13 +602,13 @@ export type SessionRole = "CUSTOMER" | AdminRole;
 
 /** The signed-in user as the API and the session expose it (never the hash). */
 export interface AuthUser {
+  emailVerified?: Date | string | null;
   id: string;
   name: string;
   email: string;
   phone?: string;
   role: AuthRole;
   avatar?: string;
-  emailVerified?: boolean;
   locked?: boolean;
 }
 
@@ -737,6 +737,8 @@ export interface CreateOrderInput {
     country: string;
     method: "standard" | "express";
     giftWrap: boolean;
+    state?: string;
+    saveAddress?: boolean;
   };
   payment: {
     method: PaymentKey;

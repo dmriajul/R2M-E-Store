@@ -242,7 +242,7 @@ export default function AdminCouponsPage() {
           <button
             type="button"
             onClick={() =>
-              toast.info("Bulk coupon import is coming soon 🏷️", {
+              toast.info("Bulk coupon import is currently unavailable", {
                 description: "Create codes one at a time from this screen.",
               })
             }

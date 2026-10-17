@@ -1,5 +1,6 @@
 "use client";
 
+import { useCheckoutStore } from "@/store/useCheckoutStore";
 import { signOut } from "next-auth/react";
 import { useDashboardStore } from "@/store/useDashboardStore";
 import { useWishlistStore } from "@/store/useWishlistStore";
@@ -21,6 +22,7 @@ import { useWishlistStore } from "@/store/useWishlistStore";
 
 /** Everything that lives in memory and is scoped to the signed-in identity. */
 export function clearIdentityCaches(): void {
+  useCheckoutStore.getState().reset();
   useDashboardStore.getState().clearIdentity();
   useWishlistStore.getState().clear();
 }

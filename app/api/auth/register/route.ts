@@ -1,121 +1,75 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createRateLimiter, clientIp } from "@/lib/rate-limit";
+import { queueVerificationEmail } from "@/lib/emails/queue-verification-email";
+import { newVerificationToken } from "@/lib/verification-tokens";
 import { createUser } from "@/lib/data/users";
-import { clientIp, createRateLimiter } from "@/lib/rate-limit";
-import {
-  AUTH_ERROR_CODES,
-  validateRegistrationServerInput,
-} from "@/lib/validations/auth";
+import { verifyTurnstileToken } from "@/lib/turnstile";
+import type { AuthApiFailure, AuthErrorCode, AuthField } from "@/lib/auth-messages";
+import { authValidationErrors } from "@/lib/validations/auth";
+import { registerApiSchema } from "@/lib/validations";
 import type { ApiResponse, AuthUser } from "@/types";
 
 export const runtime = "nodejs";
-
-const registerLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
+const limiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
 
 /**
- * Registers a customer account.
+ * Registers a customer.
  *
- * Sanitizes inputs, validates email format and password strength, hashes the
- * password with bcrypt, and returns specific error codes (`EMAIL_ALREADY_EXISTS`,
- * `INVALID_EMAIL`, `WEAK_PASSWORD`, `PASSWORD_MISMATCH`, `MISSING_FIELDS`,
- * `SERVER_ERROR`) that the client maps to user-friendly messages.
+ * Zod validates the payload, bcrypt hashes the password, Prisma stores the row
+ * and its verification token in a transaction. No configured database means 503,
+ * never an in-memory account or a success-looking response.
  */
+function failure(code: AuthErrorCode, status: number, fieldErrors?: Partial<Record<AuthField, AuthErrorCode>>, headers?: HeadersInit) {
+  return NextResponse.json<AuthApiFailure>({ data: null, success: false, error: code, code, ...(fieldErrors ? { fieldErrors } : {}) }, { status, headers });
+}
+
 export async function POST(
   request: NextRequest,
-): Promise<NextResponse<ApiResponse<AuthUser & { source: string }>>> {
-  const ip = clientIp(request.headers);
-  const rate = registerLimiter.check(ip);
-
-  if (!rate.ok) {
-    console.warn("[auth:security] Registration rate limit exceeded:", {
-      ip,
-      retryAfter: rate.retryAfter,
-    });
-    return NextResponse.json(
-      {
-        data: null,
-        error: AUTH_ERROR_CODES.RATE_LIMITED,
-        code: AUTH_ERROR_CODES.RATE_LIMITED,
-        success: false,
-      },
-      {
-        status: 429,
-        headers: { "Retry-After": String(rate.retryAfter) },
-      },
-    );
-  }
-
+): Promise<NextResponse<ApiResponse<AuthUser & { source: string; redirectTo: string }> | AuthApiFailure>> {
+  const rate = limiter.check(clientIp(request.headers));
+  if (!rate.ok) return failure("ACCOUNT_LOCKED", 429, undefined, { "Retry-After": String(rate.retryAfter) });
   let payload: unknown;
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json(
-      {
-        data: null,
-        error: AUTH_ERROR_CODES.MISSING_FIELDS,
-        code: AUTH_ERROR_CODES.MISSING_FIELDS,
-        success: false,
-      },
-      { status: 400 },
-    );
+    return failure("INVALID_REQUEST", 400);
   }
 
-  const validation = validateRegistrationServerInput(payload);
-  if (!validation.ok) {
-    const status = validation.code === AUTH_ERROR_CODES.MISSING_FIELDS ? 400 : 422;
-    return NextResponse.json(
-      {
-        data: null,
-        error: validation.code,
-        code: validation.code,
-        field: validation.field,
-        success: false,
-      },
-      { status },
-    );
+  const parsed = registerApiSchema.safeParse(payload);
+  if (!parsed.success) {
+    const result = authValidationErrors(parsed.error);
+    return failure(result.code, 422, result.fieldErrors);
   }
+  const token = payload && typeof payload === "object" && "turnstileToken" in payload ? payload.turnstileToken : undefined;
+  if (!await verifyTurnstileToken(token, { action: "register" })) return failure("SECURITY_CHECK_FAILED", 403);
 
   try {
-    const { user, code, source } = await createUser({
-      name: validation.data.name,
-      email: validation.data.email,
-      phone: validation.data.phone,
-      password: validation.data.password,
-    });
+    const issued = newVerificationToken(parsed.data.email);
+    const { user, source } = await createUser(
+      {
+        name: parsed.data.name,
+        email: parsed.data.email,
+        phone: parsed.data.phone,
+        password: parsed.data.password,
+      },
+      issued.record,
+    );
 
-    if (!user) {
-      const failureCode = code ?? AUTH_ERROR_CODES.EMAIL_ALREADY_EXISTS;
-      return NextResponse.json(
-        {
-          data: null,
-          error: failureCode,
-          code: failureCode,
-          field: failureCode === AUTH_ERROR_CODES.EMAIL_ALREADY_EXISTS ? "email" : undefined,
-          success: false,
-        },
-        { status: 409 },
-      );
-    }
+    if (!user) return failure("EMAIL_ALREADY_EXISTS", 409, { email: "EMAIL_ALREADY_EXISTS" });
+
+    queueVerificationEmail({ email: user.email, name: user.name, token: issued.token });
 
     return NextResponse.json(
       {
-        data: { ...user, source },
+        data: { ...user, source, redirectTo: "/auth/verify-email-pending" },
         error: null,
-        code: null,
         success: true,
         source,
       },
       { status: 201 },
     );
-  } catch (error) {
-    console.error("[auth:security] Registration error:", error);
-    return NextResponse.json(
-      {
-        data: null,
-        error: AUTH_ERROR_CODES.SERVER_ERROR,
-        code: AUTH_ERROR_CODES.SERVER_ERROR,
-        success: false,
-      },
-      { status: 500 },
-    );
+  } catch {
+    console.error("[registration] Account storage unavailable");
+    return failure("SERVER_ERROR", 503);
   }
 }

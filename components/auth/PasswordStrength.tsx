@@ -15,10 +15,11 @@ const LEVELS = [
   { label: "Fair", color: "bg-amber-400", text: "text-amber-400" },
   { label: "Good", color: "bg-lavender", text: "text-lavender" },
   { label: "Strong", color: "bg-emerald-500", text: "text-emerald-400" },
+  { label: "Very strong", color: "bg-emerald-500", text: "text-emerald-400" },
 ] as const;
 
 /**
- * Four-segment strength meter (red → amber → lavender → green) plus the rule
+ * Five-segment strength meter (red → amber → lavender → green) plus the rule
  * checklist, driven by the same `PASSWORD_RULES` the Zod schema enforces.
  */
 export function PasswordStrength({ value, className }: PasswordStrengthProps) {
@@ -30,9 +31,9 @@ export function PasswordStrength({ value, className }: PasswordStrengthProps) {
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex items-center gap-2">
         <div className="flex flex-1 gap-1.5" role="presentation">
-          {[0, 1, 2, 3].map((index) => (
+          {PASSWORD_RULES.map((rule, index) => (
             <span
-              key={index}
+              key={rule.label}
               className={cn(
                 "h-1.5 flex-1 rounded-full transition-colors duration-500",
                 index < filled ? level.color : "bg-white/10",
@@ -42,7 +43,7 @@ export function PasswordStrength({ value, className }: PasswordStrengthProps) {
         </div>
         <span
           aria-live="polite"
-          className={cn("w-16 text-right text-[11px] font-medium", value ? level.text : "text-muted-foreground")}
+          className={cn("w-20 text-right text-[11px] font-medium", value ? level.text : "text-muted-foreground")}
         >
           {value ? level.label : ""}
         </span>

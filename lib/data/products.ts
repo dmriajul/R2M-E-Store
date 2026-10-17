@@ -8,7 +8,7 @@
 
 import { CATEGORY_META, PRODUCT_IMAGES, PRODUCTS, getProductById } from "@/lib/site";
 import { isRenderableImage } from "@/lib/images";
-import { withDatabase } from "@/lib/prisma";
+import { withDatabase, withRequiredDatabase } from "@/lib/prisma";
 import type {
   Product,
   ProductBadge,
@@ -224,10 +224,10 @@ export async function findProductsByIds(ids: readonly string[]): Promise<{
 }> {
   const unique = Array.from(new Set(ids));
 
-  const { data, source } = await withDatabase<Product[]>(
+  const { data, source } = await withRequiredDatabase<Product[]>(
     async (db) => {
       const rows = (await db.product.findMany({
-        where: { id: { in: unique } },
+        where: { id: { in: unique }, active: true },
         include: {
           variants: { select: { size: true, color: true, stock: true } },
         },

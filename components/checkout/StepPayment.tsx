@@ -1,5 +1,7 @@
 "use client";
 
+import type { OrderRecord } from "@/types";
+
 import { useRef, useState } from "react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
@@ -111,7 +113,10 @@ export function StepPayment() {
       body.append("folder", "mukra/payments");
 
       const response = await fetch("/api/upload", { method: "POST", body });
-      const payload = (await response.json()) as { data?: UploadResult; error?: string };
+      const payload = (await response.json()) as {
+        data?: UploadResult;
+        error?: string;
+      };
 
       if (!response.ok || !payload.data) {
         throw new Error(payload.error ?? "Upload failed");
@@ -119,7 +124,7 @@ export function StepPayment() {
 
       setValue("screenshotUrl", payload.data.url, { shouldValidate: true });
       toast.success("Screenshot uploaded 📎", {
-        description: `Stored via ${payload.data.provider === "cloudinary" ? "Cloudinary" : "secure storage"}.`,
+        description: `Stored via ${payload.data.provider === "cloudinary" ? "Cloudinary" : "local file storage"}.`,
       });
     } catch (error) {
       setValue("screenshotUrl", "", { shouldValidate: true });
@@ -136,9 +141,9 @@ export function StepPayment() {
     setPlacing(true);
     setPayment(values);
 
-    const fallbackNumber = `LL-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
-    let orderNumber = fallbackNumber;
-    let persistedId: string | undefined;
+    let orderNumber: string;
+    let persistedId: string;
+    let serverOrder: OrderRecord;
 
     /* Persist the order — the API answers from Postgres, or from the demo log. */
     try {
@@ -166,6 +171,8 @@ export function StepPayment() {
             country: shipping?.country ?? "Bangladesh",
             method: shipping?.method ?? "standard",
             giftWrap: shipping?.giftWrap ?? false,
+            state: shipping?.state,
+            saveAddress: shipping?.saveAddress,
           },
           payment: {
             method: values.method,
@@ -177,35 +184,52 @@ export function StepPayment() {
       });
 
       const payload = (await response.json()) as {
-        data?: { orderNumber: string; id: string };
+        data?: OrderRecord;
         error?: string;
       };
 
       if (response.ok && payload.data) {
         orderNumber = payload.data.orderNumber;
         persistedId = payload.data.id;
+        serverOrder = payload.data;
       } else {
-        toast.warning("Order saved locally", {
-          description: payload.error ?? "Your order has been saved to this session.",
+        setPlacing(false);
+        toast.error("Order not placed", {
+          description: payload.error ?? "Please try again.",
         });
+        return;
       }
     } catch {
-      toast.warning("Order saved locally", {
-        description: "No backend reachable — your order lives in this browser session.",
+      setPlacing(false);
+      toast.error("Order not placed", {
+        description: "We couldn't reach the order service. Your bag has been kept.",
       });
+      return;
     }
 
-    placeOrder(items, totals, {
-      id: persistedId,
-      orderNumber,
-      payment: {
-        method: values.method,
-        status: method === "COD" ? "UNPAID" : "PENDING",
-        reference: orderNumber,
-        senderNumber: values.senderNumber,
-        screenshotUrl: values.screenshotUrl,
+    placeOrder(
+      items,
+      {
+        ...totals,
+        subtotal: serverOrder.subtotal,
+        shipping: serverOrder.shipping,
+        discount: serverOrder.discount,
+        giftWrap: serverOrder.giftWrap,
+        total: serverOrder.total,
       },
-    });
+      {
+        id: persistedId,
+        orderNumber,
+        estimatedDelivery: serverOrder.estimatedDelivery,
+        payment: {
+          method: values.method,
+          status: method === "COD" ? "UNPAID" : "PENDING",
+          reference: orderNumber,
+          senderNumber: values.senderNumber,
+          screenshotUrl: values.screenshotUrl,
+        },
+      },
+    );
 
     clearCart();
     setPlacing(false);
@@ -270,9 +294,19 @@ export function StepPayment() {
               {(config.numbers ?? []).map((number, index) => (
                 <CopyableValue
                   key={number}
-                  label={language === "bn" ? `${config.name} নম্বর ${index + 1}` : `${config.name} number ${index + 1}`}
+                  label={
+                    language === "bn"
+                      ? `${config.name} নম্বর ${index + 1}`
+                      : `${config.name} number ${index + 1}`
+                  }
                   value={number}
-                  hint={index === 0 ? (language === "bn" ? "পছন্দের — দ্রুত যাচাইকরণ" : "Preferred — verified fastest") : undefined}
+                  hint={
+                    index === 0
+                      ? language === "bn"
+                        ? "পছন্দের — দ্রুত যাচাইকরণ"
+                        : "Preferred — verified fastest"
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -283,7 +317,7 @@ export function StepPayment() {
               </p>
               <p className="mt-0.5 text-sm text-foreground">
                 {language === "bn"
-                  ? "আপনার <span className=\"font-mono\">LL-…</span> অর্ডার নম্বর, অর্ডার করার সময় তৈরি হয়"
+                  ? 'আপনার <span className="font-mono">LL-…</span> অর্ডার নম্বর, অর্ডার করার সময় তৈরি হয়'
                   : `Your <span className="font-mono">LL-...</span> order number, generated when you place the order`}
               </p>
               <p className="text-[11px] text-muted-foreground">
@@ -344,7 +378,9 @@ export function StepPayment() {
                 ) : (
                   <>
                     <ImagePlus className="size-4" />
-                    {language === "bn" ? "পেমেন্ট স্ক্রিনশট আপলোড করুন" : "Upload Payment Screenshot"}
+                    {language === "bn"
+                      ? "পেমেন্ট স্ক্রিনশট আপলোড করুন"
+                      : "Upload Payment Screenshot"}
                   </>
                 )}
               </Button>
@@ -357,7 +393,9 @@ export function StepPayment() {
               <div className="relative w-fit overflow-hidden rounded-xl border border-glass-border">
                 <Image
                   src={screenshotUrl || localPreview || ""}
-                  alt={language === "bn" ? "পেমেন্ট স্ক্রিনশট প্রিভিউ" : "Payment screenshot preview"}
+                  alt={
+                    language === "bn" ? "পেমেন্ট স্ক্রিনশট প্রিভিউ" : "Payment screenshot preview"
+                  }
                   width={220}
                   height={220}
                   unoptimized={Boolean(screenshotUrl) && !screenshotUrl.startsWith("/uploads")}
@@ -387,7 +425,11 @@ export function StepPayment() {
               label={language === "bn" ? "ট্রানজ্যাকশন আইডি (ঐচ্ছিক)" : "Transaction ID (optional)"}
               htmlFor="pay-transaction"
               error={errors.transactionId?.message}
-              hint={language === "bn" ? "ওয়ালেটের কনফার্মেশন SMS-এ পাওয়া যায়।" : "Found in the wallet's confirmation SMS."}
+              hint={
+                language === "bn"
+                  ? "ওয়ালেটের কনফার্মেশন SMS-এ পাওয়া যায়।"
+                  : "Found in the wallet's confirmation SMS."
+              }
             >
               <Input
                 id="pay-transaction"
@@ -401,7 +443,13 @@ export function StepPayment() {
               label={language === "bn" ? "পাঠানোর নম্বর" : "Number you're sending from"}
               htmlFor="pay-sender"
               error={errors.senderNumber?.message}
-              hint={senderHint ? (language === "bn" ? `আপনার নিজের ${config.name} নম্বর থেকে পাঠান` : `Send from your own ${config.name} number`) : undefined}
+              hint={
+                senderHint
+                  ? language === "bn"
+                    ? `আপনার নিজের ${config.name} নম্বর থেকে পাঠান`
+                    : `Send from your own ${config.name} number`
+                  : undefined
+              }
             >
               <Input
                 id="pay-sender"
@@ -421,9 +469,7 @@ export function StepPayment() {
                 {...register("confirmed")}
               />
               <span>
-                {language === "bn"
-                  ? "আমি পেমেন্ট সম্পন্ন করেছি"
-                  : "I've completed the payment"}
+                {language === "bn" ? "আমি পেমেন্ট সম্পন্ন করেছি" : "I've completed the payment"}
                 <span className="mt-1 block text-xs text-muted-foreground">
                   {language === "bn"
                     ? "আপনার অর্ডার পেমেন্ট যাচাইকরণের পর নিশ্চিত করা হবে (সাধারণত ১-২ ঘণ্টার মধ্যে)।"
@@ -449,7 +495,8 @@ export function StepPayment() {
               {language === "bn" ? "শীঘ্রই আসছে" : "Coming soon"}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {config.comingSoon} {language === "bn"
+              {config.comingSoon}{" "}
+              {language === "bn"
                 ? "ততক্ষণে, ক্যাশ অন ডেলিভারি এবং মোবাইল ওয়ালেট প্রস্তুত। 💳"
                 : "Until then, cash on delivery and the mobile wallets are ready to go. 💳"}
             </p>

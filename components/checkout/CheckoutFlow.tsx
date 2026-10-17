@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShoppingBag } from "lucide-react";
 import { useCartStore } from "@/store/useCartStore";
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button";
  * summary is rendered inside the step itself instead.
  */
 export function CheckoutFlow() {
+  const { data: session } = useSession();
   const step = useCheckoutStore((state) => state.step);
   const order = useCheckoutStore((state) => state.order);
   const items = useCartStore((state) => state.items);
@@ -64,6 +66,13 @@ export function CheckoutFlow() {
 
   return (
     <div className="flex flex-col gap-10">
+      {session?.user && !session.user.emailVerified && (
+        <aside role="status" className="rounded-2xl border border-primary/25 bg-primary/5 px-5 py-4 text-sm leading-6 text-muted-foreground">
+          Please verify your email to receive order updates seamlessly.{" "}
+          <Link href="/auth/verify-email-pending" className="text-primary underline underline-offset-4">Verify your email</Link>
+          <span className="block text-xs">You can continue checkout while you wait.</span>
+        </aside>
+      )}
       <CheckoutStepper />
 
       <div className="grid gap-10 lg:grid-cols-[1fr_360px] lg:items-start">

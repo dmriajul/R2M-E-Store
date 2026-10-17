@@ -55,7 +55,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         data: { updated },
-        error: updated ? null : "Order not found in the database",
+        error: updated ? null : "Order not found",
         success: updated,
         source: "mock",
       },
@@ -69,7 +69,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         data: null,
-        error: "Order not found in the database",
+        error: "Order not found",
         success: false,
       },
       { status: 404 },

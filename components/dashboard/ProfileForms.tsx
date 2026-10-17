@@ -357,13 +357,13 @@ export function DangerZone() {
         open={open}
         onOpenChange={setOpen}
         title="Delete your account?"
-        description="Every order, address and reward point goes with it. Type DELETE to confirm."
+        description="Self-service deletion is currently unavailable. Please contact support for help with your account."
         confirmPhrase="DELETE"
         confirmLabel="Delete Forever"
         destructive
         onConfirm={() =>
-          toast.info("Please contact support to delete your account 🔒", {
-            description: "Email hello@mukra.com and our team will assist you.",
+          toast.info("Self-service account deletion is currently unavailable", {
+            description: "Your account has not been changed. Please contact support for assistance.",
           })
         }
       />

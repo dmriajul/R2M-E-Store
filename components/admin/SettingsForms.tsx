@@ -294,7 +294,7 @@ export function PaymentsSettingsForm() {
     >
       <FormSection
         title="Gateways"
-        description="API keys are masked for security."
+        description="Gateway connections are not configured from this screen. No payment is processed here."
       >
         <AdminField
           label="Stripe secret key"
