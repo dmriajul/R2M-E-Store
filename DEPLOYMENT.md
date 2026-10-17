@@ -305,8 +305,9 @@ is clearly labelled as such.
 | Symptom | Fix |
 | --- | --- |
 | `PrismaClientInitializationError` in logs | `DATABASE_URL` missing/incorrect, or the pooled URL is missing `?pgbouncer=true` |
+| "Something went wrong" page with an **Error ID (digest)** on `/`, `/shop` or `/product/…` | The server render threw while loading the catalogue. Check `/api/ready` (`database: "unconfigured"` means env vars are missing — add `DATABASE_URL` etc. and redeploy). The digest is a hash of the server stack: search it in Vercel's runtime logs for the exact frame. With no database configured the storefront now falls back to the demo catalogue instead of erroring; account/order flows still need a real database. |
 | Sign-in loops back to `/login` | `NEXTAUTH_URL` doesn't match the deployed domain, or `NEXTAUTH_SECRET` changed between deploys |
 | Uploads vanish after a while | Cloudinary keys not set — local uploads live on the ephemeral filesystem |
 | Canonical URLs point at `localhost` | `NEXT_PUBLIC_SITE_URL` not set in Vercel |
 | OG image shows the old generic card | Share caches — re-scrape in the [Facebook debugger](https://developers.facebook.com/tools/debug/) |
-| Build fails on `prisma generate` | `@prisma/client` regenerates itself on install — keep `prisma` in `dependencies` (it is) so its CLI resolves, and set `DATABASE_URL` before the build if you use `prisma migrate deploy` |
+| `prisma generate` / `PrismaClient did not initialize yet` | The build now runs `prisma generate` automatically (npm blocks `@prisma/client`'s install script by default, so a plain `npm install` no longer generates the client). Keep `prisma` in `dependencies`, and set `DATABASE_URL` before the build if you use `prisma migrate deploy` |
