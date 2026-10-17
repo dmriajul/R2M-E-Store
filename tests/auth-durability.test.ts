@@ -70,7 +70,17 @@ test("missing database never creates accounts or authenticates known demo admins
     await assert.rejects(() => verifyCredentialsDetailed("admin@mukra.com", "password123"), DatabaseUnavailableError);
   }
   await assert.rejects(() => withRequiredDatabase(async () => true, () => false), DatabaseUnavailableError);
-  await assert.rejects(() => withDatabase(async () => true, () => false), DatabaseUnavailableError);
+  // Storefront catalogue reads (`withDatabase`) keep their documented mock
+  // fallback when a deployment is unconfigured — including in production — so
+  // a fresh Vercel deploy without env vars renders the demo catalogue instead
+  // of the "Something went wrong" error page. Account flows above stay
+  // fail-closed; `withRequiredDatabase` still rejects everywhere.
+  for (const nodeEnv of ["development", "production"] as const) {
+    process.env = { ...process.env, NODE_ENV: nodeEnv };
+    const result = await withDatabase(async (): Promise<boolean> => true, () => false);
+    assert.equal(result.data, false);
+    assert.equal(result.source, "mock");
+  }
 });
 
 test("production read outages cannot serve mock catalogue or order data", async () => {

@@ -1,4 +1,11 @@
 {
   "extends": "../tsconfig.json",
-  "compilerOptions": { "jsx": "react-jsx" }
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./*"],
+      "server-only": ["./tests/support/server-only-stub.ts"]
+    }
+  }
 }
