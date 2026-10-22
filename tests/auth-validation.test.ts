@@ -133,7 +133,7 @@ test("registration API duplicates normalize case; failed security does not discl
   assert.equal(fixture.rows("user").length, 1);
   globalThis.fetch = async () => Response.json({ success: false });
   const denied = await POST(request({}));
-  assert.equal(denied.status, 403);
+  assert.equal(denied.status, 400);
   assert.equal((await denied.json() as { code: string }).code, "SECURITY_CHECK_FAILED");
 });
 test("registration API storage errors never leak secrets, provider messages, SQL, or passwords", async () => {

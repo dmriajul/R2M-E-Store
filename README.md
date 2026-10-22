@@ -96,8 +96,8 @@ A missing/empty URL causes the maintenance page; a malformed URL, unreachable
 host, incorrect password, missing tables/columns or exhausted connection pool
 is reported in the **server console** with a safe Prisma code/hint (no URI or
 password). `/api/ready` probes database tables and reports only a fixed status.
-A healthy database is required for registration and login even though `next dev`
-bypasses the CAPTCHA. If Prisma engine downloads are blocked, run generate and
+A healthy database and a configured Turnstile site/secret pair are required for
+registration and login, including `next dev`. See `.env.example` for local test keys. If Prisma engine downloads are blocked, run generate and
 push from a network that can reach `binaries.prisma.sh`.
 
 There are no default credentials: the seed reads `ADMIN_NAME`, `ADMIN_EMAIL`

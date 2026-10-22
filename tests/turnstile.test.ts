@@ -58,26 +58,16 @@ test("non-production verification trusts loopback even with an explicit non-loca
   assert.equal(await verifyTurnstileToken("token", { action: "register" }), true);
 });
 
-test("local development bypasses Siteverify for missing or invalid tokens without contacting Cloudflare", async (context) => {
-  const warn = context.mock.method(console, "warn", () => {});
+test("local development fails closed without tokens or a server secret", async () => {
   delete process.env.TURNSTILE_SECRET_KEY;
   process.env = { ...process.env, NODE_ENV: "development" };
   let calls = 0;
   globalThis.fetch = async () => { calls++; return Response.json({ success: false }); };
-
-  // The bypass must come before token validation: an absent token is the exact
-  // case blocking local login when the widget cannot load.
   for (const token of [undefined, null, 12, {}, "", "  ", "invalid-token"]) {
-    assert.equal(await verifyTurnstileToken(token, { action: "login" }), true);
+    assert.equal(await verifyTurnstileToken(token, { action: "login" }), false);
   }
-  assert.equal(calls, 0, "Development must never call Cloudflare Siteverify");
-  assert.equal(isTurnstileServerConfigured(), true);
-  assert.ok(warn.mock.calls.some((call) => String(call.arguments[0]).includes("LOCAL DEVELOPMENT")));
-
-  // Leaving development restores strict verification immediately.
-  process.env = { ...process.env, NODE_ENV: "test" };
-  assert.equal(await verifyTurnstileToken(undefined, { action: "login" }), false);
-  assert.equal(calls, 0, "A missing token still fails before fetching outside production");
+  assert.equal(calls, 0);
+  assert.equal(isTurnstileServerConfigured(), false);
 });
 
 test("localhost, 127.0.0.1 and URL-shaped local configuration compare as one loopback host", async () => {

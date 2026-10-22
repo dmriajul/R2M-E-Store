@@ -41,7 +41,7 @@ export async function POST(
     return failure(result.code, 422, result.fieldErrors);
   }
   const token = payload && typeof payload === "object" && "turnstileToken" in payload ? payload.turnstileToken : undefined;
-  if (!await verifyTurnstileToken(token, { action: "register" })) return failure("SECURITY_CHECK_FAILED", 403);
+  if (!await verifyTurnstileToken(token, { action: "register" })) return NextResponse.json({ data: null, success: false, error: "invalid_captcha", code: "SECURITY_CHECK_FAILED" }, { status: 400, headers: { "Cache-Control": "no-store" } });
 
   try {
     const issued = newVerificationToken(parsed.data.email);

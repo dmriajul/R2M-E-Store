@@ -47,7 +47,7 @@ async function main() {
   const noSecret = process.env.TEST_TURNSTILE_MISSING_SECRET === "true";
   if (noSecret) {
     const failed = await register(`no-secret-${crypto.randomUUID()}@example.com`, "plausible-token");
-    assert.equal(failed.status, 403);
+    assert.equal(failed.status, 400);
     assert.equal((await failed.json() as { code: string }).code, "SECURITY_CHECK_FAILED");
     assert.equal((await login("plausible-token")).searchParams.get("code"), "security-verification-failed");
     assert.equal(await (await request("/api/auth/session")).json(), null);
@@ -62,7 +62,7 @@ async function main() {
   ] as const) {
     const negativeEmail = `negative-${crypto.randomUUID()}@example.com`;
     const response = await register(negativeEmail, token);
-    assert.equal(response.status, 403, `Registration must reject ${name}`);
+    assert.equal(response.status, 400, `Registration must reject ${name}`);
     assert.equal((await response.json() as { code: string }).code, "SECURITY_CHECK_FAILED");
     assert.equal((await register(negativeEmail, fixtureToken("register"))).status, 201, "A rejected check must not create the account");
     checks += 2;
@@ -70,7 +70,7 @@ async function main() {
   const email = `turnstile-http-${crypto.randomUUID()}@example.com`;
   const registerToken = fixtureToken("register");
   assert.equal((await register(email, registerToken)).status, 201);
-  assert.equal((await register(`replay-${crypto.randomUUID()}@example.com`, registerToken)).status, 403);
+  assert.equal((await register(`replay-${crypto.randomUUID()}@example.com`, registerToken)).status, 400);
   assert.equal(await (await request("/api/auth/session")).json(), null, "Registration is not auto-login");
   checks += 3;
   for (const [name, token] of [
