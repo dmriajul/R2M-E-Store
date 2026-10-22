@@ -18,7 +18,7 @@ const TEXT_DISTANCE_PX = 16;
  *
  * Spacing: the section itself is edge-to-edge by design (that is what makes it
  * read as a campaign), so the global rhythm token lives on the *inner* content
- * container — `py-24 lg:py-32`, the same value every other section uses on its
+ * container — `py-16 lg:py-20`, the same value every other section uses on its
  * wrapper. No extra margins are stacked on top.
  *
  * Performance: the banner is always below the fold, so the photo is lazy-loaded
@@ -30,7 +30,7 @@ export function CampaignBanner() {
       aria-labelledby="winter-edit-title"
       className="relative w-full overflow-hidden"
     >
-      <div className="relative isolate min-h-[26rem] w-full sm:min-h-[32rem] lg:min-h-[38rem]">
+      <div className="relative isolate min-h-[20rem] w-full sm:min-h-[24rem] lg:min-h-[28rem]">
         {/* Decorative campaign photography. The headline below carries the
             message, so the image is marked decorative (empty alt) rather than
             announcing redundant text to screen readers. */}
@@ -53,8 +53,8 @@ export function CampaignBanner() {
           className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#050816]/80 to-transparent"
         />
 
-        {/* Content frame — carries the shared `py-24 lg:py-32` rhythm token. */}
-        <div className="relative mx-auto flex min-h-[26rem] w-full max-w-7xl flex-col justify-center px-4 py-24 sm:min-h-[32rem] sm:px-6 lg:min-h-[38rem] lg:px-8 lg:py-32">
+        {/* Content frame — carries the shared `py-16 lg:py-20` rhythm token. */}
+        <div className="relative mx-auto flex min-h-[20rem] w-full max-w-7xl flex-col justify-center px-4 py-16 sm:min-h-[24rem] sm:px-6 lg:min-h-[28rem] lg:px-8 lg:py-20">
           {/* Copy staggers in 100ms steps through the shared <Reveal /> wrapper.
               Only opacity and transform move, and the shorter `distance` keeps
               the lines from sliding too far. */}

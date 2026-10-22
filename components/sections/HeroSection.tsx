@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { motion, type Variants } from "framer-motion";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
@@ -10,45 +9,40 @@ import { useLanguageStore } from "@/store/useLanguageStore";
 import type { HeroSettings } from "@/lib/hero-settings";
 import { t } from "@/lib/utils";
 
-const EASE_LUXE = [0.22, 1, 0.36, 1] as const;
-
-const container: Variants = {
-  hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.12, delayChildren: 0.1 },
-  },
-};
-
 /**
- * Hero copy variants.
+ * Hero — owns the viewport. Dark luxury: midnight gradient, royal-gold
+ * accents, drifting gold particles and a cinematic media layer.
  *
- * Animates **opacity and transform only** — an earlier version also tweened a
- * `filter: blur()`, which is off-limits under the animation rules (and is a
- * comparatively expensive property to animate on every hero element at once).
+ * **Always renders.** The copy block is animated by CSS (`.hero-rise` in
+ * globals.css) with a staggered `animation-delay`, never by a JS-driven
+ * `opacity: 0` start state — so the headline, CTAs and trust row are in the
+ * server HTML at full opacity and stay visible even if hydration never
+ * happens. Reduced-motion visitors get the end state with no animation.
+ *
+ * Media: an uploaded banner (`heroMediaUrl`, image or video) wins; otherwise
+ * the bundled `/hero-fashion.mp4` loop plays under the scrims. Either way the
+ * layered gradients + gold glow carry the section on their own, so a missing
+ * or slow media file never leaves a blank stage.
  */
-function buildItemVariants(reducedMotion: boolean): Variants {
-  return {
-    hidden: {
-      opacity: 0,
-      y: reducedMotion ? 0 : 40,
-    },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: reducedMotion ? 0.5 : 0.8, ease: EASE_LUXE },
-    },
-  };
-}
+const PARTICLES = [
+  { left: "18%", top: "28%", delay: "0s" },
+  { left: "32%", top: "72%", delay: "1.1s" },
+  { left: "58%", top: "20%", delay: "2.2s" },
+  { left: "76%", top: "62%", delay: "0.6s" },
+  { left: "88%", top: "36%", delay: "1.7s" },
+] as const;
 
 export function HeroSection({ settings }: { settings: HeroSettings }) {
   const reducedMotion = usePrefersReducedMotion();
-  const item = buildItemVariants(reducedMotion);
   const language = useLanguageStore((state) => state.language);
 
   const scrollToFeatured = () => {
-    document
-      .getElementById("featured")
-      ?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth" });
+    // The secondary CTA scrolls to the curated rail; when the catalogue is
+    // unreachable that section is skipped, so fall back to the always-present
+    // category carousel rather than silently doing nothing.
+    const target =
+      document.getElementById("featured") ?? document.getElementById("collections");
+    target?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth" });
   };
 
   const badgeText =
@@ -71,8 +65,10 @@ export function HeroSection({ settings }: { settings: HeroSettings }) {
   return (
     <section
       id="hero"
-      className="relative flex min-h-screen items-center overflow-hidden"
+      className="relative flex min-h-[100svh] items-center overflow-hidden"
     >
+      {/* Base stage — the section reads as an intentional dark-gold composition
+          even before (or without) any media. */}
       <div
         aria-hidden
         className="absolute inset-0 z-0 bg-gradient-to-b from-[#0A3622]/70 via-[#050816] to-[#050816]"
@@ -109,51 +105,31 @@ export function HeroSection({ settings }: { settings: HeroSettings }) {
         aria-hidden
         className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-[#050816] via-transparent to-[#050816]/30"
       />
-      <motion.div
+      {/* Royal-gold glow — CSS breathing loop, no JS. */}
+      <div
         aria-hidden
-        className="pointer-events-none absolute inset-[-15%] z-[1] bg-[radial-gradient(ellipse_at_25%_32%,rgba(10,54,34,0.55),transparent_48%),radial-gradient(ellipse_at_74%_42%,rgba(212,175,55,0.2),transparent_34%)]"
-        animate={
-          reducedMotion
-            ? undefined
-            : { scale: [1, 1.08, 1], opacity: [0.75, 1, 0.75] }
-        }
-        transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+        className="hero-glow-breathe pointer-events-none absolute inset-[-15%] z-[1] bg-[radial-gradient(ellipse_at_25%_32%,rgba(10,54,34,0.55),transparent_48%),radial-gradient(ellipse_at_74%_42%,rgba(212,175,55,0.2),transparent_34%)]"
       />
+      {/* Drifting gold particles. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-[2] overflow-hidden"
       >
-        {[
-          { left: "18%", top: "28%", delay: 0 },
-          { left: "32%", top: "72%", delay: 1.1 },
-          { left: "58%", top: "20%", delay: 2.2 },
-          { left: "76%", top: "62%", delay: 0.6 },
-          { left: "88%", top: "36%", delay: 1.7 },
-        ].map((particle) => (
-          <motion.span
+        {PARTICLES.map((particle) => (
+          <span
             key={`${particle.left}-${particle.top}`}
-            className="absolute size-1 rounded-full bg-[#D4AF37] shadow-[0_0_12px_3px_rgba(212,175,55,0.55)]"
-            style={{ left: particle.left, top: particle.top }}
-            animate={{ y: [0, -18, 0], opacity: [0.3, 0.9, 0.3] }}
-            transition={{
-              duration: 4,
-              delay: particle.delay,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
+            className="hero-particle absolute size-1 rounded-full bg-[#D4AF37] shadow-[0_0_12px_3px_rgba(212,175,55,0.55)]"
+            style={{ left: particle.left, top: particle.top, animationDelay: particle.delay }}
           />
         ))}
       </div>
 
+      {/* Copy — staggered CSS rise. Each step is +0.12s, matching the old
+          framer stagger, but the elements are visible in the server HTML. */}
       <div className="relative z-20 mx-auto w-full max-w-7xl px-4 py-28 sm:px-6 lg:px-8">
-        <motion.div
-          variants={container}
-          initial="hidden"
-          animate="visible"
-          className="max-w-xl lg:max-w-2xl"
-        >
+        <div className="max-w-xl lg:max-w-2xl">
           {/* Badge */}
-          <motion.div variants={item}>
+          <div className="hero-rise" style={{ animationDelay: "0.1s" }}>
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 py-1.5 text-[11px] font-semibold tracking-[0.28em] text-primary uppercase backdrop-blur-md glass-pill-glow">
               <span
                 aria-hidden
@@ -161,28 +137,28 @@ export function HeroSection({ settings }: { settings: HeroSettings }) {
               />
               {badgeText}
             </span>
-          </motion.div>
+          </div>
 
           {/* Headline */}
-          <motion.h1
-            variants={item}
-            className="notranslate mt-6 text-6xl font-bold tracking-tight text-white md:text-8xl"
+          <h1
+            className="hero-rise notranslate mt-6 text-5xl font-bold tracking-tight text-white sm:text-6xl md:text-7xl lg:text-8xl"
+            style={{ animationDelay: "0.22s" }}
           >
             {titleText}
-          </motion.h1>
+          </h1>
 
           {/* Subtitle */}
-          <motion.p
-            variants={item}
-            className="mt-6 max-w-md text-lg leading-relaxed text-muted-foreground"
+          <p
+            className="hero-rise mt-6 max-w-md text-base leading-relaxed text-muted-foreground sm:text-lg"
+            style={{ animationDelay: "0.34s" }}
           >
             {subtitleText}
-          </motion.p>
+          </p>
 
           {/* CTAs */}
-          <motion.div
-            variants={item}
-            className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center"
+          <div
+            className="hero-rise mt-10 flex flex-col gap-3 sm:flex-row sm:items-center"
+            style={{ animationDelay: "0.46s" }}
           >
             <Button
               asChild
@@ -201,14 +177,26 @@ export function HeroSection({ settings }: { settings: HeroSettings }) {
               variant="outline"
               className="h-12 border-glass-border bg-glass px-8 text-sm font-semibold tracking-[0.16em] text-white uppercase backdrop-blur-md transition-all duration-500 ease-[var(--ease-luxe)] hover:border-primary/60 hover:bg-white/10 hover:text-white"
             >
-              <Link href={secondaryCtaLink}>{secondaryCtaText}</Link>
+              <Link
+                href={secondaryCtaLink}
+                onClick={(event) => {
+                  // Same-page anchors get the resilient scroll (with the
+                  // #collections fallback); configured routes navigate normally.
+                  if (secondaryCtaLink.startsWith("#")) {
+                    event.preventDefault();
+                    scrollToFeatured();
+                  }
+                }}
+              >
+                {secondaryCtaText}
+              </Link>
             </Button>
-          </motion.div>
+          </div>
 
           {/* Micro trust row */}
-          <motion.dl
-            variants={item}
-            className="mt-14 flex flex-wrap items-center gap-x-8 gap-y-4 text-xs tracking-[0.18em] text-muted-foreground uppercase"
+          <dl
+            className="hero-rise mt-14 flex flex-wrap items-center gap-x-8 gap-y-4 text-xs tracking-[0.18em] text-muted-foreground uppercase"
+            style={{ animationDelay: "0.58s" }}
           >
             <div className="flex items-center gap-2">
               <dt className="sr-only">Shipping</dt>
@@ -218,8 +206,8 @@ export function HeroSection({ settings }: { settings: HeroSettings }) {
               <dt className="sr-only">Warranty</dt>
               <dd>{easyReturnsText}</dd>
             </div>
-          </motion.dl>
-        </motion.div>
+          </dl>
+        </div>
       </div>
 
       {/* Scroll indicator */}
@@ -231,13 +219,9 @@ export function HeroSection({ settings }: { settings: HeroSettings }) {
       >
         <span className="flex flex-col items-center gap-2">
           <span className="text-[10px] tracking-[0.3em] uppercase">{scrollText}</span>
-          <motion.span
-            animate={reducedMotion ? undefined : { y: [0, 8, 0] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-            className="flex size-8 items-center justify-center rounded-full border border-glass-border"
-          >
+          <span className="hero-scroll-bob flex size-8 items-center justify-center rounded-full border border-glass-border">
             <ChevronDown className="size-4" />
-          </motion.span>
+          </span>
         </span>
       </button>
     </section>

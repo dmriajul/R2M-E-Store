@@ -47,3 +47,7 @@ next-env.d.ts
 
 # Local-only verification test logs may contain bearer links.
 /.cache/
+
+# Browser test artifacts
+/test-results/
+/playwright-report/

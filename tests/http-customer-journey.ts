@@ -92,9 +92,10 @@ async function main() {
     "/auth/verification-error",
   ])
     await guest.status(path, 200);
-  const collections = await guest.request("/collections");
-  assert.ok([200, 307].includes(collections.status));
-  if (collections.status === 200) assert.ok((await collections.text()).includes("/#collections"));
+  const collections = await guest.status("/collections", 200);
+  // Collections is a real catalogue page: the header always renders, whatever
+  // the database holds.
+  assert.ok((await collections.text()).includes("Collections"));
   checks++;
   await guest.status("/missing-audit-page", 404);
   for (const path of ["/dashboard", "/dashboard/orders", "/admin"]) {

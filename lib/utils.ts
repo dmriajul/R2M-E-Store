@@ -267,6 +267,144 @@ export function t(key: string, language?: Language): string {
       en: "Explore the pieces families keep coming back for.",
       bn: "পরিবারগুলোর বারবার পছন্দের পোশাকগুলো দেখুন।",
     },
+    "sections.featuresEyebrow": { en: "Why Mukra", bn: "কেন মুকরা" },
+    "sections.features": {
+      en: "The Mukra Standard",
+      bn: "মুকরার মানক",
+    },
+    "sections.featuresDescription": {
+      en: "Thoughtful details behind every order — the promises we keep, whether the wardrobe is full or just being unpacked.",
+      bn: "প্রতিটি অর্ডারের পেছনে যত্নশীল বিস্তারিত — আমাদের প্রতিশ্রুতি, ওয়ারড্রোব পূর্ণ হোক বা সদ্য খোলা।",
+    },
+    "sections.featuresCloser": {
+      en: "Designed for the few · Built to last",
+      bn: "অল্প প্রিয়জনদের জন্য · টেকসই তৈরি",
+    },
+    "sections.emptyTitle": {
+      en: "The collection is being curated",
+      bn: "সংগ্রহ প্রস্তুত করা হচ্ছে",
+    },
+    "sections.emptyDescription": {
+      en: "Our new pieces are almost ready. Check back soon — or browse the full collection meanwhile.",
+      bn: "আমাদের নতুন পোশাক প্রায় তৈরি। শীঘ্রই ফিরে দেখুন — অথবা এর মধ্যে সম্পূর্ণ সংগ্রহ ঘুরে দেখুন।",
+    },
+    "sections.browseCollection": {
+      en: "Browse the Collection",
+      bn: "সংগ্রহ দেখুন",
+    },
+    "sections.clearFilters": {
+      en: "Clear Filters",
+      bn: "ফিল্টার মুছুন",
+    },
+    "sections.backToHome": {
+      en: "Back to Home",
+      bn: "হোমে ফিরুন",
+    },
+    "sections.catalogueEmptyEyebrow": {
+      en: "Curated in small numbers",
+      bn: "অল্প সংখ্যায় বাছাই করা",
+    },
+    "sections.catalogueEmptyTitle": {
+      en: "The collection is being curated",
+      bn: "সংগ্রহ প্রস্তুত করা হচ্ছে",
+    },
+    "sections.catalogueEmptyDescription": {
+      en: "Our next release is in its final stitch — new pieces are coming soon. Join the Inner Circle below and we will let you know the moment they land.",
+      bn: "আমাদের পরবর্তী সংগ্রহ শেষ পর্যায়ে — নতুন পোশাক শীঘ্রই আসছে। নিচে ইননার সার্কেলে যোগ দিন, নতুন সংগ্রহ এলেই প্রথম জানবেন।",
+    },
+    "sections.catalogueEmptyCta": {
+      en: "Notify Me",
+      bn: "আমাকে জানান",
+    },
+    "sections.catalogueEmptySecondaryCta": {
+      en: "Browse Categories",
+      bn: "ক্যাটাগরি দেখুন",
+    },
+    "sections.catalogueEmptyPerks": {
+      en: "Early access for members · Free nationwide shipping · 30-day easy returns",
+      bn: "সদস্যদের আগাম অ্যাক্সেস · সারা দেশে ফ্রি ডেলিভারি · ৩০ দিনের সহজ রিটার্ন",
+    },
+    "sections.filterEmptyEyebrow": {
+      en: "No matches",
+      bn: "কোনো মিল নেই",
+    },
+    "sections.filterEmptyTitle": {
+      en: "Nothing in this edit yet",
+      bn: "এই বাছাইয়ে এখনো কিছু নেই",
+    },
+    "sections.filterEmptyDescription": {
+      en: "No pieces match this combination right now. Clear the filters to see the full wardrobe.",
+      bn: "এই সমন্বয়ে এখন কোনো পোশাক নেই। সব পোশাক দেখতে ফিল্টারগুলো মুছে ফেলুন।",
+    },
+    "sections.databaseUnconfiguredEyebrow": {
+      en: "Opening soon",
+      bn: "শীঘ্রই চালু হচ্ছে",
+    },
+    "sections.databaseUnconfiguredTitle": {
+      en: "The catalogue is almost live",
+      bn: "ক্যাটালগ শীঘ্রই চালু হবে",
+    },
+    "sections.databaseUnconfiguredDescription": {
+      en: "Products will appear here as soon as the store is connected to its catalogue. Nothing was lost — the shop is simply being set up.",
+      bn: "স্টোরের ক্যাটালগ সংযুক্ত হওয়ামাত্র পণ্যগুলো এখানে দেখা যাবে। কিছুই হারায়নি — দোকানটি এখন সেটআপ করা হচ্ছে।",
+    },
+    "sections.databaseUnconfiguredCta": {
+      en: "Browse Categories",
+      bn: "ক্যাটাগরি দেখুন",
+    },
+    "sections.databaseUnavailableTitle": {
+      en: "We'll be right back",
+      bn: "আমরা শীঘ্রই ফিরছি",
+    },
+    "sections.databaseUnavailableDescription": {
+      en: "The shop is having a moment with its inventory system. Nothing was lost — please refresh in a little while and the collection will be right here.",
+      bn: "দোকানের ইনভেন্টরি সিস্টেমে সাময়িক সমস্যা হচ্ছে। কিছুই হারায়নি — একটু পরে রিফ্রেশ করুন, সংগ্রহ এখানেই থাকবে।",
+    },
+    "sections.databaseUnavailableCta": {
+      en: "Try Again",
+      bn: "আবার চেষ্টা করুন",
+    },
+    "features.freeShipping": {
+      en: "Free Nationwide Shipping",
+      bn: "সারা দেশে ফ্রি ডেলিভারি",
+    },
+    "features.freeShippingBody": {
+      en: "Complimentary delivery across Bangladesh on every order — no minimum, no fine print.",
+      bn: "প্রতিটি অর্ডারে সারা বাংলাদেশে ফ্রি ডেলিভারি — কোনো ন্যূনতম শর্ত নেই।",
+    },
+    "features.easyReturns": {
+      en: "30-Day Easy Returns",
+      bn: "৩০ দিনের সহজ রিটার্ন",
+    },
+    "features.easyReturnsBody": {
+      en: "Changed your mind? Return or exchange within 30 days, effortlessly.",
+      bn: "মন বদলেছে? ৩০ দিনের মধ্যে ঝামেলাহীন রিটার্ন বা এক্সচেঞ্জ করুন।",
+    },
+    "features.secureCheckout": {
+      en: "Secure Checkout",
+      bn: "নিরাপদ চেকআউট",
+    },
+    "features.secureCheckoutBody": {
+      en: "Encrypted payments with bKash, Nagad, Rocket — or cash on delivery.",
+      bn: "বিকাশ, নগদ, রকেট দিয়ে এনক্রিপ্টেড পেমেন্ট — অথবা ক্যাশ অন ডেলিভারি।",
+    },
+    "features.premiumQuality": {
+      en: "Premium Quality",
+      bn: "প্রিমিয়াম মান",
+    },
+    "features.premiumQualityBody": {
+      en: "Small-batch pieces in breathable fabrics, finished and checked by hand.",
+      bn: "শ্বাসপ্রশ্বাসযোগ্য কাপড়ে ছোট ব্যাচে তৈরি, হাতে সম্পন্ন ও যাচাই করা।",
+    },
+    "stats.happyCustomers": {
+      en: "Happy Customers",
+      bn: "সন্তুষ্ট গ্রাহক",
+    },
+    "stats.premiumProducts": {
+      en: "Premium Products",
+      bn: "প্রিমিয়াম পণ্য",
+    },
+    "stats.countries": { en: "Countries", bn: "দেশ" },
 
     // Cart
     "cart.empty": { en: "Your bag is empty", bn: "আপনার কার্ট খালি" },
@@ -442,6 +580,144 @@ export function getTranslations(key: string): Record<Language, string> {
       en: "Explore the pieces families keep coming back for.",
       bn: "পরিবারগুলোর বারবার পছন্দের পোশাকগুলো দেখুন।",
     },
+    "sections.featuresEyebrow": { en: "Why Mukra", bn: "কেন মুকরা" },
+    "sections.features": {
+      en: "The Mukra Standard",
+      bn: "মুকরার মানক",
+    },
+    "sections.featuresDescription": {
+      en: "Thoughtful details behind every order — the promises we keep, whether the wardrobe is full or just being unpacked.",
+      bn: "প্রতিটি অর্ডারের পেছনে যত্নশীল বিস্তারিত — আমাদের প্রতিশ্রুতি, ওয়ারড্রোব পূর্ণ হোক বা সদ্য খোলা।",
+    },
+    "sections.featuresCloser": {
+      en: "Designed for the few · Built to last",
+      bn: "অল্প প্রিয়জনদের জন্য · টেকসই তৈরি",
+    },
+    "sections.emptyTitle": {
+      en: "The collection is being curated",
+      bn: "সংগ্রহ প্রস্তুত করা হচ্ছে",
+    },
+    "sections.emptyDescription": {
+      en: "Our new pieces are almost ready. Check back soon — or browse the full collection meanwhile.",
+      bn: "আমাদের নতুন পোশাক প্রায় তৈরি। শীঘ্রই ফিরে দেখুন — অথবা এর মধ্যে সম্পূর্ণ সংগ্রহ ঘুরে দেখুন।",
+    },
+    "sections.browseCollection": {
+      en: "Browse the Collection",
+      bn: "সংগ্রহ দেখুন",
+    },
+    "sections.clearFilters": {
+      en: "Clear Filters",
+      bn: "ফিল্টার মুছুন",
+    },
+    "sections.backToHome": {
+      en: "Back to Home",
+      bn: "হোমে ফিরুন",
+    },
+    "sections.catalogueEmptyEyebrow": {
+      en: "Curated in small numbers",
+      bn: "অল্প সংখ্যায় বাছাই করা",
+    },
+    "sections.catalogueEmptyTitle": {
+      en: "The collection is being curated",
+      bn: "সংগ্রহ প্রস্তুত করা হচ্ছে",
+    },
+    "sections.catalogueEmptyDescription": {
+      en: "Our next release is in its final stitch — new pieces are coming soon. Join the Inner Circle below and we will let you know the moment they land.",
+      bn: "আমাদের পরবর্তী সংগ্রহ শেষ পর্যায়ে — নতুন পোশাক শীঘ্রই আসছে। নিচে ইননার সার্কেলে যোগ দিন, নতুন সংগ্রহ এলেই প্রথম জানবেন।",
+    },
+    "sections.catalogueEmptyCta": {
+      en: "Notify Me",
+      bn: "আমাকে জানান",
+    },
+    "sections.catalogueEmptySecondaryCta": {
+      en: "Browse Categories",
+      bn: "ক্যাটাগরি দেখুন",
+    },
+    "sections.catalogueEmptyPerks": {
+      en: "Early access for members · Free nationwide shipping · 30-day easy returns",
+      bn: "সদস্যদের আগাম অ্যাক্সেস · সারা দেশে ফ্রি ডেলিভারি · ৩০ দিনের সহজ রিটার্ন",
+    },
+    "sections.filterEmptyEyebrow": {
+      en: "No matches",
+      bn: "কোনো মিল নেই",
+    },
+    "sections.filterEmptyTitle": {
+      en: "Nothing in this edit yet",
+      bn: "এই বাছাইয়ে এখনো কিছু নেই",
+    },
+    "sections.filterEmptyDescription": {
+      en: "No pieces match this combination right now. Clear the filters to see the full wardrobe.",
+      bn: "এই সমন্বয়ে এখন কোনো পোশাক নেই। সব পোশাক দেখতে ফিল্টারগুলো মুছে ফেলুন।",
+    },
+    "sections.databaseUnconfiguredEyebrow": {
+      en: "Opening soon",
+      bn: "শীঘ্রই চালু হচ্ছে",
+    },
+    "sections.databaseUnconfiguredTitle": {
+      en: "The catalogue is almost live",
+      bn: "ক্যাটালগ শীঘ্রই চালু হবে",
+    },
+    "sections.databaseUnconfiguredDescription": {
+      en: "Products will appear here as soon as the store is connected to its catalogue. Nothing was lost — the shop is simply being set up.",
+      bn: "স্টোরের ক্যাটালগ সংযুক্ত হওয়ামাত্র পণ্যগুলো এখানে দেখা যাবে। কিছুই হারায়নি — দোকানটি এখন সেটআপ করা হচ্ছে।",
+    },
+    "sections.databaseUnconfiguredCta": {
+      en: "Browse Categories",
+      bn: "ক্যাটাগরি দেখুন",
+    },
+    "sections.databaseUnavailableTitle": {
+      en: "We'll be right back",
+      bn: "আমরা শীঘ্রই ফিরছি",
+    },
+    "sections.databaseUnavailableDescription": {
+      en: "The shop is having a moment with its inventory system. Nothing was lost — please refresh in a little while and the collection will be right here.",
+      bn: "দোকানের ইনভেন্টরি সিস্টেমে সাময়িক সমস্যা হচ্ছে। কিছুই হারায়নি — একটু পরে রিফ্রেশ করুন, সংগ্রহ এখানেই থাকবে।",
+    },
+    "sections.databaseUnavailableCta": {
+      en: "Try Again",
+      bn: "আবার চেষ্টা করুন",
+    },
+    "features.freeShipping": {
+      en: "Free Nationwide Shipping",
+      bn: "সারা দেশে ফ্রি ডেলিভারি",
+    },
+    "features.freeShippingBody": {
+      en: "Complimentary delivery across Bangladesh on every order — no minimum, no fine print.",
+      bn: "প্রতিটি অর্ডারে সারা বাংলাদেশে ফ্রি ডেলিভারি — কোনো ন্যূনতম শর্ত নেই।",
+    },
+    "features.easyReturns": {
+      en: "30-Day Easy Returns",
+      bn: "৩০ দিনের সহজ রিটার্ন",
+    },
+    "features.easyReturnsBody": {
+      en: "Changed your mind? Return or exchange within 30 days, effortlessly.",
+      bn: "মন বদলেছে? ৩০ দিনের মধ্যে ঝামেলাহীন রিটার্ন বা এক্সচেঞ্জ করুন।",
+    },
+    "features.secureCheckout": {
+      en: "Secure Checkout",
+      bn: "নিরাপদ চেকআউট",
+    },
+    "features.secureCheckoutBody": {
+      en: "Encrypted payments with bKash, Nagad, Rocket — or cash on delivery.",
+      bn: "বিকাশ, নগদ, রকেট দিয়ে এনক্রিপ্টেড পেমেন্ট — অথবা ক্যাশ অন ডেলিভারি।",
+    },
+    "features.premiumQuality": {
+      en: "Premium Quality",
+      bn: "প্রিমিয়াম মান",
+    },
+    "features.premiumQualityBody": {
+      en: "Small-batch pieces in breathable fabrics, finished and checked by hand.",
+      bn: "শ্বাসপ্রশ্বাসযোগ্য কাপড়ে ছোট ব্যাচে তৈরি, হাতে সম্পন্ন ও যাচাই করা।",
+    },
+    "stats.happyCustomers": {
+      en: "Happy Customers",
+      bn: "সন্তুষ্ট গ্রাহক",
+    },
+    "stats.premiumProducts": {
+      en: "Premium Products",
+      bn: "প্রিমিয়াম পণ্য",
+    },
+    "stats.countries": { en: "Countries", bn: "দেশ" },
     "cart.empty": { en: "Your bag is empty", bn: "আপনার কার্ট খালি" },
     "cart.items": { en: "items", bn: "আইটেম" },
     "cart.total": { en: "Total", bn: "মোট" },

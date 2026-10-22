@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 import { cn } from "@/lib/utils";
 import { ProductCard } from "@/components/product/ProductCard";
+import { CatalogueEmptyState } from "@/components/shop/CatalogueEmptyState";
 import { SectionHeading } from "@/components/sections/SectionHeading";
 import type { Product } from "@/types";
 
@@ -65,8 +66,27 @@ export function FeaturedCarousel({ products }: FeaturedCarouselProps) {
     };
   }, [emblaApi, sync]);
 
-  /** Collapse the section when there is nothing curated yet. */
-  if (products.length === 0) return null;
+  /** Nothing curated yet — keep the section's layout with a premium empty
+      state instead of leaving a hole in the page. */
+  if (products.length === 0) {
+    return (
+      <section
+        id="featured"
+        aria-labelledby="featured-title"
+        className="relative py-16 lg:py-20"
+      >
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+          <SectionHeading
+            id="featured-title"
+            eyebrowKey="sections.featuredEyebrow"
+            titleKey="sections.featured"
+            descriptionKey="sections.featuredDescription"
+          />
+          <CatalogueEmptyState variant="compact" className="mt-10" />
+        </div>
+      </section>
+    );
+  }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -85,8 +105,9 @@ export function FeaturedCarousel({ products }: FeaturedCarouselProps) {
 
   return (
     <section
+      id="featured"
       aria-labelledby="featured-title"
-      className="relative py-24 lg:py-32"
+      className="relative py-16 lg:py-20"
     >
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
@@ -105,7 +126,7 @@ export function FeaturedCarousel({ products }: FeaturedCarouselProps) {
           aria-roledescription="carousel"
           aria-label="Featured products"
           onKeyDown={handleKeyDown}
-          className="mt-12 overflow-hidden [touch-action:pan-y_pinch-zoom]"
+          className="mt-10 overflow-hidden [touch-action:pan-y_pinch-zoom]"
         >
           <ul className="flex items-stretch">
             {products.map((product) => (

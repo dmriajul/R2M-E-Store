@@ -249,6 +249,92 @@
   }
 }
 
+/* ==========================================================================
+   Fail-visible entrance motion
+   Every animation here ENHANCES content that is already visible in the
+   server-rendered HTML. If JavaScript never runs, nothing is hidden: the
+   `backwards` fill only applies the "from" state while the animation plays,
+   and reduced-motion visitors get the final state immediately.
+   ========================================================================== */
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+
+@keyframes hero-glow-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes hero-particle-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translateY(-18px);
+    opacity: 0.9;
+  }
+}
+
+@keyframes hero-scroll-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+@keyframes page-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.hero-rise {
+  animation: hero-rise 0.8s var(--ease-luxe) backwards;
+}
+
+.hero-glow-breathe {
+  animation: hero-glow-breathe 14s ease-in-out infinite;
+}
+
+.hero-particle {
+  animation: hero-particle-drift 4s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.hero-scroll-bob {
+  animation: hero-scroll-bob 1.8s ease-in-out infinite;
+}
+
+.page-fade {
+  animation: page-fade 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-rise,
+  .hero-glow-breathe,
+  .hero-particle,
+  .hero-scroll-bob,
+  .page-fade {
+    animation: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -498,6 +584,35 @@
   /* Glowing glass pill for hero badge */
   .glass-pill-glow {
     box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+  }
+
+  /* Scroll-reveal (see components/sections/Reveal.tsx).
+     Elements render VISIBLE in the server HTML — the hidden state is only
+     armed by the client for items still below the fold, so the page can never
+     lose content to failed hydration, a deep link or a restored scroll
+     position. Once revealed, an element stays revealed. */
+  .reveal-hidden {
+    opacity: 0;
+    transform: translateY(var(--reveal-y, 40px));
+  }
+
+  .reveal-shown {
+    opacity: 1;
+    transform: translateY(0);
+    transition:
+      opacity 0.7s var(--ease-luxe) var(--reveal-delay, 0s),
+      transform 0.7s var(--ease-luxe) var(--reveal-delay, 0s);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal-hidden {
+      opacity: 1;
+      transform: none;
+    }
+
+    .reveal-shown {
+      transition: none;
+    }
   }
 }
 

@@ -48,7 +48,7 @@ export function NewsletterSection() {
   ] as const;
 
   return (
-    <section aria-label="Newsletter" className="relative py-24 lg:py-32">
+    <section aria-label="Newsletter" className="relative py-16 lg:py-20">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="glass glow-gold relative overflow-hidden rounded-3xl px-6 py-14 sm:px-12 lg:px-16">
           <span

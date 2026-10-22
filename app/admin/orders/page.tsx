@@ -16,6 +16,7 @@ import {
   ADMIN_STATUSES,
   ordersToCsv,
 } from "@/lib/admin-constants";
+import { useAdminOrdersSync } from "@/hooks/useAdminOrdersSync";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { OrderStatusBadge } from "@/components/admin/StatusBadge";
 import { PaymentStatusBadge } from "@/components/admin/PaymentStatusBadge";
@@ -67,6 +68,7 @@ const DATE_RANGES: readonly { id: DateRange; label: { en: string; bn: string } }
 ];
 
 export default function AdminOrdersPage() {
+  const sync = useAdminOrdersSync();
   /* Live rows: the admin layout hydrates this list from Postgres, or keeps the
      database and reports the failure. */
   const orders = useAdminStore((state) => state.orders);
@@ -449,6 +451,25 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => void sync.refresh()}
+          disabled={sync.refreshing}
+          className={cn(adminButtonGhost, "min-h-10 disabled:opacity-50")}
+        >
+          <RefreshCw aria-hidden className={cn("size-3.5", sync.refreshing && "animate-spin")} />
+          Refresh orders
+        </button>
+        <span role="status">
+          {sync.error
+            ? `${sync.error} Displayed orders may be stale.`
+            : sync.lastUpdated
+              ? `Live orders · refreshed ${new Date(sync.lastUpdated).toLocaleTimeString()} · auto-refresh every 2 seconds`
+              : "Connecting to live orders…"}
+        </span>
+      </div>
+
       {/* ---------- Stats ---------- */}
       <section aria-label={t("Order statistics")} className="grid gap-3 sm:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => (

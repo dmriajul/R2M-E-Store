@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, t } from "@/lib/utils";
 import { getProducts } from "@/lib/site";
 import {
   DEFAULT_SHOP_FILTERS,
@@ -13,13 +13,23 @@ import {
 } from "@/lib/shop";
 import { ProductCard } from "@/components/product/ProductCard";
 import { FilterBar } from "@/components/shop/FilterBar";
+import { CatalogueEmptyState } from "@/components/shop/CatalogueEmptyState";
 import { Button } from "@/components/ui/button";
+import type { CatalogueStatus } from "@/lib/data/products";
+import { useLanguageStore } from "@/store/useLanguageStore";
 import type { Product } from "@/types";
 
 interface ShopCatalogProps {
   /** Filters parsed from the URL on the server, so shared links render filtered. */
   initialFilters: ShopFilterState;
   products: Product[];
+  /**
+   * Why the catalogue might be empty. `ready` when rows exist; `empty` when the
+   * database answered with nothing; `setup` when no database is configured at
+   * all. Only rows matter for rendering here — the distinction selects the
+   * wording of the premium empty state.
+   */
+  catalogueStatus?: Extract<CatalogueStatus, "ready" | "empty" | "unconfigured">;
 }
 
 /**
@@ -29,7 +39,12 @@ interface ShopCatalogProps {
  * in sync with `history.replaceState` (no router navigation, so typing on a
  * pill stays instant) — which keeps filter combinations shareable.
  */
-export function ShopCatalog({ initialFilters, products: catalogue }: ShopCatalogProps) {
+export function ShopCatalog({
+  initialFilters,
+  products: catalogue,
+  catalogueStatus = catalogue.length > 0 ? "ready" : "empty",
+}: ShopCatalogProps) {
+  const language = useLanguageStore((state) => state.language);
   const [filters, setFilters] = useState<ShopFilterState>(initialFilters);
   const [visibleCount, setVisibleCount] = useState(SHOP_PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -123,41 +138,22 @@ export function ShopCatalog({ initialFilters, products: catalogue }: ShopCatalog
               onClick={clearFilters}
               className="h-8 rounded-full px-3 text-xs tracking-[0.14em] text-muted-foreground uppercase transition-colors duration-300 hover:bg-white/5 hover:text-rose"
             >
-              Clear filters
+              {t("sections.clearFilters", language)}
             </Button>
           )}
         </div>
 
         {products.length === 0 ? (
           catalogue.length === 0 ? (
-            /* An empty catalogue, not a filter miss — invite the shopper back. */
-            <div className="glass-soft flex flex-col items-center gap-4 rounded-3xl px-6 py-20 text-center">
-              <span className="text-6xl" aria-hidden>
-                ✨
-              </span>
-              <h3 className="text-xl font-semibold">The collection is being curated</h3>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                Our new pieces are almost ready. Check back soon — or sign up for
-                the newsletter below and be the first to know.
-              </p>
-            </div>
+            /* Reachable catalogue, nothing in it yet (or not connected yet) —
+               keep the page chrome and invite the shopper back. This is a
+               healthy state: it must never read as an outage. */
+            <CatalogueEmptyState
+              mode={catalogueStatus === "unconfigured" ? "setup" : "empty"}
+            />
           ) : (
-            <div className="glass-soft flex flex-col items-center gap-4 rounded-3xl px-6 py-20 text-center">
-              <span className="text-6xl" aria-hidden>
-                🧸
-              </span>
-              <h3 className="text-xl font-semibold">No items found for this filter</h3>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                Try a different age group or category — there is plenty more in the
-                wardrobe.
-              </p>
-              <Button
-                onClick={clearFilters}
-                className="mt-2 h-10 rounded-full bg-primary px-6 text-xs font-semibold tracking-[0.16em] text-primary-foreground uppercase transition-all duration-500 hover:shadow-[0_0_28px_-8px_rgba(212,175,55,0.9)]"
-              >
-                Clear filters
-              </Button>
-            </div>
+            /* The catalogue has products; this combination simply has none. */
+            <CatalogueEmptyState variant="filter" onClearFilters={clearFilters} />
           )
         ) : (
           <>

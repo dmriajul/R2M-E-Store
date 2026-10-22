@@ -1,0 +1,12 @@
+.shimmer {
+  background: linear-gradient(100deg, #18233b 25%, #263553 45%, #18233b 65%);
+  background-size: 240% 100%;
+  animation: returns-shimmer 1.6s linear infinite;
+}
+@keyframes returns-shimmer {
+  from { background-position: 140% 0; }
+  to { background-position: -140% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer { animation: none; }
+}

@@ -115,7 +115,7 @@ export function Navbar() {
   const navLinks = language === "bn" ? [
     { label: "হোম", href: "/" },
     { label: "দেখুন", href: "/shop" },
-    { label: "সংগ্রহ", href: "/#collections" },
+    { label: "সংগ্রহ", href: "/collections" },
     { label: "পরিচয়", href: "/#about" },
   ] : NAV_LINKS;
 
