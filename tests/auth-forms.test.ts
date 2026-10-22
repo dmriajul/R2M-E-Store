@@ -124,7 +124,7 @@ test("login sends one non-empty Turnstile token to Credentials and remounts afte
   }
 });
 
-test("local development login: no widget, no token, and the server's credential error is the only feedback", async (context) => {
+test("local development login: real widget gates submission until a token is issued", async (context) => {
   const env = process.env;
   const originalFetch = globalThis.fetch;
   const errors = context.mock.method(toast, "error", () => "login-dev-error");
@@ -147,19 +147,21 @@ test("local development login: no widget, no token, and the server's credential 
   let view: Awaited<ReturnType<typeof mount>> | undefined;
   try {
     view = await mount(LoginPage);
-    assert.equal(view.element.querySelector('[data-turnstile-action="login"]'), null, "No CAPTCHA widget in development");
-    assert.match(view.element.textContent ?? "", /Security check bypassed in development/);
+    assert.ok(view.element.querySelector('[data-turnstile-action="login"]'));
+    assert.doesNotMatch(view.element.textContent ?? "", /Security check bypassed/);
 
     const submit = view.element.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     assert.equal(submit.disabled, true, "An empty form stays disabled");
     await change(view.element, "#login-email", "super-admin@example.com");
     await change(view.element, "#login-password", "CorrectLookingPassword1!");
-    assert.equal(submit.disabled, false, "Valid credentials enable submit without solving a CAPTCHA");
+    assert.equal(submit.disabled, true, "A challenge is required in development too");
+    await solve();
+    assert.equal(submit.disabled, false);
 
     await act(async () => view!.element.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
     assert.equal(callbackBodies.length, 1);
     assert.equal(callbackBodies[0]!.get("email"), "super-admin@example.com");
-    assert.equal(callbackBodies[0]!.get("turnstileToken"), null, "No token is fabricated in development");
+    assert.equal(callbackBodies[0]!.get("turnstileToken"), "isolated-token");
     assert.ok(view.element.textContent?.includes(AUTH_MESSAGES.INVALID_CREDENTIALS));
     assert.ok(!view.element.textContent?.includes(AUTH_MESSAGES.SECURITY_CHECK_FAILED));
   } finally {

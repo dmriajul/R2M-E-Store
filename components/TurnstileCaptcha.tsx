@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Turnstile } from "@marsidev/react-turnstile";
+import { Component, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { Loader2, ShieldCheck, ShieldOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TurnstileAction } from "@/lib/turnstile-shared";
@@ -14,11 +14,11 @@ interface TurnstileCaptchaProps {
   action?: TurnstileAction;
 }
 
-type CaptchaStatus = "loading" | "ready" | "verified" | "expired" | "unavailable";
+type CaptchaStatus = "loading" | "ready" | "verified" | "expired" | "unavailable" | "timeout";
 
 /** Status line copy, announced via aria-live. Kept short and neutral in every state. */
 function statusMessage(status: CaptchaStatus, failed: boolean): string {
-  if (failed) return "Please refresh the page to try again.";
+  if (failed) return "If this persists, disable ad-blockers or try another browser.";
   switch (status) {
     case "loading":
       // The widget well carries the visible loading state; avoid duplicate copy.
@@ -41,10 +41,12 @@ function statusMessage(status: CaptchaStatus, failed: boolean): string {
  * Submit buttons stay disabled in every state except a live, verified token —
  * see `useTurnstile` and the auth forms.
  */
-export function TurnstileCaptcha({ onVerify, onError, action = "review" }: TurnstileCaptchaProps) {
+function TurnstileWidget({ onVerify, onError, action = "review" }: TurnstileCaptchaProps) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
   const uid = useId().replace(/:/g, "");
   const alive = useRef(false);
+  const widgetRef = useRef<TurnstileInstance>(null);
+  const [attempt, setAttempt] = useState(0);
   const callbacks = useRef({ onVerify, onError });
   const [status, setStatus] = useState<CaptchaStatus>("loading");
 
@@ -54,6 +56,7 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
 
   const unavailable = useCallback(() => {
     if (!alive.current) return;
+    console.warn("[turnstile] Security check failed to load. Check the CDN request, CSP and Cloudflare domain allowlist.");
     callbacks.current.onVerify("");
     callbacks.current.onError?.();
     setStatus("unavailable");
@@ -71,6 +74,11 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
   const retry = useCallback(() => {
     if (!alive.current) return;
     callbacks.current.onVerify("");
+    callbacks.current.onError?.();
+    // Reset existing challenges; a blocked script needs a fresh loader attempt.
+    if (window.turnstile) widgetRef.current?.reset();
+    else document.getElementById("cf-turnstile-script")?.remove();
+    setAttempt((value) => value + 1);
     setStatus("loading");
   }, []);
   const expire = useCallback(() => {
@@ -93,14 +101,24 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
       }
     };
     document.addEventListener("error", scriptError, true);
-    // A slow CDN is not a failure. Only a real script/widget error can fail
-    // the challenge; the wrapper will render if its script arrives later.
-    if (!siteKey) unavailable();
+    if (!siteKey) {
+      console.error("[turnstile] Missing NEXT_PUBLIC_TURNSTILE_SITE_KEY. Configure the public site key and rebuild the application.");
+      unavailable();
+    }
     return () => {
       alive.current = false;
       document.removeEventListener("error", scriptError, true);
     };
   }, [siteKey, unavailable]);
+
+  useEffect(() => {
+    if (!siteKey || status !== "loading") return;
+    const timer = setTimeout(() => {
+      unavailable();
+      setStatus("timeout");
+    }, 15_000);
+    return () => clearTimeout(timer);
+  }, [siteKey, status, attempt, unavailable]);
 
   const options = useMemo(
     () => ({
@@ -115,9 +133,11 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
     }),
     [action],
   );
-  const scriptOptions = useMemo(() => ({ onError: unavailable }), [unavailable]);
+  // Do NOT pass scriptOptions.onError: wrapper 1.6.1 deletes its global
+  // onload callback when that option is present, preventing API initialization.
+  // The capture-phase resource error listener above handles blocked scripts.
 
-  const failed = !siteKey || status === "unavailable";
+  const failed = !siteKey || status === "unavailable" || status === "timeout";
   const loading = Boolean(siteKey) && status === "loading" && !failed;
   const message = statusMessage(status, failed);
 
@@ -147,23 +167,30 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
             failed && "border border-dashed border-white/[0.06] bg-white/[0.02]",
           )}
         >
-          {siteKey && !failed ? (
+          {siteKey ? (
             <>
               <Turnstile
                 id={`mukra-turnstile-${uid}`}
                 siteKey={siteKey}
                 options={options}
-                scriptOptions={scriptOptions}
+                ref={widgetRef}
+                key={attempt}
                 rerenderOnCallbackChange={false}
                 onWidgetLoad={ready}
                 onSuccess={success}
-                onError={retry}
+                onError={unavailable}
                 onExpire={expire}
-                onTimeout={expire}
+                onTimeout={unavailable}
                 onUnsupported={unavailable}
                 className="flex w-full justify-center border-0 bg-transparent shadow-none [&_iframe]:max-w-full [&_iframe]:border-0 [&_iframe]:shadow-none"
                 style={{ minWidth: 0, maxWidth: "100%" }}
               />
+              {failed && (
+                <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#141210] px-2 text-center">
+                  <p className="text-xs text-muted-foreground">Security check failed to load. Please retry.</p>
+                  <button type="button" onClick={retry} className="text-xs text-primary underline">Retry</button>
+                </div>
+              )}
               {loading && (
                 <div
                   aria-hidden
@@ -180,7 +207,7 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
             <div className="flex flex-col items-center gap-1.5 px-4 py-2 text-center">
               <ShieldOff aria-hidden className="size-4 text-muted-foreground/60" />
               <p className="text-xs font-medium tracking-wide text-muted-foreground">
-                Verification unavailable
+                Verification unavailable: security check configuration is missing.
               </p>
             </div>
           )}
@@ -206,4 +233,30 @@ export function TurnstileCaptcha({ onVerify, onError, action = "review" }: Turns
       <noscript>Enable JavaScript to complete the security check. Submission remains disabled.</noscript>
     </div>
   );
+}
+
+
+/** Keep a provider render failure from taking down the authentication form. */
+class CaptchaBoundary extends Component<TurnstileCaptchaProps & { children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() {
+    console.warn("[turnstile] Widget rendering failed.");
+    this.props.onVerify("");
+    this.props.onError?.();
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div role="alert" className="rounded-2xl border border-primary/25 bg-[#141210] p-4 text-center text-xs text-muted-foreground">
+        <p>Security check failed to load. Please retry.</p>
+        <button type="button" className="mt-2 text-primary underline" onClick={() => this.setState({ failed: false })}>Retry</button>
+        <p className="mt-2">If this persists, disable ad-blockers or try another browser.</p>
+      </div>
+    );
+  }
+}
+
+export function TurnstileCaptcha(props: TurnstileCaptchaProps) {
+  return <CaptchaBoundary {...props}><TurnstileWidget {...props} /></CaptchaBoundary>;
 }

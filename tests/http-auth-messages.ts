@@ -47,8 +47,8 @@ async function main() {
 
   // The incoming dedicated login API must not become a captcha/verification bypass.
   for (const [values, status, code] of [
-    [{ email: valid.email, password: valid.password, turnstileToken: undefined }, 403, "SECURITY_CHECK_FAILED"],
-    [{ email: valid.email, password: valid.password, turnstileToken: fixtureToken("register") }, 403, "SECURITY_CHECK_FAILED"],
+    [{ email: valid.email, password: valid.password, turnstileToken: undefined }, 400, "SECURITY_CHECK_FAILED"],
+    [{ email: valid.email, password: valid.password, turnstileToken: fixtureToken("register") }, 400, "SECURITY_CHECK_FAILED"],
     [{ email: `api-unknown-${crypto.randomUUID()}@example.com`, password: valid.password }, 401, "INVALID_CREDENTIALS"],
     [{ email: valid.email, password: "incorrect" }, 401, "INVALID_CREDENTIALS"],
     [{ email: "not-an-email", password: valid.password }, 401, "INVALID_CREDENTIALS"],

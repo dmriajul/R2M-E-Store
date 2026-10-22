@@ -94,36 +94,17 @@ test("merged login API cannot bypass captcha or query account status without a s
   fixture.db.user.findFirst = async () => { reads++; return null; };
   globalThis.fetch = async () => Response.json({ success: false });
   const response = await POST(request({ turnstileToken: "" }));
-  assert.equal(response.status, 403);
+  assert.equal(response.status, 400);
   assert.equal((await response.json() as { code: string }).code, "SECURITY_CHECK_FAILED");
   assert.equal(reads, 0);
 });
-test("local development login API bypasses CAPTCHA while still enforcing the real credentials", async (context) => {
-  context.mock.method(console, "warn", () => {});
+test("local development login API requires CAPTCHA before inspecting credentials", async () => {
   setup();
   process.env = { ...process.env, NODE_ENV: "development" };
   delete process.env.TURNSTILE_SECRET_KEY;
-  const ip = "192.0.2.77";
-  await createUser({ name: "Dev Super Admin", email: "dev-admin@example.com", password, role: "SUPER_ADMIN" });
-
-  // With no captcha token and no secret configured, wrong credentials must
-  // still be rejected with the generic message instead of a security error.
-  const unknown = await POST(request({ email: "missing@example.com", turnstileToken: undefined }, ip));
-  const wrong = await POST(request({ email: "dev-admin@example.com", password: "wrong-password", turnstileToken: undefined }, ip));
-  assert.equal(unknown.status, 401);
-  assert.equal(wrong.status, 401);
-  const unknownBody = await unknown.json() as { code: string };
-  const wrongBody = await wrong.json() as { code: string };
-  assert.equal(unknownBody.code, "INVALID_CREDENTIALS");
-  assert.deepEqual(unknownBody, wrongBody);
-
-  const success = await POST(request({ email: "dev-admin@example.com", turnstileToken: undefined }, ip));
-  assert.equal(success.status, 200);
-  const body = await success.json() as { data: Record<string, unknown> };
-  assert.equal(body.data.email, "dev-admin@example.com");
-  assert.equal(body.data.role, "SUPER_ADMIN");
-  assert.equal(body.data.password, undefined);
-  assert.equal(success.headers.getSetCookie().length, 0, "The preflight API never establishes a session");
+  const response = await POST(request({ turnstileToken: undefined }, "192.0.2.77"));
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "invalid_captcha");
 });
 
 test("merged login API uses generic errors for missing/malformed fields with valid captcha", async () => {

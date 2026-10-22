@@ -28,7 +28,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
   let payload: unknown;
   try { payload = await request.json(); } catch { return failure("INVALID_REQUEST", 400); }
   const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
-  if (!await verifyTurnstileToken(record.turnstileToken, { action: "login" })) return failure("SECURITY_CHECK_FAILED", 403);
+  if (!await verifyTurnstileToken(record.turnstileToken, { action: "login" })) return NextResponse.json({ data: null, success: false, error: "invalid_captcha", code: "SECURITY_CHECK_FAILED" }, { status: 400, headers: { "Cache-Control": "no-store" } });
   const parsed = loginSchema.safeParse({ email: record.email, password: record.password, remember: true });
   // Match Credentials: malformed/missing/wrong credentials all use generic copy.
   if (!parsed.success) return failure("INVALID_CREDENTIALS", 401);

@@ -1,11 +1,4 @@
-/**
- * End-to-end Credentials contract for the development-only CAPTCHA bypass.
- *
- * Runs the real Auth.js handlers against the isolated test database with
- * NODE_ENV=development and NO Turnstile token/secret. This is the exact local
- * login path: correct staff credentials must create a SUPER_ADMIN session;
- * wrong credentials must fail with `invalid-credentials`, never a CAPTCHA error.
- */
+/** Real development Credentials contract: CAPTCHA remains enforced. */
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { NextRequest } from "next/server";
@@ -20,7 +13,7 @@ afterEach(() => {
   delete scope.prismaUnavailable;
 });
 
-test("development Credentials: no Turnstile token logs a Super Admin in; wrong password is invalid-credentials", async (context) => {
+test("development Credentials: missing CAPTCHA fails closed; solved challenge allows login", async (context) => {
   context.mock.method(console, "warn", () => {});
   context.mock.method(console, "error", () => {});
   process.env = {
@@ -30,7 +23,8 @@ test("development Credentials: no Turnstile token logs a Super Admin in; wrong p
     AUTH_URL: "http://localhost:3000",
     NEXTAUTH_URL: "http://localhost:3000",
   };
-  delete process.env.TURNSTILE_SECRET_KEY;
+  process.env.TURNSTILE_SECRET_KEY = "isolated-unit-test-secret";
+  context.mock.method(globalThis, "fetch", async () => Response.json({ success: true, action: "login", hostname: "localhost" }));
   delete process.env.TURNSTILE_ALLOWED_HOSTNAMES;
 
   const fixture = installTestDatabase({
@@ -52,7 +46,7 @@ test("development Credentials: no Turnstile token logs a Super Admin in; wrong p
   const csrfCookies = csrfResponse.headers.getSetCookie().map((header) => header.split(";")[0]).join("; ");
   assert.ok(csrf.csrfToken);
 
-  async function credentials(password: string) {
+  async function credentials(password: string, token = "solved-unit-token") {
     return handlers.POST(new NextRequest("http://localhost:3000/api/auth/callback/credentials", {
       method: "POST",
       headers: {
@@ -63,15 +57,18 @@ test("development Credentials: no Turnstile token logs a Super Admin in; wrong p
       body: new URLSearchParams({
         email: "admin@mukra.com",
         password,
+        turnstileToken: token,
         csrfToken: csrf.csrfToken,
         callbackUrl: "http://localhost:3000/admin",
       }).toString(),
     }));
   }
 
+  const blocked = await credentials("password123", "");
+  assert.equal(new URL((await blocked.json()).url).searchParams.get("code"), "security-verification-failed");
   const success = await credentials("password123");
   const destination = await success.json() as { url: string };
-  assert.equal(new URL(destination.url).searchParams.get("error"), null, "No CAPTCHA error may block local login");
+  assert.equal(new URL(destination.url).searchParams.get("error"), null, "A verified challenge permits credential verification");
   assert.equal(new URL(destination.url).pathname, "/admin");
 
   const sessionCookies = success.headers.getSetCookie().map((header) => header.split(";")[0]).join("; ");
