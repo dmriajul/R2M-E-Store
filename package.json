@@ -11,6 +11,7 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "auth:accounts": "tsx scripts/auth-accounts.ts",
     "test": "tsx --tsconfig tests/tsconfig.json --test tests/*.test.ts",
     "test:http": "tsx tests/http-customer-journey.ts",
     "test:verification:http": "tsx tests/http-email-verification.ts",
