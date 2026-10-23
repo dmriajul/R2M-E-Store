@@ -100,6 +100,10 @@ A healthy database and a configured Turnstile site/secret pair are required for
 registration and login, including `next dev`. See `.env.example` for local test keys. If Prisma engine downloads are blocked, run generate and
 push from a network that can reach `binaries.prisma.sh`.
 
+For the current credential audit, optional test customer setup and account report, see
+[Authentication credentials audit](docs/AUTH_CREDENTIALS_AUDIT.md).
+Run `npm run auth:accounts` for a masked account summary.
+
 There are no default credentials: the seed reads `ADMIN_NAME`, `ADMIN_EMAIL`
 and `ADMIN_PASSWORD` from the environment and refuses to run without them.
 
