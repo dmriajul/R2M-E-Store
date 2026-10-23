@@ -1,20 +1,126 @@
 "use client";
 
-import { Component, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import {
+  Component,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
+import Script from "next/script";
 import { Loader2, ShieldCheck, ShieldOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TURNSTILE_RESPONSE_FIELD, type TurnstileAction } from "@/lib/turnstile-shared";
+import {
+  getTurnstileSiteKey,
+  TURNSTILE_RESPONSE_FIELD,
+  type TurnstileAction,
+} from "@/lib/turnstile-shared";
 
-interface TurnstileCaptchaProps {
+export const TURNSTILE_SCRIPT_ID = "cf-turnstile-script";
+export const TURNSTILE_ONLOAD_CALLBACK = "onloadTurnstileCallback";
+export const TURNSTILE_SCRIPT_SRC =
+  `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=${TURNSTILE_ONLOAD_CALLBACK}`;
+
+interface TurnstileRenderOptions {
+  sitekey: string;
+  action: TurnstileAction;
+  theme: "dark";
+  appearance: "always";
+  size: "flexible";
+  retry: "auto";
+  "retry-interval": number;
+  "refresh-expired": "auto";
+  "refresh-timeout": "auto";
+  "response-field": boolean;
+  "response-field-name": string;
+  callback: (token: string) => void;
+  "expired-callback": () => void;
+  "error-callback": (errorCode?: unknown) => void;
+  "timeout-callback": () => void;
+  "unsupported-callback": () => void;
+}
+
+interface TurnstileBrowserApi {
+  render: (container: HTMLElement | string, options: TurnstileRenderOptions) => string | undefined;
+  reset?: (widgetId?: string) => void;
+  remove?: (widgetId: string) => void;
+  getResponse?: (widgetId?: string) => string | undefined;
+}
+
+type TurnstileWindow = Window &
+  typeof globalThis & {
+    turnstile?: TurnstileBrowserApi;
+    onloadTurnstileCallback?: () => void;
+  };
+
+export interface TurnstileCaptchaProps {
   onVerify: (token: string) => void;
   onError?: () => void;
   /** The widget is locked to the site's dark luxury theme. */
   theme?: "dark";
   action?: TurnstileAction;
+  /** Optional explicit site key override (defaults to NEXT_PUBLIC_TURNSTILE_SITE_KEY || TURNSTILE_SITE_KEY). */
+  siteKey?: string;
 }
 
 type CaptchaStatus = "loading" | "ready" | "verified" | "expired" | "unavailable" | "timeout";
+
+const onloadSubscribers = new Set<() => void>();
+
+/**
+ * Register a listener on Cloudflare's `onload=onloadTurnstileCallback` hook.
+ *
+ * Unlike `@marsidev/react-turnstile@1.6.1`, this callback is never deleted from
+ * `window` and does not rely on a one-shot module-scoped Promise, so SPA route
+ * transitions, Strict Mode remounts, and manual script retries always receive
+ * readiness notifications.
+ */
+function subscribeTurnstileOnload(listener: () => void): () => void {
+  onloadSubscribers.add(listener);
+  if (typeof window !== "undefined") {
+    const win = window as TurnstileWindow;
+    if (typeof win.onloadTurnstileCallback !== "function") {
+      win.onloadTurnstileCallback = () => {
+        for (const notify of onloadSubscribers) notify();
+      };
+    }
+  }
+  return () => {
+    onloadSubscribers.delete(listener);
+  };
+}
+
+/**
+ * Guarantee `<script id="cf-turnstile-script" src="...api.js?render=explicit..." async defer>`
+ * exists in the DOM. Next.js `<Script strategy="afterInteractive">` handles SSR
+ * preloading and initial injection; this fallback ensures retries (after a
+ * blocked script was removed from the DOM) and isolated non-Next test roots
+ * always mount a live `<script async defer>` tag without duplicates.
+ */
+function ensureTurnstileScriptElement(): HTMLScriptElement | null {
+  if (typeof document === "undefined") return null;
+  const existing =
+    (document.getElementById(TURNSTILE_SCRIPT_ID) as HTMLScriptElement | null) ??
+    document.querySelector<HTMLScriptElement>(
+      'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]',
+    );
+  if (existing) {
+    if (!existing.id) existing.id = TURNSTILE_SCRIPT_ID;
+    existing.async = true;
+    existing.defer = true;
+    return existing;
+  }
+
+  const script = document.createElement("script");
+  script.id = TURNSTILE_SCRIPT_ID;
+  script.src = TURNSTILE_SCRIPT_SRC;
+  script.async = true;
+  script.defer = true;
+  (document.head ?? document.body ?? document.documentElement).appendChild(script);
+  return script;
+}
 
 /** Status line copy, announced via aria-live. Kept short and neutral in every state. */
 function statusMessage(status: CaptchaStatus, failed: boolean): string {
@@ -34,21 +140,30 @@ function statusMessage(status: CaptchaStatus, failed: boolean): string {
 
 /**
  * Cloudflare Turnstile presented as a native piece of the dark luxury theme:
- * a gold-framed “Security check” card with the widget centred in a fixed
- * 300px well that scales fluidly on small screens.
+ * a gold-framed “Security check” card with the widget centred in a 300px well
+ * that scales fluidly on small screens.
  *
- * The installed wrapper owns script deduplication and widget removal on unmount.
- * Submit buttons stay disabled in every state except a live, verified token —
- * see `useTurnstile` and the auth forms.
+ * Loads `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit`
+ * with `async` and `defer`, renders explicitly into a `data-sitekey` container,
+ * emits the canonical `cf-turnstile-response` hidden form field, and cleans up
+ * widgets on unmount/reset.
  */
-function TurnstileWidget({ onVerify, onError, action = "review" }: TurnstileCaptchaProps) {
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+function TurnstileWidget({
+  onVerify,
+  onError,
+  action = "review",
+  siteKey: siteKeyProp,
+}: TurnstileCaptchaProps) {
+  const siteKey = getTurnstileSiteKey(siteKeyProp);
   const uid = useId().replace(/:/g, "");
   const alive = useRef(false);
-  const widgetRef = useRef<TurnstileInstance>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const callbacks = useRef({ onVerify, onError });
   const [status, setStatus] = useState<CaptchaStatus>("loading");
+  const [verifiedToken, setVerifiedToken] = useState("");
+  const [hasNativeResponseInput, setHasNativeResponseInput] = useState(false);
 
   useEffect(() => {
     callbacks.current = { onVerify, onError };
@@ -57,90 +172,187 @@ function TurnstileWidget({ onVerify, onError, action = "review" }: TurnstileCapt
   const unavailable = useCallback((errorCode?: unknown) => {
     if (!alive.current) return;
     if (errorCode === "110200") {
-      console.warn("[turnstile] Domain is not authorized for this Turnstile widget (110200). Add this hostname in Cloudflare Turnstile widget settings.");
+      console.warn(
+        "[turnstile] Domain is not authorized for this Turnstile widget (110200). Add this hostname in Cloudflare Turnstile widget settings.",
+      );
+    } else if (errorCode === "csp-blocked") {
+      console.warn(
+        "[turnstile] Content-Security-Policy blocked challenges.cloudflare.com. Allow script-src and frame-src https://challenges.cloudflare.com.",
+      );
     } else {
-      console.warn("[turnstile] Security check failed to load. Check the CDN request, CSP and Cloudflare domain allowlist.");
+      console.warn(
+        "[turnstile] Security check failed to load. Check the CDN request, CSP and Cloudflare domain allowlist.",
+      );
     }
+    setVerifiedToken("");
     callbacks.current.onVerify("");
     callbacks.current.onError?.();
     setStatus("unavailable");
   }, []);
-  const ready = useCallback(() => {
-    if (!alive.current) return;
-    callbacks.current.onVerify("");
-    setStatus("ready");
-  }, []);
-  const success = useCallback((token: string) => {
-    if (!alive.current) return;
-    setStatus("verified");
-    callbacks.current.onVerify(token);
-  }, []);
+
+  const tryRenderWidget = useCallback(() => {
+    if (!alive.current || !siteKey) return;
+    if (widgetIdRef.current !== null) return;
+    const container = containerRef.current;
+    const api = typeof window === "undefined" ? undefined : (window as TurnstileWindow).turnstile;
+    if (!container || typeof api?.render !== "function") return;
+
+    try {
+      const renderedId = api.render(container, {
+        sitekey: siteKey,
+        action,
+        theme: "dark",
+        appearance: "always",
+        size: "flexible",
+        retry: "auto",
+        "retry-interval": 8_000,
+        "refresh-expired": "auto",
+        "refresh-timeout": "auto",
+        "response-field": true,
+        "response-field-name": TURNSTILE_RESPONSE_FIELD,
+        callback: (token: string) => {
+          if (!alive.current) return;
+          const clean = typeof token === "string" ? token.trim() : "";
+          setVerifiedToken(clean);
+          setStatus(clean ? "verified" : "ready");
+          callbacks.current.onVerify(clean);
+        },
+        "expired-callback": () => {
+          if (!alive.current) return;
+          setVerifiedToken("");
+          callbacks.current.onVerify("");
+          setStatus("expired");
+        },
+        "error-callback": (errorCode?: unknown) => {
+          unavailable(errorCode);
+        },
+        "timeout-callback": () => {
+          unavailable("widget-timeout");
+        },
+        "unsupported-callback": () => {
+          unavailable("unsupported-browser");
+        },
+      });
+
+      if (typeof renderedId === "string" && renderedId.length > 0) {
+        widgetIdRef.current = renderedId;
+        setHasNativeResponseInput(
+          Boolean(container.querySelector(`input[name="${TURNSTILE_RESPONSE_FIELD}"]`)),
+        );
+        setStatus((prev) => (prev === "verified" ? prev : "ready"));
+      } else {
+        unavailable("empty-widget-id");
+      }
+    } catch {
+      unavailable("render-error");
+    }
+  }, [action, siteKey, unavailable]);
+
   const retry = useCallback(() => {
     if (!alive.current) return;
+    setVerifiedToken("");
+    setHasNativeResponseInput(false);
     callbacks.current.onVerify("");
     callbacks.current.onError?.();
-    // Reset existing challenges; a blocked script needs a fresh loader attempt.
-    if (window.turnstile) widgetRef.current?.reset();
-    else document.getElementById("cf-turnstile-script")?.remove();
+
+    const api = typeof window === "undefined" ? undefined : (window as TurnstileWindow).turnstile;
+    if (api && widgetIdRef.current && typeof api.reset === "function") {
+      try {
+        api.reset(widgetIdRef.current);
+      } catch {
+        // Widget removal and remount happen via `attempt` change below.
+      }
+    } else if (!api) {
+      document.getElementById(TURNSTILE_SCRIPT_ID)?.remove();
+    }
     setAttempt((value) => value + 1);
     setStatus("loading");
-  }, []);
-  const expire = useCallback(() => {
-    if (!alive.current) return;
-    callbacks.current.onVerify("");
-    setStatus("expired");
   }, []);
 
   useEffect(() => {
     alive.current = true;
-    // A deduplicated script can outlive its original widget. Listen per mount,
-    // rather than relying solely on the first wrapper's script.onerror handler.
-    const scriptError = (event: Event) => {
+    if (!siteKey) {
+      console.error(
+        "[turnstile] Missing NEXT_PUBLIC_TURNSTILE_SITE_KEY. Configure the public site key and rebuild the application.",
+      );
+      unavailable("missing-site-key");
+      return () => {
+        alive.current = false;
+      };
+    }
+
+    const unsubscribeOnload = subscribeTurnstileOnload(tryRenderWidget);
+    const script = ensureTurnstileScriptElement();
+    const handleLoad = () => tryRenderWidget();
+    const handleError = () => unavailable("script-error");
+    script?.addEventListener("load", handleLoad);
+    script?.addEventListener("error", handleError);
+
+    const handleResourceError = (event: Event) => {
       const target = event.target;
       if (
         target instanceof window.HTMLScriptElement &&
         target.src.startsWith("https://challenges.cloudflare.com/turnstile/")
       ) {
-        unavailable();
+        unavailable("script-error");
       }
     };
-    document.addEventListener("error", scriptError, true);
-    if (!siteKey) {
-      console.error("[turnstile] Missing NEXT_PUBLIC_TURNSTILE_SITE_KEY. Configure the public site key and rebuild the application.");
-      unavailable();
+    const handleCspViolation = (event: Event) => {
+      const blockedUri = (event as SecurityPolicyViolationEvent).blockedURI ?? "";
+      if (blockedUri.includes("challenges.cloudflare.com")) {
+        unavailable("csp-blocked");
+      }
+    };
+    document.addEventListener("error", handleResourceError, true);
+    document.addEventListener("securitypolicyviolation", handleCspViolation);
+
+    tryRenderWidget();
+
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    if (
+      widgetIdRef.current === null &&
+      typeof (window as TurnstileWindow).turnstile?.render !== "function"
+    ) {
+      pollInterval = setInterval(() => {
+        if (typeof (window as TurnstileWindow).turnstile?.render === "function") {
+          if (pollInterval !== null) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
+          tryRenderWidget();
+        }
+      }, 100);
     }
+
     return () => {
       alive.current = false;
-      document.removeEventListener("error", scriptError, true);
+      unsubscribeOnload();
+      script?.removeEventListener("load", handleLoad);
+      script?.removeEventListener("error", handleError);
+      document.removeEventListener("error", handleResourceError, true);
+      document.removeEventListener("securitypolicyviolation", handleCspViolation);
+      if (pollInterval !== null) clearInterval(pollInterval);
+
+      const widgetId = widgetIdRef.current;
+      widgetIdRef.current = null;
+      if (widgetId) {
+        try {
+          (window as TurnstileWindow).turnstile?.remove?.(widgetId);
+        } catch {
+          // Ignore cleanup errors from detached iframes.
+        }
+      }
     };
-  }, [siteKey, unavailable]);
+  }, [siteKey, attempt, tryRenderWidget, unavailable]);
 
   useEffect(() => {
     if (!siteKey || status !== "loading") return;
     const timer = setTimeout(() => {
-      unavailable();
+      unavailable("script-timeout");
       setStatus("timeout");
     }, 15_000);
     return () => clearTimeout(timer);
   }, [siteKey, status, attempt, unavailable]);
-
-  const options = useMemo(
-    () => ({
-      theme: "dark" as const,
-      action,
-      appearance: "always" as const,
-      // Flexible uses the available width and a low-profile ~65px challenge footprint.
-      size: "flexible" as const,
-      responseField: true,
-      responseFieldName: TURNSTILE_RESPONSE_FIELD,
-      refreshExpired: "auto" as const,
-      refreshTimeout: "auto" as const,
-    }),
-    [action],
-  );
-  // Do NOT pass scriptOptions.onError: wrapper 1.6.1 deletes its global
-  // onload callback when that option is present, preventing API initialization.
-  // The capture-phase resource error listener above handles blocked scripts.
 
   const failed = !siteKey || status === "unavailable" || status === "timeout";
   const loading = Boolean(siteKey) && status === "loading" && !failed;
@@ -153,6 +365,19 @@ function TurnstileWidget({ onVerify, onError, action = "review" }: TurnstileCapt
       aria-describedby={`mukra-turnstile-status-${uid}`}
       className="min-w-0 overflow-hidden rounded-2xl border border-primary/25 bg-[#141210] p-3 sm:p-4"
     >
+      {siteKey && (
+        <Script
+          id={TURNSTILE_SCRIPT_ID}
+          src={TURNSTILE_SCRIPT_SRC}
+          strategy="afterInteractive"
+          async
+          defer
+          onLoad={tryRenderWidget}
+          onReady={tryRenderWidget}
+          onError={() => unavailable("script-error")}
+        />
+      )}
+
       <div className="mb-2.5 flex items-center justify-center gap-2">
         <ShieldCheck aria-hidden className="size-3.5 shrink-0 text-primary/50" />
         <p
@@ -174,26 +399,40 @@ function TurnstileWidget({ onVerify, onError, action = "review" }: TurnstileCapt
         >
           {siteKey ? (
             <>
-              <Turnstile
+              <div
+                ref={containerRef}
                 id={`mukra-turnstile-${uid}`}
-                siteKey={siteKey}
-                options={options}
-                ref={widgetRef}
                 key={attempt}
-                rerenderOnCallbackChange={false}
-                onWidgetLoad={ready}
-                onSuccess={success}
-                onError={unavailable}
-                onExpire={expire}
-                onTimeout={unavailable}
-                onUnsupported={unavailable}
+                data-sitekey={siteKey}
+                data-action={action}
+                data-theme="dark"
+                data-size="flexible"
                 className="flex w-full justify-center border-0 bg-transparent shadow-none [&_iframe]:max-w-full [&_iframe]:border-0 [&_iframe]:shadow-none"
-                style={{ minWidth: 0, maxWidth: "100%" }}
+                style={{ minWidth: 0, width: "100%", maxWidth: "100%", minHeight: 65 }}
               />
+              {!hasNativeResponseInput && (
+                <input
+                  type="hidden"
+                  name={TURNSTILE_RESPONSE_FIELD}
+                  value={verifiedToken}
+                  readOnly
+                />
+              )}
               {failed && (
-                <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#141210] px-2 text-center">
-                  <p className="text-xs text-muted-foreground">Security check failed to load. Please retry.</p>
-                  <button type="button" onClick={retry} className="text-xs text-primary underline">Retry</button>
+                <div
+                  role="alert"
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#141210] px-2 text-center"
+                >
+                  <p className="text-xs text-muted-foreground">
+                    Security check failed to load. Please retry.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={retry}
+                    className="text-xs text-primary underline"
+                  >
+                    Retry
+                  </button>
                 </div>
               )}
               {loading && (
@@ -235,16 +474,22 @@ function TurnstileWidget({ onVerify, onError, action = "review" }: TurnstileCapt
         </p>
       </div>
 
-      <noscript>Enable JavaScript to complete the security check. Submission remains disabled.</noscript>
+      <noscript>
+        Enable JavaScript to complete the security check. Submission remains disabled.
+      </noscript>
     </div>
   );
 }
 
-
 /** Keep a provider render failure from taking down the authentication form. */
-class CaptchaBoundary extends Component<TurnstileCaptchaProps & { children: ReactNode }, { failed: boolean }> {
+class CaptchaBoundary extends Component<
+  TurnstileCaptchaProps & { children: ReactNode },
+  { failed: boolean }
+> {
   state = { failed: false };
-  static getDerivedStateFromError() { return { failed: true }; }
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
   componentDidCatch() {
     console.warn("[turnstile] Widget rendering failed.");
     this.props.onVerify("");
@@ -253,15 +498,30 @@ class CaptchaBoundary extends Component<TurnstileCaptchaProps & { children: Reac
   render() {
     if (!this.state.failed) return this.props.children;
     return (
-      <div role="alert" className="rounded-2xl border border-primary/25 bg-[#141210] p-4 text-center text-xs text-muted-foreground">
+      <div
+        role="alert"
+        className="rounded-2xl border border-primary/25 bg-[#141210] p-4 text-center text-xs text-muted-foreground"
+      >
         <p>Security check failed to load. Please retry.</p>
-        <button type="button" className="mt-2 text-primary underline" onClick={() => this.setState({ failed: false })}>Retry</button>
-        <p className="mt-2">If this persists, disable ad-blockers or try another browser.</p>
+        <button
+          type="button"
+          className="mt-2 text-primary underline"
+          onClick={() => this.setState({ failed: false })}
+        >
+          Retry
+        </button>
+        <p className="mt-2">
+          If this persists, disable ad-blockers or try another browser.
+        </p>
       </div>
     );
   }
 }
 
 export function TurnstileCaptcha(props: TurnstileCaptchaProps) {
-  return <CaptchaBoundary {...props}><TurnstileWidget {...props} /></CaptchaBoundary>;
+  return (
+    <CaptchaBoundary {...props}>
+      <TurnstileWidget {...props} />
+    </CaptchaBoundary>
+  );
 }

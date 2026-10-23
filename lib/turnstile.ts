@@ -1,4 +1,9 @@
-import { TURNSTILE_RESPONSE_FIELD, type TurnstileAction } from "@/lib/turnstile-shared";
+import {
+  getTurnstileSiteKey,
+  isTurnstileBypassed,
+  TURNSTILE_RESPONSE_FIELD,
+  type TurnstileAction,
+} from "@/lib/turnstile-shared";
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const TURNSTILE_ALWAYS_PASS_TEST_SECRET = "1x0000000000000000000000000000000AA";
@@ -38,6 +43,7 @@ const TURNSTILE_TOKEN_FIELDS = [
   TURNSTILE_RESPONSE_FIELD,
   "turnstileToken",
   "cfTurnstileResponse",
+  "token",
 ] as const;
 
 type TurnstileFailureReason =
@@ -68,6 +74,8 @@ export function extractTurnstileToken(
   payload: unknown,
   headers?: Headers | null,
 ): unknown {
+  if (typeof payload === "string") return payload;
+
   if (payload instanceof FormData || payload instanceof URLSearchParams) {
     let firstDefined: unknown = undefined;
     for (const field of TURNSTILE_TOKEN_FIELDS) {
@@ -90,7 +98,9 @@ export function extractTurnstileToken(
     if (firstDefined !== undefined) return firstDefined;
   }
 
-  const headerToken = headers?.get(TURNSTILE_RESPONSE_FIELD)?.trim();
+  const headerToken =
+    headers?.get(TURNSTILE_RESPONSE_FIELD)?.trim() ||
+    headers?.get("x-turnstile-token")?.trim();
   if (headerToken) return headerToken;
   return undefined;
 }
@@ -341,13 +351,33 @@ function rejected(reason: TurnstileFailureReason, diagnostic?: SafeProviderDiagn
   return false;
 }
 
+let devBypassWarningLogged = false;
+
 /** Fail closed on missing configuration, bad data, outages and replays. */
 export async function verifyTurnstileToken(
   token: unknown,
   options: VerifyTurnstileOptions,
 ): Promise<boolean> {
-  if (typeof token !== "string") return rejected("invalid-token");
-  const normalizedToken = token.trim();
+  if (isTurnstileBypassed()) {
+    if (!devBypassWarningLogged) {
+      devBypassWarningLogged = true;
+      console.warn(
+        "[turnstile] LOCAL DEVELOPMENT bypass active (TURNSTILE_DEV_BYPASS=true). Production builds always enforce siteverify.",
+      );
+    }
+    return true;
+  }
+
+  const candidate =
+    typeof token === "string"
+      ? token
+      : token && typeof token === "object" && !Array.isArray(token)
+        ? extractTurnstileToken(token, options.requestHeaders)
+        : token === undefined
+          ? extractTurnstileToken(null, options.requestHeaders)
+          : token;
+  if (typeof candidate !== "string") return rejected("invalid-token");
+  const normalizedToken = candidate.trim();
   if (!normalizedToken || normalizedToken.length > 2048) return rejected("invalid-token");
 
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
@@ -415,6 +445,7 @@ export async function verifyTurnstileToken(
 
 /** Server-only configuration readiness; deliberately does not reveal any key/hostname. */
 export function isTurnstileServerConfigured(): boolean {
+  if (isTurnstileBypassed()) return true;
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
   return Boolean(secret) &&
     !(process.env.NODE_ENV === "production" && TURNSTILE_TEST_SECRETS.has(secret ?? "")) &&
@@ -431,8 +462,8 @@ let configurationWarningLogged = false;
  * disabled. Only variable names are logged — never key values, tokens or hosts.
  */
 export function warnOnTurnstileConfigurationGaps(): void {
-  if (configurationWarningLogged) return;
-  const publicKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+  if (configurationWarningLogged || isTurnstileBypassed()) return;
+  const publicKey = getTurnstileSiteKey();
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
   if (publicKey && secret && isTurnstileServerConfigured()) return;
   configurationWarningLogged = true;

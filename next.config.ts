@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   env: {
     NEXT_PUBLIC_TURNSTILE_SITE_KEY:
-      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? TURNSTILE_SITE_KEY,
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || TURNSTILE_SITE_KEY,
   },
   /** Docker/self-host friendly server bundle (Vercel ignores it). */
   output: "standalone",

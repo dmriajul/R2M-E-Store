@@ -73,6 +73,24 @@ test("extractTurnstileToken and parseTurnstileRequestRecord parse cf-turnstile-r
   const parsedMulti = await parseTurnstileRequestRecord(multiReq);
   assert.equal(parsedMulti?.formEncoded, true);
   assert.equal(extractTurnstileToken(parsedMulti?.record), "multipart-cf-token");
+
+  // verifyTurnstileToken() also extracts cf-turnstile-response directly when passed a payload or FormData
+  reply({ success: true, action: "login", hostname: "shop.example.com" });
+  assert.equal(await verifyTurnstileToken({ "cf-turnstile-response": "record-cf-token" }, { action: "login" }), true);
+  reply({ success: true, action: "login", hostname: "shop.example.com" });
+  assert.equal(await verifyTurnstileToken(form, { action: "login" }), true);
+});
+
+test("development mode supports explicit TURNSTILE_DEV_BYPASS safely while production ignores it", async () => {
+  delete process.env.TURNSTILE_SECRET_KEY;
+  process.env = { ...process.env, NODE_ENV: "development", TURNSTILE_DEV_BYPASS: "true" };
+  assert.equal(isTurnstileServerConfigured(), true);
+  assert.equal(await verifyTurnstileToken(undefined, { action: "login" }), true);
+
+  // Production must never honor TURNSTILE_DEV_BYPASS
+  process.env = { ...process.env, NODE_ENV: "production", TURNSTILE_DEV_BYPASS: "true", NEXT_PUBLIC_TURNSTILE_DEV_BYPASS: "true" };
+  assert.equal(isTurnstileServerConfigured(), false);
+  assert.equal(await verifyTurnstileToken("plausible-token", { action: "login" }), false);
 });
 
 test("production domain verification handles Vercel aliases, custom www/apex pairs, TURNSTILE_HOSTNAMES and loopback stripping", async () => {

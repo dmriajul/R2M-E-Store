@@ -159,6 +159,8 @@ export default function RootLayout({
     >
       <head>
         <meta name="google" content="notranslate" />
+        <link rel="preconnect" href="https://challenges.cloudflare.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
         {/* JSON-LD Structured Data */}
         <script
           type="application/ld+json"

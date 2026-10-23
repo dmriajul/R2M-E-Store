@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireDatabase } from "@/lib/prisma";
 import { isTurnstileServerConfigured } from "@/lib/turnstile";
+import { getTurnstileSiteKey } from "@/lib/turnstile-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function GET() {
     database = true;
   } catch { /* Health consumers receive only a fixed status, never raw errors. */ }
   finally { clearTimeout(timer); }
-  const turnstile = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim()) && isTurnstileServerConfigured();
+  const turnstile = Boolean(getTurnstileSiteKey()) && isTurnstileServerConfigured();
   const auth = Boolean(process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim());
   const ready = database && turnstile && auth;
   return NextResponse.json({ status: ready ? "ready" : "unavailable", checks: {
