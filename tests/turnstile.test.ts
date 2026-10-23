@@ -4,9 +4,14 @@ import {
   extractTurnstileToken,
   isTurnstileServerConfigured,
   parseTurnstileRequestRecord,
+  readTurnstileSecretKey,
   verifyTurnstileToken,
 } from "../lib/turnstile";
-import { TURNSTILE_RESPONSE_FIELD, TURNSTILE_SITE_KEY } from "../lib/turnstile-shared";
+import {
+  getTurnstileSiteKey,
+  TURNSTILE_RESPONSE_FIELD,
+  TURNSTILE_SITE_KEY,
+} from "../lib/turnstile-shared";
 
 const originalEnv = { ...process.env };
 const originalFetch = globalThis.fetch;
@@ -34,9 +39,101 @@ test("Turnstile verifies via Cloudflare, sends secret only in POST body and disa
   assert.equal(await verifyTurnstileToken("token", { action: "login", requestHeaders: headers }), true);
 });
 
-test("configured Turnstile site key constant matches the existing Cloudflare widget", () => {
+test("TURNSTILE_SECRET_KEY and NEXT_PUBLIC_TURNSTILE_SITE_KEY strip quotes, whitespace, BOM, KEY= prefixes and reject invalid character boundaries", async (context) => {
   assert.equal(TURNSTILE_SITE_KEY, "0x4AAAAAAFR9W3cd66AOTr2B");
   assert.equal(TURNSTILE_RESPONSE_FIELD, "cf-turnstile-response");
+  context.mock.method(console, "warn", () => {});
+  context.mock.method(console, "error", () => {});
+  const cleanSecret = "0x4AAAAAA_valid_prod_secret_key_35c";
+  assert.equal(cleanSecret.length, 35);
+
+  for (const wrapped of [
+    `  "${cleanSecret}"  `,
+    `\uFEFF'${cleanSecret}'\r\n`,
+    `\`${cleanSecret}\``,
+    `\\"${cleanSecret}\\"`,
+    `TURNSTILE_SECRET_KEY="${cleanSecret}" # Cloudflare prod secret`,
+  ]) {
+    process.env.TURNSTILE_SECRET_KEY = wrapped;
+    process.env.NEXTAUTH_URL = '  "https://2r-m-store.vercel.app"  \r\n';
+    delete process.env.TURNSTILE_ALLOWED_HOSTNAMES;
+    const resolution = readTurnstileSecretKey();
+    assert.equal(resolution.error, null);
+    assert.equal(resolution.secret, cleanSecret);
+    assert.equal(resolution.looksLikeSiteKey, false);
+
+    let postedSecret = "";
+    globalThis.fetch = async (_url, init) => {
+      const body = new URLSearchParams(String(init?.body));
+      postedSecret = body.get("secret") ?? "";
+      return Response.json({ success: true, action: "login", hostname: "2r-m-store.vercel.app" });
+    };
+    assert.equal(await verifyTurnstileToken("  valid-cf-token\r\n ", { action: "login" }), true);
+    assert.equal(postedSecret, cleanSecret, "Posted secret must contain zero quotes or whitespace");
+  }
+
+  // Empty quotes and invalid interior character boundaries fail closed before fetching
+  let fetchCount = 0;
+  globalThis.fetch = async () => {
+    fetchCount++;
+    return Response.json({ success: true, action: "login", hostname: "shop.example.com" });
+  };
+  for (const malformed of ['""', "''", "0x4bad secret with spaces", "0x4bad;character", "0x4bad/slash"]) {
+    process.env.TURNSTILE_SECRET_KEY = malformed;
+    process.env.TURNSTILE_ALLOWED_HOSTNAMES = "shop.example.com";
+    assert.equal(isTurnstileServerConfigured(), false);
+    assert.equal(await verifyTurnstileToken("valid-token", { action: "login" }), false);
+  }
+  assert.equal(fetchCount, 0);
+
+  // A 35-char secret-shaped value in NEXT_PUBLIC_TURNSTILE_SITE_KEY is never exposed and falls back to TURNSTILE_SITE_KEY
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = `"${cleanSecret}"`;
+  assert.equal(getTurnstileSiteKey(), TURNSTILE_SITE_KEY);
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = '  "0x4AAAAAAFR9W3cd66AOTr2B" \r\n';
+  assert.equal(getTurnstileSiteKey(), "0x4AAAAAAFR9W3cd66AOTr2B");
+});
+
+test("siteverify failures log structured error-codes (invalid-input-secret, timeout-or-duplicate) to console.error without leaking secrets or tokens", async (context) => {
+  const secretValue = "0x4AAAAAA_super_private_secret_35ch";
+  const tokenValue = "private-single-use-turnstile-token";
+  process.env.TURNSTILE_SECRET_KEY = secretValue;
+  process.env.TURNSTILE_ALLOWED_HOSTNAMES = "2r-m-store.vercel.app";
+
+  const errorLogs: string[] = [];
+  context.mock.method(console, "error", (...args: unknown[]) => {
+    errorLogs.push(args.map(String).join(" "));
+  });
+
+  reply({ success: false, "error-codes": ["invalid-input-secret"] });
+  assert.equal(await verifyTurnstileToken(tokenValue, { action: "login" }), false);
+  assert.ok(errorLogs.some((line) => line.includes("provider-rejected-token") && line.includes("invalid-input-secret")));
+
+  errorLogs.length = 0;
+  reply({ success: false, "error-codes": ["timeout-or-duplicate"], hostname: "2r-m-store.vercel.app" });
+  assert.equal(await verifyTurnstileToken(tokenValue, { action: "login" }), false);
+  assert.ok(errorLogs.some((line) => line.includes("provider-rejected-token") && line.includes("timeout-or-duplicate")));
+
+  errorLogs.length = 0;
+  reply({ success: false, "error-codes": ["invalid-input-secret"] }, 400);
+  assert.equal(await verifyTurnstileToken(tokenValue, { action: "login" }), false);
+  assert.ok(errorLogs.some((line) => line.includes("provider-http-error") && line.includes("invalid-input-secret") && line.includes('"httpStatus":400')));
+
+  for (const line of errorLogs) {
+    assert.ok(!line.includes(secretValue), "Logs must never expose TURNSTILE_SECRET_KEY");
+    assert.ok(!line.includes(tokenValue), "Logs must never expose cf-turnstile-response token");
+  }
+});
+
+test("extractTurnstileToken ignores stringified undefined/null placeholders from URLSearchParams", () => {
+  const params = new URLSearchParams({
+    "cf-turnstile-response": "undefined",
+    turnstileToken: "real-fallback-token",
+  });
+  assert.equal(extractTurnstileToken(params), "real-fallback-token");
+  assert.equal(
+    extractTurnstileToken({ "cf-turnstile-response": "null", turnstileToken: "real-record-token" }),
+    "real-record-token",
+  );
 });
 
 test("extractTurnstileToken and parseTurnstileRequestRecord parse cf-turnstile-response across JSON and form requests", async () => {

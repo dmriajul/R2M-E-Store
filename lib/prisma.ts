@@ -8,7 +8,7 @@
  * sample rows.
  */
 
-import { isDatabaseConfigured } from "@/lib/integrations";
+import { normalizeDatabaseUrl } from "@/lib/integrations";
 
 /** The slice of the Prisma client surface the data layer actually uses. */
 export interface PrismaDelegate {
@@ -117,13 +117,17 @@ function validDatabaseUrl(value: string): boolean {
  * builds without a live connection.
  */
 export async function getPrisma(): Promise<PrismaLikeClient | null> {
-  if (!isDatabaseConfigured()) {
+  const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
+  if (!databaseUrl) {
     diagnose("DATABASE_URL is missing or empty. Set it in .env.local and restart next dev.");
     return null;
   }
-  if (!validDatabaseUrl(process.env.DATABASE_URL!)) {
+  if (!validDatabaseUrl(databaseUrl)) {
     diagnose("DATABASE_URL must be a PostgreSQL URI with a hostname and database name (see .env.example).");
     throw new DatabaseUnavailableError();
+  }
+  if (process.env.DATABASE_URL !== databaseUrl) {
+    process.env.DATABASE_URL = databaseUrl;
   }
   if (globalForPrisma.prismaUnavailable) return null;
   if (client) return client;

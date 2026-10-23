@@ -6,8 +6,18 @@
  * behaviour (local disk uploads, cash on delivery) when they are not.
  */
 
+/** Strip accidental outer whitespace, BOM/control chars, and surrounding quotes on DATABASE_URL. */
+export function normalizeDatabaseUrl(raw: string | undefined = process.env.DATABASE_URL): string {
+  if (typeof raw !== "string") return "";
+  return raw
+    .replace(/[\u0000-\u001F\u007F\u200B-\u200D\u2060\uFEFF]/g, "")
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim();
+}
+
 /** True when a Postgres connection string is present. */
-export const isDatabaseConfigured = (): boolean => Boolean(process.env.DATABASE_URL?.trim());
+export const isDatabaseConfigured = (): boolean => Boolean(normalizeDatabaseUrl());
 
 /** Cloudinary uploads need all three keys; otherwise we write to /public/uploads. */
 export const isCloudinaryConfigured = (): boolean =>
