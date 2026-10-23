@@ -102,7 +102,19 @@ async function main() {
   assert.equal(customer.user.emailVerified, true, "Customer must verify before a session is issued");
   cookies.clear();
   const adminToken = fixtureToken("login");
-  assert.equal((await login(adminToken)).searchParams.get("error"), null);
+  const adminCsrf = await (await request("/api/auth/csrf")).json() as { csrfToken: string };
+  const adminLoginResp = await request("/api/auth/callback/credentials", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Auth-Return-Redirect": "1" },
+    body: new URLSearchParams({
+      email: "admin@mukra.com",
+      password: "password123",
+      csrfToken: adminCsrf.csrfToken,
+      "cf-turnstile-response": adminToken,
+      callbackUrl: new URL("/admin", base).href,
+    }),
+  });
+  assert.equal(new URL((await adminLoginResp.json() as { url: string }).url).searchParams.get("error"), null);
   const admin = await (await request("/api/auth/session")).json() as { user: { role: string } };
   assert.equal(admin.user.role, "SUPER_ADMIN");
   assert.equal((await request("/admin")).status, 200);

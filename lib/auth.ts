@@ -1,5 +1,6 @@
 import { createRateLimiter, clientIp } from "@/lib/rate-limit";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import { extractTurnstileToken, verifyTurnstileToken } from "@/lib/turnstile";
+import { TURNSTILE_RESPONSE_FIELD } from "@/lib/turnstile-shared";
 import { LOGIN_MESSAGES, type LoginFailure } from "@/lib/auth-messages";
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
@@ -58,15 +59,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        [TURNSTILE_RESPONSE_FIELD]: { label: "Security check", type: "hidden" },
         turnstileToken: { label: "Security check", type: "hidden" },
       },
       async authorize(raw, request) {
-        if (!loginLimiter.check(clientIp(request.headers)).ok)
+        const ip = clientIp(request.headers);
+        if (!loginLimiter.check(ip).ok)
           throw new LoginError("too-many-attempts");
+        const captchaToken = extractTurnstileToken(raw, request.headers);
         if (process.env.NODE_ENV !== "production") {
-          console.warn(`[auth] Credentials CAPTCHA token received: ${typeof raw?.turnstileToken === "string" && raw.turnstileToken.trim().length > 0}.`);
+          console.warn(`[auth] Credentials CAPTCHA token received: ${typeof captchaToken === "string" && captchaToken.trim().length > 0}.`);
         }
-        if (!await verifyTurnstileToken(raw?.turnstileToken, { action: "login" })) {
+        if (!await verifyTurnstileToken(captchaToken, { action: "login", remoteIp: ip, requestHeaders: request.headers })) {
           throw new LoginError("security-verification-failed");
         }
         const parsed = loginSchema.safeParse({

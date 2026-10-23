@@ -111,6 +111,7 @@ test("login sends one non-empty Turnstile token to Credentials and remounts afte
     });
 
     assert.equal(callbackBodies.length, 1, "A single-use token must reach one Credentials request only");
+    assert.equal(callbackBodies[0]!.get("cf-turnstile-response"), "isolated-token");
     assert.equal(callbackBodies[0]!.get("turnstileToken"), "isolated-token");
     assert.equal(callbackBodies[0]!.get("email"), "customer@example.com");
     assert.equal(callbackBodies[0]!.get("password"), "legacy-password");

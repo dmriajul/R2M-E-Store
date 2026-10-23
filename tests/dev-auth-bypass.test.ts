@@ -79,6 +79,29 @@ test("development Credentials: missing CAPTCHA fails closed; solved challenge al
   assert.equal(session?.user?.email, "admin@mukra.com");
   assert.equal(session?.user?.role, "SUPER_ADMIN");
 
+  async function credentialsCfResponse(password: string, cfToken: string) {
+    return handlers.POST(new NextRequest("http://localhost:3000/api/auth/callback/credentials", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Auth-Return-Redirect": "1",
+        cookie: csrfCookies,
+      },
+      body: new URLSearchParams({
+        email: "admin@mukra.com",
+        password,
+        "cf-turnstile-response": cfToken,
+        csrfToken: csrf.csrfToken,
+        callbackUrl: "http://localhost:3000/admin",
+      }).toString(),
+    }));
+  }
+
+  const cfSuccess = await credentialsCfResponse("password123", "solved-cf-turnstile-response-token");
+  const cfDestination = await cfSuccess.json() as { url: string };
+  assert.equal(new URL(cfDestination.url).searchParams.get("error"), null, "cf-turnstile-response alone authenticates Credentials");
+  assert.equal(new URL(cfDestination.url).pathname, "/admin");
+
   const wrong = await credentials("wrong-password");
   const wrongDestination = await wrong.json() as { url: string };
   assert.equal(new URL(wrongDestination.url).searchParams.get("code"), "invalid-credentials");

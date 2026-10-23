@@ -54,9 +54,10 @@ export function createRateLimiter({ max, windowMs }: { max: number; windowMs: nu
   };
 }
 
-/** Best-effort client IP for anonymous rate-limit keys. */
+/** Best-effort client IP for anonymous rate-limit keys and Turnstile remoteip. */
 export function clientIp(headers: Headers): string {
   return (
+    headers.get("cf-connecting-ip")?.trim() ||
     headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     headers.get("x-real-ip")?.trim() ||
     "anonymous"

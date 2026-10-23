@@ -15,7 +15,17 @@ Object.assign(globalThis, {
 });
 after(() => dom.window.close());
 
-type WidgetOptions = { callback: (token: string) => void; "expired-callback": () => void; "error-callback": () => void; action: string; appearance: string; theme: string; size: string };
+type WidgetOptions = {
+  callback: (token: string) => void;
+  "expired-callback": () => void;
+  "error-callback": () => void;
+  action: string;
+  appearance: string;
+  theme: string;
+  size: string;
+  "response-field"?: boolean;
+  "response-field-name"?: string;
+};
 const widgets = new Map<string, WidgetOptions>();
 const removed = new Set<string>();
 let sequence = 0;
@@ -116,6 +126,8 @@ test("SSR hydrates without warnings; Strict Mode deduplicates script, expiry/res
     assert.equal(widget.action, "login");
     assert.equal(widget.theme, "dark");
     assert.equal(widget.size, "flexible");
+    assert.equal(widget["response-field"], true);
+    assert.equal(widget["response-field-name"], "cf-turnstile-response");
     assert.ok(element.textContent?.includes("Please complete the security check to continue."),
       "A visible instruction guides the user while the widget awaits verification");
     await act(async () => widget.callback("token-one"));

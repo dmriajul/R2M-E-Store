@@ -151,6 +151,34 @@ test("merged login API storage failure exposes no diagnostics or credentials", a
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { data: null, error: "SERVER_ERROR", code: "SERVER_ERROR", success: false });
 });
+test("merged login API accepts canonical cf-turnstile-response in JSON and URL-encoded form requests", async () => {
+  const fixture = setup();
+  await createUser({ name: "CF Token Shopper", email: "merged@example.com", password });
+  await fixture.db.user.update({ where: { email: "merged@example.com" }, data: { emailVerified: new Date() } });
+
+  const seenTokens: string[] = [];
+  globalThis.fetch = async (_url, init) => {
+    const params = new URLSearchParams(String(init?.body));
+    seenTokens.push(params.get("response") ?? "");
+    return Response.json({ success: true, action: "login", hostname: "localhost" });
+  };
+
+  const jsonLogin = await POST(new NextRequest("http://localhost/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-forwarded-for": "198.51.100.77" },
+    body: JSON.stringify({ email: "merged@example.com", password, "cf-turnstile-response": "cf-json-login-token" }),
+  }));
+  assert.equal(jsonLogin.status, 200);
+
+  const formLogin = await POST(new NextRequest("http://localhost/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "x-forwarded-for": "198.51.100.78" },
+    body: new URLSearchParams({ email: "merged@example.com", password, "cf-turnstile-response": "cf-form-login-token" }).toString(),
+  }));
+  assert.equal(formLogin.status, 200);
+  assert.deepEqual(seenTokens, ["cf-json-login-token", "cf-form-login-token"]);
+});
+
 test("merged API and Credentials password service share the same account lockout", async (context) => {
   setup(); context.mock.method(console, "warn", () => {});
   await createUser({ name: "Merged Admin", email: "merged@example.com", password, role: "SUPER_ADMIN" });

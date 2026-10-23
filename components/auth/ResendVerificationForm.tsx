@@ -5,7 +5,7 @@ import { resendVerificationEmail } from "@/app/(auth)/auth/actions";
 import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
 import { CaptchaBypassNotice } from "@/components/auth/CaptchaBypassNotice";
 import { useTurnstile } from "@/hooks/useTurnstile";
-import { isTurnstileBypassed, TURNSTILE_ERROR } from "@/lib/turnstile-shared";
+import { isTurnstileBypassed, TURNSTILE_ERROR, TURNSTILE_RESPONSE_FIELD } from "@/lib/turnstile-shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -18,13 +18,17 @@ export function ResendVerificationForm() {
   const [pending, startTransition] = useTransition();
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!captcha.token && !captchaBypassed) { setMessage(TURNSTILE_ERROR); return; }
-    const turnstileToken = captcha.token || undefined;
-    captcha.clearToken();
+    const consumed = captcha.consumeToken();
+    if (!consumed && !captchaBypassed) { setMessage(TURNSTILE_ERROR); return; }
+    const turnstileToken = consumed || undefined;
     setMessage("");
     startTransition(async () => {
       try {
-        const result = await resendVerificationEmail({ email, turnstileToken });
+        const result = await resendVerificationEmail({
+          email,
+          [TURNSTILE_RESPONSE_FIELD]: turnstileToken,
+          turnstileToken,
+        });
         setMessage(result.message);
       } catch {
         setMessage("We couldn't reach the verification service. Please try again.");

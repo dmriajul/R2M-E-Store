@@ -1,5 +1,19 @@
 # MUKRA — Turnstile diagnosis, implementation and verification
 
+## Existing-widget finalization & production domain verification (2026-10-23)
+
+- **Existing widget site key:** Configured `TURNSTILE_SITE_KEY = "0x4AAAAAAFR9W3cd66AOTr2B"` in `lib/turnstile-shared.ts`, wired as the build-time fallback for `NEXT_PUBLIC_TURNSTILE_SITE_KEY` in `next.config.ts` and documented in `.env.example` / `.env.production.example`. Explicit runtime overrides (or clearing `process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY` in tests) remain respected.
+- **Canonical `cf-turnstile-response` parsing:**
+  - `TurnstileCaptcha` sets `responseField: true` and `responseFieldName: "cf-turnstile-response"` on the widget so native form submissions carry `cf-turnstile-response`.
+  - `LoginPage`, `RegisterPage`, and `ResendVerificationForm` submit `"cf-turnstile-response"` alongside `turnstileToken` (for backwards compatibility) and reset the widget after every submission attempt (`ReviewSection` also uses the single-use `useTurnstile` reset lifecycle).
+  - Server endpoints (`lib/auth.ts` NextAuth `Credentials.authorize`, `POST /api/auth/login`, `POST /api/auth/register`, and `resendVerificationEmail` in `app/(auth)/auth/actions.ts`) parse `"cf-turnstile-response"` (with fallback to `turnstileToken` or `x-turnstile-token`) across JSON, `application/x-www-form-urlencoded`, and `multipart/form-data` payloads via `parseTurnstileRequestRecord()` and `extractTurnstileToken()`.
+- **Server-side Siteverify (`process.env.TURNSTILE_SECRET_KEY`):** `verifyTurnstileToken()` reads `process.env.TURNSTILE_SECRET_KEY`, posts `secret`, `response`, and optional `remoteip` (`CF-Connecting-IP` / `X-Forwarded-For` / `X-Real-IP`) as `application/x-www-form-urlencoded` to `https://challenges.cloudflare.com/turnstile/v0/siteverify` with `cache: "no-store"` and a 10-second `AbortSignal.timeout`, and fails closed on missing secrets, non-2xx HTTP status, `success !== true`, action mismatch, or hostname mismatch.
+- **Production domain verification:**
+  - Accepts `TURNSTILE_ALLOWED_HOSTNAMES` (and Spin's `TURNSTILE_HOSTNAMES`). When loopback entries (`localhost` / `127.0.0.1` / `[::1]`) are accidentally left alongside production domains—or when running in cloud production (`VERCEL_ENV="production"` / `CF_PAGES="1"`)—loopback entries are stripped automatically with a safe server warning.
+  - When explicit allowlists are omitted, trusted hostnames are derived from `AUTH_URL`, `NEXTAUTH_URL`, `NEXT_PUBLIC_SITE_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_BRANCH_URL`, `VERCEL_URL`, `CF_PAGES_URL`, custom `www.`/apex pairs (never arbitrary subdomains or `.vercel.app` wildcards), and verified platform `x-forwarded-host`/`host` headers when running behind Vercel/Cloudflare (`VERCEL="1"` / `CF_PAGES="1"` / `AUTH_TRUST_HOST="true"`).
+  - Client-side Cloudflare error `110200` (domain not authorized in widget settings) logs a safe diagnostic warning without leaking keys or internal details in the DOM.
+  - Ensure all active deployment domains (e.g., `2r-m-store.vercel.app`, `mukra-riajul1.vercel.app`, any custom domain, and `localhost` for local browser testing) are added in Cloudflare Dashboard → Turnstile → Widget (`0x4AAAAAAFR9W3cd66AOTr2B`) → Hostname Management, and ensure `TURNSTILE_SECRET_KEY` is configured for Preview as well as Production if testing preview deployments.
+
 ## Local-development CAPTCHA bypass (2026-10-17)
 
 - **Scope:** `next dev` only. `isTurnstileBypassed()` in `lib/turnstile-shared.ts` returns true solely when `process.env.NODE_ENV === "development"`. Next.js inlines `NODE_ENV` into browser and server bundles, so `next build`/`next start` (production) always verify; the `npm test` runner and isolated HTTP contracts run outside development and are unchanged.
