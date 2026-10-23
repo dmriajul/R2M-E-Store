@@ -246,24 +246,24 @@ test("registration captcha: visible directly above submit; unsolved attempts gui
     assert.equal(requests, 0);
   } finally { globalThis.fetch = originalFetch; await view.unmount(); }
 });
-test("registration missing site key: neutral fallback, no internal configuration details, disabled submit", async (context) => {
+test("registration unset site key env: falls back to 0x4AAAAAAFR9W3cd66AOTr2B data-sitekey, emits cf-turnstile-response hidden input, and keeps submit disabled until solved", async (context) => {
   const env = process.env;
   const log = context.mock.method(console, "log", () => {});
-  // The development bypass is intentionally not active here: this test covers
-  // the non-development missing-key fallback.
   process.env = { ...env, NODE_ENV: "test" };
   delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   let view: Awaited<ReturnType<typeof mount>> | undefined;
   try {
     view = await mount(RegisterPage);
+    const form = view.element.querySelector("form")!;
     const submit = view.element.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     const area = submit.previousElementSibling!;
-    assert.ok(area.querySelector('[data-turnstile-action="register"]'));
-    assert.match(area.textContent ?? "", /Verification unavailable/);
-    assert.doesNotMatch(area.textContent ?? "", /Security check unavailable/);
+    const container = area.querySelector<HTMLElement>('[data-turnstile-action="register"] [id^="mukra-turnstile-"]');
+    assert.ok(container);
+    assert.equal(container.getAttribute("data-sitekey"), "0x4AAAAAAFR9W3cd66AOTr2B");
+    assert.ok(form.contains(container), "Turnstile widget must be mounted inside the main <form>");
+    assert.ok(form.querySelector('input[type="hidden"][name="cf-turnstile-response"]'));
     assert.doesNotMatch(view.element.textContent ?? "", /TURNSTILE DEBUG|Site Key|NEXT_PUBLIC_TURNSTILE_SITE_KEY|Development setup|\.env\.local/);
     assert.equal(submit.disabled, true);
-    assert.equal(widgets.size, 0);
     assert.equal(log.mock.callCount(), 0);
   } finally { await view?.unmount(); log.mock.restore(); process.env = env; }
 });

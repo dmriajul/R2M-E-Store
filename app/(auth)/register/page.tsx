@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
 import { CaptchaBypassNotice } from "@/components/auth/CaptchaBypassNotice";
@@ -30,6 +30,8 @@ export default function RegisterPage() {
   /* `next dev` only — production and test builds keep the real challenge. */
   const captchaBypassed = isTurnstileBypassed();
   const feedback = useAuthFeedback();
+  const formRef = useRef<HTMLFormElement>(null);
+  const submissionInFlight = useRef(false);
   const [pending, setPending] = useState(false);
   const [captchaAttempted, setCaptchaAttempted] = useState(false);
 
@@ -56,9 +58,18 @@ export default function RegisterPage() {
   const password = watch("password");
 
   const onSubmit = async (values: RegisterValues) => {
-    const consumed = captcha.consumeToken();
+    if (submissionInFlight.current) return;
+    let consumed = captcha.consumeToken();
+    if (!consumed && formRef.current) {
+      const responseInput = formRef.current.elements.namedItem(TURNSTILE_RESPONSE_FIELD);
+      if (responseInput && "value" in responseInput && typeof responseInput.value === "string") {
+        consumed = responseInput.value.trim();
+        responseInput.value = "";
+      }
+    }
     if (!consumed && !captchaBypassed) { setCaptchaAttempted(true); return; }
     const turnstileToken = consumed || undefined;
+    submissionInFlight.current = true;
     feedback.clear();
     setPending(true);
 
@@ -102,6 +113,7 @@ export default function RegisterPage() {
     } catch {
       feedback.show("SERVER_ERROR");
     } finally {
+      submissionInFlight.current = false;
       captcha.reset();
       setPending(false);
     }
@@ -123,7 +135,7 @@ export default function RegisterPage() {
           </p>
         </header>
 
-        <form onChangeCapture={() => {
+        <form ref={formRef} onChangeCapture={() => {
           feedback.clear();
           for (const field of Object.keys(errors) as (keyof RegisterValues)[]) {
             if (errors[field]?.type === "server") clearErrors(field);

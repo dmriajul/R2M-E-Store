@@ -57,38 +57,57 @@ function latestWidget() {
   return widget;
 }
 
-test("never renders debug banners, key values or internal configuration hints", async (context) => {
+test("never renders debug banners or visible key hints while setting data-sitekey and 0x4AAAAAAFR9W3cd66AOTr2B fallback", async (context) => {
   const originalEnv = process.env;
   const log = context.mock.method(console, "log", () => {});
+  const parseHtml = (html: string) => {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    return wrapper;
+  };
   try {
     process.env = { ...originalEnv, NODE_ENV: "development", NEXT_PUBLIC_TURNSTILE_SITE_KEY: "debug-public-key-do-not-display" };
-    const render = () => renderToString(createElement(TurnstileCaptcha, { action: "register", onVerify: () => {} }));
-    const present = render();
-    assert.ok(!present.includes("TURNSTILE DEBUG"));
-    assert.ok(!present.includes("Site Key"));
-    assert.ok(!present.includes("debug-public-key-do-not-display"));
+    const render = (siteKey?: string) =>
+      renderToString(createElement(TurnstileCaptcha, { action: "register", onVerify: () => {}, ...(siteKey !== undefined ? { siteKey } : {}) }));
+    const present = parseHtml(render());
+    assert.ok(!(present.textContent ?? "").includes("TURNSTILE DEBUG"));
+    assert.ok(!(present.textContent ?? "").includes("Site Key"));
+    assert.ok(!(present.textContent ?? "").includes("debug-public-key-do-not-display"));
+    assert.equal(present.querySelector('[data-turnstile-action="register"] [id^="mukra-turnstile-"]')?.getAttribute("data-sitekey"), "debug-public-key-do-not-display");
+
+    // Unset or empty NEXT_PUBLIC_TURNSTILE_SITE_KEY falls back to 0x4AAAAAAFR9W3cd66AOTr2B
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-    const missing = render();
+    const fallbackUnset = parseHtml(render());
+    assert.equal(fallbackUnset.querySelector('[data-turnstile-action="register"] [id^="mukra-turnstile-"]')?.getAttribute("data-sitekey"), "0x4AAAAAAFR9W3cd66AOTr2B");
+    assert.ok(!(fallbackUnset.textContent ?? "").includes("NEXT_PUBLIC_TURNSTILE_SITE_KEY"));
+
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "   ";
+    const fallbackBlank = parseHtml(render());
+    assert.equal(fallbackBlank.querySelector('[data-turnstile-action="register"] [id^="mukra-turnstile-"]')?.getAttribute("data-sitekey"), "0x4AAAAAAFR9W3cd66AOTr2B");
+
+    // Explicit empty siteKey="" still renders the neutral unavailable fallback
+    const missing = render("");
     assert.ok(!missing.includes("TURNSTILE DEBUG"));
     assert.ok(!missing.includes("Site Key"));
     assert.ok(!missing.includes("NEXT_PUBLIC_TURNSTILE_SITE_KEY"));
     assert.ok(!missing.includes("Development setup"));
     assert.match(missing, /Verification unavailable/);
+
     process.env = { ...process.env, NODE_ENV: "production", NEXT_PUBLIC_TURNSTILE_SITE_KEY: "debug-public-key-do-not-display" };
-    const production = render();
-    assert.ok(!production.includes("TURNSTILE DEBUG"));
-    assert.ok(!production.includes("debug-public-key-do-not-display"));
-    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-    assert.ok(!render().includes("TURNSTILE DEBUG"));
-    // The client component stays silent; missing configuration is reported
-    // server-side only (see lib/turnstile.ts).
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "debug-public-key-do-not-display";
+    const production = parseHtml(render());
+    assert.ok(!(production.textContent ?? "").includes("TURNSTILE DEBUG"));
+    assert.ok(!(production.textContent ?? "").includes("debug-public-key-do-not-display"));
+    assert.equal(production.querySelector('[data-turnstile-action="register"] [id^="mukra-turnstile-"]')?.getAttribute("data-sitekey"), "debug-public-key-do-not-display");
+
     const { root, element } = mount();
-    await act(async () => root.render(createElement(TurnstileCaptcha, { action: "register", onVerify: () => {} })));
-    assert.equal(typeof (window as unknown as Record<string, unknown>).onloadTurnstileCallback, "function",
-      "The script loader must not delete the callback Cloudflare invokes");
-    await act(async () => root.unmount());
-    element.remove();
+    try {
+      await act(async () => root.render(createElement(TurnstileCaptcha, { action: "register", onVerify: () => {} })));
+      assert.equal(typeof (window as unknown as Record<string, unknown>).onloadTurnstileCallback, "function",
+        "The script loader must not delete the callback Cloudflare invokes");
+    } finally {
+      await act(async () => root.unmount());
+      element.remove();
+    }
     assert.equal(log.mock.callCount(), 0);
   } finally {
     log.mock.restore();
@@ -96,15 +115,22 @@ test("never renders debug banners, key values or internal configuration hints", 
   }
 });
 
-test("missing site key is a visible error, never a silently hidden widget", async () => {
-  delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+test("explicit empty site key is a visible error, never a silently hidden widget", async () => {
   const { root, element } = mount();
-  await act(async () => { root.render(createElement(Form)); });
-  assert.ok(element.textContent?.includes("Verification unavailable"));
-  assert.doesNotMatch(element.textContent ?? "", /Security check unavailable/);
-  assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, true);
-  await act(async () => root.unmount());
-  element.remove();
+  try {
+    await act(async () => {
+      root.render(createElement("form", null,
+        createElement(TurnstileCaptcha, { action: "login", siteKey: "", onVerify: () => {} }),
+        createElement("button", { type: "submit", disabled: true }, "Submit"),
+      ));
+    });
+    assert.ok(element.textContent?.includes("Verification unavailable"));
+    assert.doesNotMatch(element.textContent ?? "", /Security check unavailable/);
+    assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, true);
+  } finally {
+    await act(async () => root.unmount());
+    element.remove();
+  }
 });
 
 test("SSR hydrates without warnings; Strict Mode deduplicates script, expiry/reset/error disable submit and unmount removes widgets", async () => {
@@ -128,11 +154,14 @@ test("SSR hydrates without warnings; Strict Mode deduplicates script, expiry/res
     assert.equal(widget.size, "flexible");
     assert.equal(widget["response-field"], true);
     assert.equal(widget["response-field-name"], "cf-turnstile-response");
+    assert.equal(element.querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]')?.value, "");
     assert.ok(element.textContent?.includes("Please complete the security check to continue."),
       "A visible instruction guides the user while the widget awaits verification");
     await act(async () => widget.callback("token-one"));
+    assert.equal(element.querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]')?.value, "token-one");
     assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, false);
     await act(async () => widget["expired-callback"]());
+    assert.equal(element.querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]')?.value, "");
     assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, true);
     assert.ok(element.textContent?.includes("expired"));
     await act(async () => widget.callback("token-two"));
@@ -212,11 +241,31 @@ for (const action of ["login", "register"] as const) {
     assert.ok(element.querySelector(`[data-turnstile-action="${action}"] [id^="mukra-turnstile-"]`));
     assert.equal(latestWidget().action, action);
     const script = document.querySelector<HTMLScriptElement>("#cf-turnstile-script");
-    assert.ok(script?.src.startsWith("https://challenges.cloudflare.com/turnstile/v0/api.js?"));
+    assert.ok(script?.src.startsWith("https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"));
+    assert.equal(script?.async, true);
+    assert.equal(script?.defer, true);
     await act(async () => root.unmount());
     element.remove();
   });
 }
+
+test("CSP securitypolicyviolation for challenges.cloudflare.com triggers graceful fallback and disables submit", async () => {
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "isolated-browser-test-key";
+  const { root, element } = mount();
+  try {
+    await act(async () => root.render(createElement(Form)));
+    await flush();
+    const cspEvent = Object.assign(new dom.window.Event("securitypolicyviolation"), {
+      blockedURI: "https://challenges.cloudflare.com/turnstile/v0/api.js",
+    });
+    await act(async () => document.dispatchEvent(cspEvent));
+    assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, true);
+    assert.match(element.textContent ?? "", /Security check failed to load/);
+  } finally {
+    await act(async () => root.unmount());
+    element.remove();
+  }
+});
 
 
 test("unresponsive CDN times out at 15 seconds and manual retry reloads the script", async (context) => {

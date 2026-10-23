@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { BadgeCheck, PenLine, Star } from "lucide-react";
 import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
 import { useTurnstile } from "@/hooks/useTurnstile";
+import { getTurnstileSiteKey } from "@/lib/turnstile-shared";
 import { StarRating } from "@/components/product/StarRating";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,7 +50,7 @@ export function ReviewSection({ product, reviews }: ReviewSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const captcha = useTurnstile();
-  const isCaptchaEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim());
+  const isCaptchaEnabled = Boolean(getTurnstileSiteKey());
   const breakdown = buildBreakdown(product.rating, product.reviewCount);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
