@@ -67,10 +67,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!loginLimiter.check(ip).ok)
           throw new LoginError("too-many-attempts");
         const captchaToken = extractTurnstileToken(raw, request.headers);
+        const tokenPresent = typeof captchaToken === "string" && captchaToken.trim().length > 0;
         if (process.env.NODE_ENV !== "production") {
-          console.warn(`[auth] Credentials CAPTCHA token received: ${typeof captchaToken === "string" && captchaToken.trim().length > 0}.`);
+          console.warn(`[auth] Credentials CAPTCHA token received: ${tokenPresent}.`);
         }
         if (!await verifyTurnstileToken(captchaToken, { action: "login", remoteIp: ip, requestHeaders: request.headers })) {
+          console.error(
+            "[auth] Credentials Turnstile verification failed",
+            JSON.stringify({
+              provider: "credentials",
+              action: "login",
+              tokenPresent,
+              hasCfTurnstileResponseField: Boolean(raw && typeof raw === "object" && TURNSTILE_RESPONSE_FIELD in raw),
+            }),
+          );
           throw new LoginError("security-verification-failed");
         }
         const parsed = loginSchema.safeParse({

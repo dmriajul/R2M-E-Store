@@ -7,7 +7,11 @@ import { CaptchaBypassNotice } from "@/components/auth/CaptchaBypassNotice";
 import { useTurnstile } from "@/hooks/useTurnstile";
 import { queueAuthSuccess } from "@/lib/auth-flash";
 import { loginErrorCode } from "@/lib/auth-messages";
-import { isTurnstileBypassed, TURNSTILE_RESPONSE_FIELD } from "@/lib/turnstile-shared";
+import {
+  consumeFormTurnstileToken,
+  isTurnstileBypassed,
+  TURNSTILE_RESPONSE_FIELD,
+} from "@/lib/turnstile-shared";
 import { AuthFeedback } from "@/components/auth/AuthFeedback";
 import { useAuthFeedback } from "@/hooks/useAuthFeedback";
 import { signIn, type SignInResponse } from "next-auth/react";
@@ -67,12 +71,8 @@ export default function LoginPage() {
     // form receives two submit events before the disabled state paints.
     if (submissionInFlight.current) return;
     let turnstileToken = captcha.consumeToken();
-    if (!turnstileToken && formRef.current) {
-      const responseInput = formRef.current.elements.namedItem(TURNSTILE_RESPONSE_FIELD);
-      if (responseInput && "value" in responseInput && typeof responseInput.value === "string") {
-        turnstileToken = responseInput.value.trim();
-        responseInput.value = "";
-      }
+    if (!turnstileToken) {
+      turnstileToken = consumeFormTurnstileToken(formRef.current);
     }
     if (!turnstileToken && !captchaBypassed) { feedback.show("SECURITY_CHECK_FAILED"); return; }
 

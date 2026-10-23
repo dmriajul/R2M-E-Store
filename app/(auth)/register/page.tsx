@@ -6,7 +6,11 @@ import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
 import { CaptchaBypassNotice } from "@/components/auth/CaptchaBypassNotice";
 import { useTurnstile } from "@/hooks/useTurnstile";
 import { authErrorMessage, isAuthErrorCode, type AuthErrorCode } from "@/lib/auth-messages";
-import { isTurnstileBypassed, TURNSTILE_RESPONSE_FIELD } from "@/lib/turnstile-shared";
+import {
+  consumeFormTurnstileToken,
+  isTurnstileBypassed,
+  TURNSTILE_RESPONSE_FIELD,
+} from "@/lib/turnstile-shared";
 import { AuthFeedback } from "@/components/auth/AuthFeedback";
 import { useAuthFeedback } from "@/hooks/useAuthFeedback";
 import { useForm } from "react-hook-form";
@@ -60,12 +64,8 @@ export default function RegisterPage() {
   const onSubmit = async (values: RegisterValues) => {
     if (submissionInFlight.current) return;
     let consumed = captcha.consumeToken();
-    if (!consumed && formRef.current) {
-      const responseInput = formRef.current.elements.namedItem(TURNSTILE_RESPONSE_FIELD);
-      if (responseInput && "value" in responseInput && typeof responseInput.value === "string") {
-        consumed = responseInput.value.trim();
-        responseInput.value = "";
-      }
+    if (!consumed) {
+      consumed = consumeFormTurnstileToken(formRef.current);
     }
     if (!consumed && !captchaBypassed) { setCaptchaAttempted(true); return; }
     const turnstileToken = consumed || undefined;

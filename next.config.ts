@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { TURNSTILE_SITE_KEY } from "./lib/turnstile-shared";
+import { getTurnstileSiteKey } from "./lib/turnstile-shared";
 
 /** One year, used for fingerprinted build output. */
 const IMMUTABLE = "public, max-age=31536000, immutable";
@@ -15,8 +15,7 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   env: {
-    NEXT_PUBLIC_TURNSTILE_SITE_KEY:
-      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || TURNSTILE_SITE_KEY,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: getTurnstileSiteKey(),
   },
   /** Docker/self-host friendly server bundle (Vercel ignores it). */
   output: "standalone",
