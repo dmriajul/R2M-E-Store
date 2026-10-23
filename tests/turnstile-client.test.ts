@@ -5,7 +5,13 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import { TurnstileCaptcha } from "../components/TurnstileCaptcha";
+import {
+  TurnstileCaptcha,
+  TURNSTILE_ATTEMPT_TIMEOUT_MS,
+  TURNSTILE_ERROR_RETRY_DELAY_MS,
+  TURNSTILE_LOAD_TIMEOUT_MS,
+  TURNSTILE_MAX_AUTO_RETRIES,
+} from "../components/TurnstileCaptcha";
 import { useTurnstile } from "../hooks/useTurnstile";
 
 const dom = new JSDOM("<!doctype html><html><head></head><body></body></html>", { url: "http://localhost/" });
@@ -18,7 +24,8 @@ after(() => dom.window.close());
 type WidgetOptions = {
   callback: (token: string) => void;
   "expired-callback": () => void;
-  "error-callback": () => void;
+  "error-callback": (errorCode?: unknown) => boolean | void;
+  "timeout-callback"?: () => void;
   action: string;
   appearance: string;
   theme: string;
@@ -185,17 +192,70 @@ test("SSR hydrates without warnings; Strict Mode deduplicates script, expiry/res
   } finally { console.error = originalError; element.remove(); }
 });
 
-test("blocked script presents fallback and keeps submit disabled", async () => {
+test("blocked script silently auto-retries before presenting fallback and keeping submit disabled", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const api = window.turnstile;
+  delete (window as unknown as Record<string, unknown>).turnstile;
+  document.getElementById("cf-turnstile-script")?.remove();
   process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "isolated-browser-test-key";
   const { root, element } = mount();
-  await act(async () => root.render(createElement(Form)));
-  const script = document.querySelector("#cf-turnstile-script");
-  assert.ok(script);
-  await act(async () => script.dispatchEvent(new dom.window.Event("error")));
-  assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, true);
-  assert.ok(element.textContent?.includes("Security check failed to load"));
-  await act(async () => root.unmount());
-  element.remove();
+  try {
+    await act(async () => root.render(createElement(Form)));
+    for (let retryIndex = 1; retryIndex <= TURNSTILE_MAX_AUTO_RETRIES; retryIndex++) {
+      const currentScript = document.querySelector("#cf-turnstile-script");
+      assert.ok(currentScript);
+      await act(async () => currentScript.dispatchEvent(new dom.window.Event("error")));
+      // Still loading silently before auto-retry fires — no premature error banner.
+      assert.match(element.textContent ?? "", /Loading security check/);
+      assert.doesNotMatch(element.textContent ?? "", /Security check failed to load/);
+      await act(async () => context.mock.timers.tick(TURNSTILE_ERROR_RETRY_DELAY_MS * retryIndex));
+      assert.notEqual(document.querySelector("#cf-turnstile-script"), currentScript);
+    }
+
+    // Final attempt also fails (persistent ad-blocker): surface manual Retry fallback.
+    const finalScript = document.querySelector("#cf-turnstile-script");
+    assert.ok(finalScript);
+    await act(async () => finalScript.dispatchEvent(new dom.window.Event("error")));
+    assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, true);
+    assert.ok(element.textContent?.includes("Security check failed to load"));
+  } finally {
+    Object.assign(window, { turnstile: api });
+    await act(async () => root.unmount());
+    element.remove();
+  }
+});
+
+test("transient script network glitch recovers via silent auto-retry without stranding user", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const api = window.turnstile;
+  delete (window as unknown as Record<string, unknown>).turnstile;
+  document.getElementById("cf-turnstile-script")?.remove();
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "isolated-browser-test-key";
+  const { root, element } = mount();
+  try {
+    await act(async () => root.render(createElement(Form)));
+    const failedScript = document.querySelector("#cf-turnstile-script");
+    assert.ok(failedScript);
+    await act(async () => failedScript.dispatchEvent(new dom.window.Event("error")));
+    assert.doesNotMatch(element.textContent ?? "", /Security check failed to load/);
+
+    // Network recovers on the silent auto-retry and Turnstile loads cleanly.
+    await act(async () => context.mock.timers.tick(TURNSTILE_ERROR_RETRY_DELAY_MS));
+    const retriedScript = document.querySelector("#cf-turnstile-script");
+    assert.ok(retriedScript);
+    assert.notEqual(retriedScript, failedScript);
+    Object.assign(window, { turnstile: api });
+    await act(async () => {
+      (window as unknown as { onloadTurnstileCallback?: () => void }).onloadTurnstileCallback?.();
+    });
+    assert.doesNotMatch(element.textContent ?? "", /Security check failed to load/);
+    await act(async () => latestWidget().callback("auto-recovered-token"));
+    assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, false);
+  } finally {
+    Object.assign(window, { turnstile: api });
+    await act(async () => root.unmount());
+    element.remove();
+  }
 });
 
 test("local token lifetime clears and remounts before Cloudflare's five-minute expiry", async (context) => {
@@ -268,7 +328,7 @@ test("CSP securitypolicyviolation for challenges.cloudflare.com triggers gracefu
 });
 
 
-test("unresponsive CDN times out at 15 seconds and manual retry reloads the script", async (context) => {
+test("unresponsive CDN avoids false-positive 15s timeout via silent auto-retries and manual retry reloads the script", async (context) => {
   context.mock.timers.enable({ apis: ["setTimeout"] });
   const api = window.turnstile;
   delete (window as unknown as Record<string, unknown>).turnstile;
@@ -277,19 +337,92 @@ test("unresponsive CDN times out at 15 seconds and manual retry reloads the scri
   const { root, element } = mount();
   try {
     await act(async () => root.render(createElement(Form)));
-    const script = document.getElementById("cf-turnstile-script");
-    await act(async () => context.mock.timers.tick(14_999));
+    const initialScript = document.getElementById("cf-turnstile-script");
+    assert.ok(initialScript);
+
+    // At 15s (previously a false-positive timeout), silent auto-retry has replaced the stalled script and keeps loading.
+    await act(async () => context.mock.timers.tick(TURNSTILE_ATTEMPT_TIMEOUT_MS));
+    const secondScript = document.getElementById("cf-turnstile-script");
+    assert.notEqual(secondScript, initialScript, "First stalled script must be replaced silently");
+    await act(async () => context.mock.timers.tick(5_000));
     assert.match(element.textContent ?? "", /Loading security check/);
+    assert.doesNotMatch(element.textContent ?? "", /Security check failed to load/);
+
+    // Tick up to 1ms before total load budget (`TURNSTILE_LOAD_TIMEOUT_MS` = 30s): still loading cleanly.
+    const remainingBeforeTimeout = TURNSTILE_LOAD_TIMEOUT_MS - TURNSTILE_ATTEMPT_TIMEOUT_MS - 5_000 - 1;
+    await act(async () => context.mock.timers.tick(remainingBeforeTimeout));
+    assert.match(element.textContent ?? "", /Loading security check/);
+
+    // Exhaust total load budget -> surface manual Retry fallback.
+    const lastAutoScript = document.getElementById("cf-turnstile-script");
     await act(async () => context.mock.timers.tick(1));
     assert.match(element.textContent ?? "", /Security check failed to load/);
     assert.match(element.textContent ?? "", /disable ad-blockers/);
     assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, true);
     await act(async () => element.querySelector<HTMLButtonElement>('button[type="button"]')!.click());
-    assert.notEqual(document.getElementById("cf-turnstile-script"), script);
+    assert.notEqual(document.getElementById("cf-turnstile-script"), lastAutoScript);
     assert.match(element.textContent ?? "", /Loading security check/);
     Object.assign(window, { turnstile: api });
   } finally {
     Object.assign(window, { turnstile: api });
+    await act(async () => root.unmount());
+    element.remove();
+  }
+});
+
+test("polling fallback renders widget as soon as window.turnstile becomes interactive even if onload callback was missed", async (context) => {
+  context.mock.timers.enable({ apis: ["setInterval", "setTimeout"] });
+  const api = window.turnstile;
+  delete (window as unknown as Record<string, unknown>).turnstile;
+  document.getElementById("cf-turnstile-script")?.remove();
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "isolated-browser-test-key";
+  const { root, element } = mount();
+  try {
+    await act(async () => root.render(createElement(Form)));
+    assert.match(element.textContent ?? "", /Loading security check/);
+
+    // Simulate delayed extension/script attaching window.turnstile without firing onloadTurnstileCallback.
+    const beforeCount = sequence;
+    Object.assign(window, { turnstile: api });
+    await act(async () => context.mock.timers.tick(100));
+    assert.ok(sequence > beforeCount, "100ms polling fallback must render widget automatically");
+    assert.match(element.textContent ?? "", /Please complete the security check to continue\./);
+    await act(async () => latestWidget().callback("polled-token"));
+    assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, false);
+  } finally {
+    Object.assign(window, { turnstile: api });
+    await act(async () => root.unmount());
+    element.remove();
+  }
+});
+
+test("transient Turnstile 300xxx/600xxx client errors and challenge timeouts do not strand the widget with a premature failure overlay", async () => {
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "isolated-browser-test-key";
+  const { root, element } = mount();
+  try {
+    await act(async () => root.render(createElement(Form)));
+    await flush();
+    const widget = latestWidget();
+
+    // Transient 300030 & 600010 errors return false to allow Cloudflare auto-retry without showing failure overlay.
+    let handled: boolean | void = undefined;
+    await act(async () => { handled = widget["error-callback"]("300030"); });
+    assert.equal(handled, false);
+    assert.doesNotMatch(element.textContent ?? "", /Security check failed to load/);
+
+    await act(async () => { handled = widget["error-callback"]("600010"); });
+    assert.equal(handled, false);
+    assert.doesNotMatch(element.textContent ?? "", /Security check failed to load/);
+
+    // Challenge timeout refreshes gracefully as expired rather than a broken load failure.
+    await act(async () => { widget["timeout-callback"]?.(); });
+    assert.doesNotMatch(element.textContent ?? "", /Security check failed to load/);
+    assert.match(element.textContent ?? "", /Security check expired/);
+
+    // Subsequent verification succeeds cleanly.
+    await act(async () => widget.callback("fresh-token-after-transient-retry"));
+    assert.equal(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled, false);
+  } finally {
     await act(async () => root.unmount());
     element.remove();
   }
