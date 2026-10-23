@@ -23,6 +23,19 @@ export const TURNSTILE_ONLOAD_CALLBACK = "onloadTurnstileCallback";
 export const TURNSTILE_SCRIPT_SRC =
   `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=${TURNSTILE_ONLOAD_CALLBACK}`;
 
+/** Up to 2 silent automatic script retries (3 total attempts) before surfacing manual Retry UI. */
+export const TURNSTILE_MAX_AUTO_RETRIES = 2;
+/** Per-attempt script load window before silently replacing a stalled script request. */
+export const TURNSTILE_ATTEMPT_TIMEOUT_MS = 10_000;
+/** Total load threshold across initial attempt + silent auto-retries (30s). */
+export const TURNSTILE_LOAD_TIMEOUT_MS =
+  TURNSTILE_ATTEMPT_TIMEOUT_MS * (TURNSTILE_MAX_AUTO_RETRIES + 1);
+/** Base backoff delay (ms) before silently retrying after a transient `<script>` network error. */
+export const TURNSTILE_ERROR_RETRY_DELAY_MS = 1_200;
+const TURNSTILE_POLL_INTERVAL_MS = 100;
+/** Transient Cloudflare Turnstile client/challenge codes (`300xxx`, `600xxx`) eligible for silent retry. */
+const RETRIABLE_WIDGET_ERROR_CODE = /^(?:300|600)\d{3}$/;
+
 interface TurnstileRenderOptions {
   sitekey: string;
   action: TurnstileAction;
@@ -37,7 +50,7 @@ interface TurnstileRenderOptions {
   "response-field-name": string;
   callback: (token: string) => void;
   "expired-callback": () => void;
-  "error-callback": (errorCode?: unknown) => void;
+  "error-callback": (errorCode?: unknown) => boolean | void;
   "timeout-callback": () => void;
   "unsupported-callback": () => void;
 }
@@ -49,10 +62,14 @@ interface TurnstileBrowserApi {
   getResponse?: (widgetId?: string) => string | undefined;
 }
 
+type TurnstileOnloadDispatcher = (() => void) & {
+  __mukraTurnstileDispatcher?: true;
+};
+
 type TurnstileWindow = Window &
   typeof globalThis & {
     turnstile?: TurnstileBrowserApi;
-    onloadTurnstileCallback?: () => void;
+    onloadTurnstileCallback?: TurnstileOnloadDispatcher;
   };
 
 export interface TurnstileCaptchaProps {
@@ -70,47 +87,146 @@ type CaptchaStatus = "loading" | "ready" | "verified" | "expired" | "unavailable
 const onloadSubscribers = new Set<() => void>();
 
 /**
+ * Install a persistent `window.onloadTurnstileCallback` dispatcher eagerly so
+ * SSR-preloaded `<Script strategy="afterInteractive">` executions never miss
+ * the callback during hydration or child-before-parent effect flushing.
+ */
+function ensureTurnstileOnloadCallback(): void {
+  if (typeof window === "undefined") return;
+  const win = window as TurnstileWindow;
+  const current = win.onloadTurnstileCallback;
+  if (current?.__mukraTurnstileDispatcher) return;
+
+  const dispatcher: TurnstileOnloadDispatcher = () => {
+    if (typeof current === "function") {
+      try {
+        current();
+      } catch {
+        // Isolate any pre-existing callback errors.
+      }
+    }
+    for (const notify of [...onloadSubscribers]) {
+      try {
+        notify();
+      } catch {
+        // Isolate subscriber errors so one mount never blocks another.
+      }
+    }
+  };
+  dispatcher.__mukraTurnstileDispatcher = true;
+  win.onloadTurnstileCallback = dispatcher;
+}
+
+if (typeof window !== "undefined") {
+  ensureTurnstileOnloadCallback();
+}
+
+/**
  * Register a listener on Cloudflare's `onload=onloadTurnstileCallback` hook.
  *
  * Unlike `@marsidev/react-turnstile@1.6.1`, this callback is never deleted from
  * `window` and does not rely on a one-shot module-scoped Promise, so SPA route
- * transitions, Strict Mode remounts, and manual script retries always receive
- * readiness notifications.
+ * transitions, Strict Mode remounts, and manual/automatic script retries always
+ * receive readiness notifications — and immediately invoke the listener when
+ * `window.turnstile` is already present in `window`.
  */
 function subscribeTurnstileOnload(listener: () => void): () => void {
   onloadSubscribers.add(listener);
-  if (typeof window !== "undefined") {
-    const win = window as TurnstileWindow;
-    if (typeof win.onloadTurnstileCallback !== "function") {
-      win.onloadTurnstileCallback = () => {
-        for (const notify of onloadSubscribers) notify();
-      };
-    }
+  ensureTurnstileOnloadCallback();
+  if (
+    typeof window !== "undefined" &&
+    typeof (window as TurnstileWindow).turnstile?.render === "function"
+  ) {
+    listener();
   }
   return () => {
     onloadSubscribers.delete(listener);
   };
 }
 
+function findTurnstileScriptElements(): HTMLScriptElement[] {
+  if (typeof document === "undefined") return [];
+  const seen = new Set<HTMLScriptElement>();
+  const byId = document.getElementById(TURNSTILE_SCRIPT_ID);
+  if (byId && byId.tagName === "SCRIPT") {
+    seen.add(byId as HTMLScriptElement);
+  }
+  const bySrc = document.querySelectorAll<HTMLScriptElement>(
+    'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]',
+  );
+  for (const el of bySrc) {
+    seen.add(el);
+  }
+  return [...seen];
+}
+
+function removeTurnstileScriptElements(): void {
+  for (const script of findTurnstileScriptElements()) {
+    script.remove();
+  }
+}
+
+function attachScriptStatusTracking(script: HTMLScriptElement): void {
+  if (script.dataset.turnstileTracked === "true") return;
+  script.dataset.turnstileTracked = "true";
+  if (!script.dataset.turnstileStatus) {
+    script.dataset.turnstileStatus =
+      typeof window !== "undefined" &&
+      typeof (window as TurnstileWindow).turnstile?.render === "function"
+        ? "loaded"
+        : "loading";
+  }
+  script.addEventListener(
+    "load",
+    () => {
+      script.dataset.turnstileStatus = "loaded";
+    },
+    { once: true },
+  );
+  script.addEventListener(
+    "error",
+    () => {
+      script.dataset.turnstileStatus = "error";
+    },
+    { once: true },
+  );
+}
+
 /**
- * Guarantee `<script id="cf-turnstile-script" src="...api.js?render=explicit..." async defer>`
+ * Guarantee a live `<script id="cf-turnstile-script" src="...api.js?render=explicit..." async defer>`
  * exists in the DOM. Next.js `<Script strategy="afterInteractive">` handles SSR
- * preloading and initial injection; this fallback ensures retries (after a
- * blocked script was removed from the DOM) and isolated non-Next test roots
- * always mount a live `<script async defer>` tag without duplicates.
+ * preloading and initial injection; this fallback deduplicates stray tags,
+ * replaces dead/errored script tags across SPA transitions or silent retries,
+ * and mounts a clean `<script async defer>` tag in isolated roots.
  */
 function ensureTurnstileScriptElement(): HTMLScriptElement | null {
   if (typeof document === "undefined") return null;
-  const existing =
-    (document.getElementById(TURNSTILE_SCRIPT_ID) as HTMLScriptElement | null) ??
-    document.querySelector<HTMLScriptElement>(
-      'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]',
-    );
-  if (existing) {
-    if (!existing.id) existing.id = TURNSTILE_SCRIPT_ID;
-    existing.async = true;
-    existing.defer = true;
-    return existing;
+  ensureTurnstileOnloadCallback();
+
+  const apiReady =
+    typeof window !== "undefined" &&
+    typeof (window as TurnstileWindow).turnstile?.render === "function";
+
+  let primary: HTMLScriptElement | null = null;
+  for (const candidate of findTurnstileScriptElements()) {
+    if (!apiReady && candidate.dataset.turnstileStatus === "error") {
+      candidate.remove();
+      continue;
+    }
+    if (!primary) {
+      primary = candidate;
+    } else {
+      candidate.remove();
+    }
+  }
+
+  if (primary) {
+    if (!primary.id) primary.id = TURNSTILE_SCRIPT_ID;
+    primary.async = true;
+    primary.defer = true;
+    if (apiReady) primary.dataset.turnstileStatus = "loaded";
+    attachScriptStatusTracking(primary);
+    return primary;
   }
 
   const script = document.createElement("script");
@@ -118,6 +234,7 @@ function ensureTurnstileScriptElement(): HTMLScriptElement | null {
   script.src = TURNSTILE_SCRIPT_SRC;
   script.async = true;
   script.defer = true;
+  attachScriptStatusTracking(script);
   (document.head ?? document.body ?? document.documentElement).appendChild(script);
   return script;
 }
@@ -143,10 +260,11 @@ function statusMessage(status: CaptchaStatus, failed: boolean): string {
  * a gold-framed “Security check” card with the widget centred in a 300px well
  * that scales fluidly on small screens.
  *
- * Loads `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit`
- * with `async` and `defer`, renders explicitly into a `data-sitekey` container,
- * emits the canonical `cf-turnstile-response` hidden form field, and cleans up
- * widgets on unmount/reset.
+ * Loads `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onloadTurnstileCallback`
+ * with `strategy="afterInteractive"`, renders explicitly into a `data-sitekey`
+ * container as soon as `window.turnstile` is interactive, silently auto-retries
+ * transient network/extension delays, emits the canonical `cf-turnstile-response`
+ * hidden form field, and cleans up widgets on unmount/reset.
  */
 function TurnstileWidget({
   onVerify,
@@ -155,11 +273,16 @@ function TurnstileWidget({
   siteKey: siteKeyProp,
 }: TurnstileCaptchaProps) {
   const siteKey = getTurnstileSiteKey(siteKeyProp);
-  const uid = useId().replace(/:/g, "");
-  const alive = useRef(false);
+  const uid = useId().replace(/[^A-Za-z0-9_-]/g, "");
+  const unmountedRef = useRef(false);
+  const failedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const autoRetryCountRef = useRef(0);
+  const widgetErrorRetriesRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [manualAttempt, setManualAttempt] = useState(0);
   const callbacks = useRef({ onVerify, onError });
   const [status, setStatus] = useState<CaptchaStatus>("loading");
   const [verifiedToken, setVerifiedToken] = useState("");
@@ -170,20 +293,27 @@ function TurnstileWidget({
   }, [onVerify, onError]);
 
   const unavailable = useCallback((errorCode?: unknown) => {
-    if (!alive.current) return;
-    if (errorCode === "110200") {
-      console.warn(
-        "[turnstile] Domain is not authorized for this Turnstile widget (110200). Add this hostname in Cloudflare Turnstile widget settings.",
-      );
-    } else if (errorCode === "csp-blocked") {
-      console.warn(
-        "[turnstile] Content-Security-Policy blocked challenges.cloudflare.com. Allow script-src and frame-src https://challenges.cloudflare.com.",
-      );
-    } else {
-      console.warn(
-        "[turnstile] Security check failed to load. Check the CDN request, CSP and Cloudflare domain allowlist.",
-      );
+    if (unmountedRef.current) return;
+    if (retryTimerRef.current !== null) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
     }
+    if (!failedRef.current) {
+      if (errorCode === "110200") {
+        console.warn(
+          "[turnstile] Domain is not authorized for this Turnstile widget (110200). Add this hostname in Cloudflare Turnstile widget settings.",
+        );
+      } else if (errorCode === "csp-blocked") {
+        console.warn(
+          "[turnstile] Content-Security-Policy blocked challenges.cloudflare.com. Allow script-src and frame-src https://challenges.cloudflare.com.",
+        );
+      } else {
+        console.warn(
+          "[turnstile] Security check failed to load. Check the CDN request, CSP and Cloudflare domain allowlist.",
+        );
+      }
+    }
+    failedRef.current = true;
     setVerifiedToken("");
     callbacks.current.onVerify("");
     callbacks.current.onError?.();
@@ -191,11 +321,15 @@ function TurnstileWidget({
   }, []);
 
   const tryRenderWidget = useCallback(() => {
-    if (!alive.current || !siteKey) return;
+    if (unmountedRef.current || !siteKey) return;
     if (widgetIdRef.current !== null) return;
     const container = containerRef.current;
     const api = typeof window === "undefined" ? undefined : (window as TurnstileWindow).turnstile;
     if (!container || typeof api?.render !== "function") return;
+
+    if (container.childNodes.length > 0) {
+      container.replaceChildren();
+    }
 
     try {
       const renderedId = api.render(container, {
@@ -205,29 +339,46 @@ function TurnstileWidget({
         appearance: "always",
         size: "flexible",
         retry: "auto",
-        "retry-interval": 8_000,
+        "retry-interval": 3_000,
         "refresh-expired": "auto",
         "refresh-timeout": "auto",
         "response-field": true,
         "response-field-name": TURNSTILE_RESPONSE_FIELD,
         callback: (token: string) => {
-          if (!alive.current) return;
+          if (unmountedRef.current) return;
           const clean = typeof token === "string" ? token.trim() : "";
+          failedRef.current = false;
+          autoRetryCountRef.current = 0;
+          widgetErrorRetriesRef.current = 0;
           setVerifiedToken(clean);
           setStatus(clean ? "verified" : "ready");
           callbacks.current.onVerify(clean);
         },
         "expired-callback": () => {
-          if (!alive.current) return;
+          if (unmountedRef.current) return;
           setVerifiedToken("");
           callbacks.current.onVerify("");
           setStatus("expired");
         },
         "error-callback": (errorCode?: unknown) => {
+          if (unmountedRef.current) return;
+          if (
+            typeof errorCode === "string" &&
+            RETRIABLE_WIDGET_ERROR_CODE.test(errorCode) &&
+            widgetErrorRetriesRef.current < TURNSTILE_MAX_AUTO_RETRIES
+          ) {
+            widgetErrorRetriesRef.current += 1;
+            setVerifiedToken("");
+            callbacks.current.onVerify("");
+            return false;
+          }
           unavailable(errorCode);
         },
         "timeout-callback": () => {
-          unavailable("widget-timeout");
+          if (unmountedRef.current) return;
+          setVerifiedToken("");
+          callbacks.current.onVerify("");
+          setStatus("expired");
         },
         "unsupported-callback": () => {
           unavailable("unsupported-browser");
@@ -235,6 +386,11 @@ function TurnstileWidget({
       });
 
       if (typeof renderedId === "string" && renderedId.length > 0) {
+        if (retryTimerRef.current !== null) {
+          clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = null;
+        }
+        failedRef.current = false;
         widgetIdRef.current = renderedId;
         setHasNativeResponseInput(
           Boolean(container.querySelector(`input[name="${TURNSTILE_RESPONSE_FIELD}"]`)),
@@ -248,43 +404,114 @@ function TurnstileWidget({
     }
   }, [action, siteKey, unavailable]);
 
+  const scheduleSilentScriptRetry = useCallback(
+    (reason: "script-error" | "script-timeout") => {
+      if (unmountedRef.current || widgetIdRef.current !== null || failedRef.current) return;
+
+      // Never trigger a false-positive script failure/timeout if `window.turnstile` is already interactive.
+      if (
+        typeof window !== "undefined" &&
+        typeof (window as TurnstileWindow).turnstile?.render === "function"
+      ) {
+        tryRenderWidget();
+        return;
+      }
+
+      if (retryTimerRef.current !== null) return;
+
+      if (autoRetryCountRef.current < TURNSTILE_MAX_AUTO_RETRIES) {
+        const nextRetry = autoRetryCountRef.current + 1;
+        autoRetryCountRef.current = nextRetry;
+
+        if (reason === "script-timeout") {
+          removeTurnstileScriptElements();
+          setStatus("loading");
+          setAttempt((value) => value + 1);
+          return;
+        }
+
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
+          if (unmountedRef.current || widgetIdRef.current !== null || failedRef.current) return;
+          if (typeof (window as TurnstileWindow).turnstile?.render === "function") {
+            tryRenderWidget();
+            return;
+          }
+          removeTurnstileScriptElements();
+          setStatus("loading");
+          setAttempt((value) => value + 1);
+        }, TURNSTILE_ERROR_RETRY_DELAY_MS * nextRetry);
+        return;
+      }
+
+      unavailable(reason);
+      if (reason === "script-timeout") {
+        setStatus("timeout");
+      }
+    },
+    [tryRenderWidget, unavailable],
+  );
+
   const retry = useCallback(() => {
-    if (!alive.current) return;
+    if (unmountedRef.current) return;
+    if (retryTimerRef.current !== null) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    failedRef.current = false;
+    autoRetryCountRef.current = 0;
+    widgetErrorRetriesRef.current = 0;
     setVerifiedToken("");
     setHasNativeResponseInput(false);
     callbacks.current.onVerify("");
     callbacks.current.onError?.();
 
     const api = typeof window === "undefined" ? undefined : (window as TurnstileWindow).turnstile;
-    if (api && widgetIdRef.current && typeof api.reset === "function") {
+    if (api && widgetIdRef.current && typeof api.remove === "function") {
+      try {
+        api.remove(widgetIdRef.current);
+      } catch {
+        // Widget removal and remount happen via `attempt` change below.
+      }
+      widgetIdRef.current = null;
+    } else if (api && widgetIdRef.current && typeof api.reset === "function") {
       try {
         api.reset(widgetIdRef.current);
       } catch {
         // Widget removal and remount happen via `attempt` change below.
       }
-    } else if (!api) {
-      document.getElementById(TURNSTILE_SCRIPT_ID)?.remove();
+      widgetIdRef.current = null;
+    } else if (typeof api?.render !== "function") {
+      removeTurnstileScriptElements();
     }
-    setAttempt((value) => value + 1);
+
     setStatus("loading");
+    setManualAttempt((value) => value + 1);
+    setAttempt((value) => value + 1);
   }, []);
 
   useEffect(() => {
-    alive.current = true;
+    unmountedRef.current = false;
     if (!siteKey) {
       console.error(
         "[turnstile] Missing NEXT_PUBLIC_TURNSTILE_SITE_KEY. Configure the public site key and rebuild the application.",
       );
       unavailable("missing-site-key");
       return () => {
-        alive.current = false;
+        unmountedRef.current = true;
       };
     }
 
-    const unsubscribeOnload = subscribeTurnstileOnload(tryRenderWidget);
     const script = ensureTurnstileScriptElement();
-    const handleLoad = () => tryRenderWidget();
-    const handleError = () => unavailable("script-error");
+    const unsubscribeOnload = subscribeTurnstileOnload(tryRenderWidget);
+    const handleLoad = () => {
+      if (script) script.dataset.turnstileStatus = "loaded";
+      tryRenderWidget();
+    };
+    const handleError = () => {
+      if (script) script.dataset.turnstileStatus = "error";
+      scheduleSilentScriptRetry("script-error");
+    };
     script?.addEventListener("load", handleLoad);
     script?.addEventListener("error", handleError);
 
@@ -292,9 +519,11 @@ function TurnstileWidget({
       const target = event.target;
       if (
         target instanceof window.HTMLScriptElement &&
-        target.src.startsWith("https://challenges.cloudflare.com/turnstile/")
+        (target.id === TURNSTILE_SCRIPT_ID ||
+          target.src.startsWith("https://challenges.cloudflare.com/turnstile/"))
       ) {
-        unavailable("script-error");
+        target.dataset.turnstileStatus = "error";
+        scheduleSilentScriptRetry("script-error");
       }
     };
     const handleCspViolation = (event: Event) => {
@@ -303,35 +532,60 @@ function TurnstileWidget({
         unavailable("csp-blocked");
       }
     };
+    const handleOnline = () => {
+      if (unmountedRef.current || widgetIdRef.current !== null) return;
+      if (typeof (window as TurnstileWindow).turnstile?.render === "function") {
+        failedRef.current = false;
+        tryRenderWidget();
+        return;
+      }
+      if (failedRef.current) {
+        retry();
+      } else {
+        removeTurnstileScriptElements();
+        setAttempt((value) => value + 1);
+      }
+    };
+
     document.addEventListener("error", handleResourceError, true);
     document.addEventListener("securitypolicyviolation", handleCspViolation);
+    window.addEventListener("online", handleOnline);
 
     tryRenderWidget();
 
     let pollInterval: ReturnType<typeof setInterval> | null = null;
-    if (
-      widgetIdRef.current === null &&
-      typeof (window as TurnstileWindow).turnstile?.render !== "function"
-    ) {
+    if (widgetIdRef.current === null && !failedRef.current) {
       pollInterval = setInterval(() => {
-        if (typeof (window as TurnstileWindow).turnstile?.render === "function") {
+        if (widgetIdRef.current !== null || unmountedRef.current || failedRef.current) {
           if (pollInterval !== null) {
             clearInterval(pollInterval);
             pollInterval = null;
           }
-          tryRenderWidget();
+          return;
         }
-      }, 100);
+        if (typeof (window as TurnstileWindow).turnstile?.render === "function") {
+          tryRenderWidget();
+          if ((widgetIdRef.current !== null || failedRef.current) && pollInterval !== null) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
+        }
+      }, TURNSTILE_POLL_INTERVAL_MS);
     }
 
     return () => {
-      alive.current = false;
+      unmountedRef.current = true;
       unsubscribeOnload();
       script?.removeEventListener("load", handleLoad);
       script?.removeEventListener("error", handleError);
       document.removeEventListener("error", handleResourceError, true);
       document.removeEventListener("securitypolicyviolation", handleCspViolation);
+      window.removeEventListener("online", handleOnline);
       if (pollInterval !== null) clearInterval(pollInterval);
+      if (retryTimerRef.current !== null) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
 
       const widgetId = widgetIdRef.current;
       widgetIdRef.current = null;
@@ -343,16 +597,38 @@ function TurnstileWidget({
         }
       }
     };
-  }, [siteKey, attempt, tryRenderWidget, unavailable]);
+  }, [siteKey, attempt, tryRenderWidget, scheduleSilentScriptRetry, unavailable, retry]);
 
   useEffect(() => {
     if (!siteKey || status !== "loading") return;
-    const timer = setTimeout(() => {
+
+    const retryTimers: Array<ReturnType<typeof setTimeout>> = [];
+    for (let step = 1; step <= TURNSTILE_MAX_AUTO_RETRIES; step++) {
+      retryTimers.push(
+        setTimeout(() => {
+          scheduleSilentScriptRetry("script-timeout");
+        }, TURNSTILE_ATTEMPT_TIMEOUT_MS * step),
+      );
+    }
+
+    const deadlineTimer = setTimeout(() => {
+      if (unmountedRef.current || widgetIdRef.current !== null || failedRef.current) return;
+      if (
+        typeof window !== "undefined" &&
+        typeof (window as TurnstileWindow).turnstile?.render === "function"
+      ) {
+        tryRenderWidget();
+        return;
+      }
       unavailable("script-timeout");
       setStatus("timeout");
-    }, 15_000);
-    return () => clearTimeout(timer);
-  }, [siteKey, status, attempt, unavailable]);
+    }, TURNSTILE_LOAD_TIMEOUT_MS);
+
+    return () => {
+      for (const timer of retryTimers) clearTimeout(timer);
+      clearTimeout(deadlineTimer);
+    };
+  }, [siteKey, status, manualAttempt, scheduleSilentScriptRetry, tryRenderWidget, unavailable]);
 
   const failed = !siteKey || status === "unavailable" || status === "timeout";
   const loading = Boolean(siteKey) && status === "loading" && !failed;
@@ -374,7 +650,7 @@ function TurnstileWidget({
           defer
           onLoad={tryRenderWidget}
           onReady={tryRenderWidget}
-          onError={() => unavailable("script-error")}
+          onError={() => scheduleSilentScriptRetry("script-error")}
         />
       )}
 
@@ -483,10 +759,10 @@ function TurnstileWidget({
 
 /** Keep a provider render failure from taking down the authentication form. */
 class CaptchaBoundary extends Component<
-  TurnstileCaptchaProps & { children: ReactNode },
-  { failed: boolean }
+  TurnstileCaptchaProps & { children: (retryKey: number) => ReactNode },
+  { failed: boolean; retryKey: number }
 > {
-  state = { failed: false };
+  state = { failed: false, retryKey: 0 };
   static getDerivedStateFromError() {
     return { failed: true };
   }
@@ -496,7 +772,7 @@ class CaptchaBoundary extends Component<
     this.props.onError?.();
   }
   render() {
-    if (!this.state.failed) return this.props.children;
+    if (!this.state.failed) return this.props.children(this.state.retryKey);
     return (
       <div
         role="alert"
@@ -506,7 +782,9 @@ class CaptchaBoundary extends Component<
         <button
           type="button"
           className="mt-2 text-primary underline"
-          onClick={() => this.setState({ failed: false })}
+          onClick={() =>
+            this.setState((prev) => ({ failed: false, retryKey: prev.retryKey + 1 }))
+          }
         >
           Retry
         </button>
@@ -521,7 +799,7 @@ class CaptchaBoundary extends Component<
 export function TurnstileCaptcha(props: TurnstileCaptchaProps) {
   return (
     <CaptchaBoundary {...props}>
-      <TurnstileWidget {...props} />
+      {(retryKey) => <TurnstileWidget key={retryKey} {...props} />}
     </CaptchaBoundary>
   );
 }
