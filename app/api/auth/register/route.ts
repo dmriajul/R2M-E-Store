@@ -3,7 +3,11 @@ import { createRateLimiter, clientIp } from "@/lib/rate-limit";
 import { queueVerificationEmail } from "@/lib/emails/queue-verification-email";
 import { newVerificationToken } from "@/lib/verification-tokens";
 import { createUser } from "@/lib/data/users";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import {
+  extractTurnstileToken,
+  parseTurnstileRequestRecord,
+  verifyTurnstileToken,
+} from "@/lib/turnstile";
 import type { AuthApiFailure, AuthErrorCode, AuthField } from "@/lib/auth-messages";
 import { authValidationErrors } from "@/lib/validations/auth";
 import { registerApiSchema } from "@/lib/validations";
@@ -26,22 +30,30 @@ function failure(code: AuthErrorCode, status: number, fieldErrors?: Partial<Reco
 export async function POST(
   request: NextRequest,
 ): Promise<NextResponse<ApiResponse<AuthUser & { source: string; redirectTo: string }> | AuthApiFailure>> {
-  const rate = limiter.check(clientIp(request.headers));
+  const ip = clientIp(request.headers);
+  const rate = limiter.check(ip);
   if (!rate.ok) return failure("ACCOUNT_LOCKED", 429, undefined, { "Retry-After": String(rate.retryAfter) });
-  let payload: unknown;
-  try {
-    payload = await request.json();
-  } catch {
-    return failure("INVALID_REQUEST", 400);
-  }
+  const parsedBody = await parseTurnstileRequestRecord(request);
+  if (!parsedBody) return failure("INVALID_REQUEST", 400);
+  const payload = parsedBody.formEncoded && typeof parsedBody.record.acceptedTerms === "string"
+    ? {
+        ...parsedBody.record,
+        acceptedTerms: parsedBody.record.acceptedTerms === "true" || parsedBody.record.acceptedTerms === "on",
+      }
+    : parsedBody.record;
 
   const parsed = registerApiSchema.safeParse(payload);
   if (!parsed.success) {
     const result = authValidationErrors(parsed.error);
     return failure(result.code, 422, result.fieldErrors);
   }
-  const token = payload && typeof payload === "object" && "turnstileToken" in payload ? payload.turnstileToken : undefined;
-  if (!await verifyTurnstileToken(token, { action: "register" })) return NextResponse.json({ data: null, success: false, error: "invalid_captcha", code: "SECURITY_CHECK_FAILED" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+  const token = extractTurnstileToken(payload, request.headers);
+  if (!await verifyTurnstileToken(token, { action: "register", remoteIp: ip, requestHeaders: request.headers })) {
+    return NextResponse.json(
+      { data: null, success: false, error: "invalid_captcha", code: "SECURITY_CHECK_FAILED" },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   try {
     const issued = newVerificationToken(parsed.data.email);

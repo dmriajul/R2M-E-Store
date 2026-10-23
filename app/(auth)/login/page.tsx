@@ -7,7 +7,7 @@ import { CaptchaBypassNotice } from "@/components/auth/CaptchaBypassNotice";
 import { useTurnstile } from "@/hooks/useTurnstile";
 import { queueAuthSuccess } from "@/lib/auth-flash";
 import { loginErrorCode } from "@/lib/auth-messages";
-import { isTurnstileBypassed } from "@/lib/turnstile-shared";
+import { isTurnstileBypassed, TURNSTILE_RESPONSE_FIELD } from "@/lib/turnstile-shared";
 import { AuthFeedback } from "@/components/auth/AuthFeedback";
 import { useAuthFeedback } from "@/hooks/useAuthFeedback";
 import { signIn, type SignInResponse } from "next-auth/react";
@@ -30,6 +30,7 @@ export default function LoginPage() {
   /* `next dev` only — production and test builds keep the real challenge. */
   const captchaBypassed = isTurnstileBypassed();
   const feedback = useAuthFeedback();
+  const formRef = useRef<HTMLFormElement>(null);
   const submissionInFlight = useRef(false);
   const [pending, setPending] = useState(false);
   /* Set by `clearSessionCache()` — confirms the debug wipe actually ran. */
@@ -65,7 +66,14 @@ export default function LoginPage() {
     // solved challenge can enter exactly one Credentials request, even if the
     // form receives two submit events before the disabled state paints.
     if (submissionInFlight.current) return;
-    const turnstileToken = captcha.consumeToken();
+    let turnstileToken = captcha.consumeToken();
+    if (!turnstileToken && formRef.current) {
+      const responseInput = formRef.current.elements.namedItem(TURNSTILE_RESPONSE_FIELD);
+      if (responseInput && "value" in responseInput && typeof responseInput.value === "string") {
+        turnstileToken = responseInput.value.trim();
+        responseInput.value = "";
+      }
+    }
     if (!turnstileToken && !captchaBypassed) { feedback.show("SECURITY_CHECK_FAILED"); return; }
 
     submissionInFlight.current = true;
@@ -83,8 +91,13 @@ export default function LoginPage() {
       result = await signIn("credentials", {
         email: values.email,
         password: values.password,
-        /* Omit entirely in development: URLSearchParams would send "undefined". */
-        ...(turnstileToken ? { turnstileToken } : {}),
+        /* Omit when empty: URLSearchParams would serialize undefined as "undefined". */
+        ...(turnstileToken
+          ? {
+              [TURNSTILE_RESPONSE_FIELD]: turnstileToken,
+              turnstileToken,
+            }
+          : {}),
         redirect: false,
       });
     } catch {
@@ -141,7 +154,7 @@ export default function LoginPage() {
           </p>
         </header>
 
-        <form onChangeCapture={feedback.clear} onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
+        <form ref={formRef} onChangeCapture={feedback.clear} onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-5" noValidate>
           <AuthFeedback message={feedback.message} warning={feedback.warning} onDismiss={feedback.clear} />
           {/* Email */}
           <div className="flex flex-col gap-2">

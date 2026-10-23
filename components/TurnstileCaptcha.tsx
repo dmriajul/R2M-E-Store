@@ -4,7 +4,7 @@ import { Component, type ReactNode, useCallback, useEffect, useId, useMemo, useR
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { Loader2, ShieldCheck, ShieldOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { TurnstileAction } from "@/lib/turnstile-shared";
+import { TURNSTILE_RESPONSE_FIELD, type TurnstileAction } from "@/lib/turnstile-shared";
 
 interface TurnstileCaptchaProps {
   onVerify: (token: string) => void;
@@ -54,9 +54,13 @@ function TurnstileWidget({ onVerify, onError, action = "review" }: TurnstileCapt
     callbacks.current = { onVerify, onError };
   }, [onVerify, onError]);
 
-  const unavailable = useCallback(() => {
+  const unavailable = useCallback((errorCode?: unknown) => {
     if (!alive.current) return;
-    console.warn("[turnstile] Security check failed to load. Check the CDN request, CSP and Cloudflare domain allowlist.");
+    if (errorCode === "110200") {
+      console.warn("[turnstile] Domain is not authorized for this Turnstile widget (110200). Add this hostname in Cloudflare Turnstile widget settings.");
+    } else {
+      console.warn("[turnstile] Security check failed to load. Check the CDN request, CSP and Cloudflare domain allowlist.");
+    }
     callbacks.current.onVerify("");
     callbacks.current.onError?.();
     setStatus("unavailable");
@@ -127,7 +131,8 @@ function TurnstileWidget({ onVerify, onError, action = "review" }: TurnstileCapt
       appearance: "always" as const,
       // Flexible uses the available width and a low-profile ~65px challenge footprint.
       size: "flexible" as const,
-      responseField: false,
+      responseField: true,
+      responseFieldName: TURNSTILE_RESPONSE_FIELD,
       refreshExpired: "auto" as const,
       refreshTimeout: "auto" as const,
     }),

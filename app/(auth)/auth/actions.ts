@@ -1,14 +1,18 @@
 "use server";
 
-import { verifyTurnstileToken } from "@/lib/turnstile";
-import { TURNSTILE_ERROR } from "@/lib/turnstile-shared";
+import { extractTurnstileToken, verifyTurnstileToken } from "@/lib/turnstile";
+import { TURNSTILE_ERROR, TURNSTILE_RESPONSE_FIELD } from "@/lib/turnstile-shared";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { prepareVerificationResend } from "@/lib/email-verification";
 import { queueVerificationEmail } from "@/lib/emails/queue-verification-email";
 import { clientIp, createRateLimiter } from "@/lib/rate-limit";
 
-const inputSchema = z.object({ email: z.string().trim().email().max(254), turnstileToken: z.unknown().optional() });
+const inputSchema = z.object({
+  email: z.string().trim().email().max(254),
+  [TURNSTILE_RESPONSE_FIELD]: z.unknown().optional(),
+  turnstileToken: z.unknown().optional(),
+});
 const ipLimiter = createRateLimiter({ max: 20, windowMs: 60 * 60 * 1000 });
 const genericMessage =
   "If this account needs verification, a new link will be sent. Please check your inbox and spam folder. Resends are limited to three per hour.";
@@ -16,11 +20,21 @@ const genericMessage =
 export async function resendVerificationEmail(
   input: unknown,
 ): Promise<{ ok: boolean; message: string }> {
-  const parsed = inputSchema.safeParse(input);
+  const normalizedInput = input instanceof FormData
+    ? {
+        email: input.get("email"),
+        [TURNSTILE_RESPONSE_FIELD]: input.get(TURNSTILE_RESPONSE_FIELD) ?? undefined,
+        turnstileToken: input.get("turnstileToken") ?? undefined,
+      }
+    : input;
+  const parsed = inputSchema.safeParse(normalizedInput);
   if (!parsed.success) return { ok: false, message: "Enter a valid email address." };
-  const rate = ipLimiter.check(clientIp(await headers()));
+  const requestHeaders = await headers();
+  const ip = clientIp(requestHeaders);
+  const rate = ipLimiter.check(ip);
   if (!rate.ok) return { ok: false, message: "Too many requests. Please try again later." };
-  if (!await verifyTurnstileToken(parsed.data.turnstileToken, { action: "resend_verification" })) {
+  const token = extractTurnstileToken(parsed.data, requestHeaders);
+  if (!await verifyTurnstileToken(token, { action: "resend_verification", remoteIp: ip, requestHeaders })) {
     return { ok: false, message: TURNSTILE_ERROR };
   }
   try {

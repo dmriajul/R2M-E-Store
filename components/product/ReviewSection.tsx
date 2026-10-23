@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { BadgeCheck, PenLine, Star } from "lucide-react";
 import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
+import { useTurnstile } from "@/hooks/useTurnstile";
 import { StarRating } from "@/components/product/StarRating";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,19 +48,19 @@ function buildBreakdown(rating: number, reviewCount: number): Array<{ stars: num
 export function ReviewSection({ product, reviews }: ReviewSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState("");
-  const isCaptchaEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+  const captcha = useTurnstile();
+  const isCaptchaEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim());
   const breakdown = buildBreakdown(product.rating, product.reviewCount);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isCaptchaEnabled && !captchaToken) return;
+    if (isCaptchaEnabled && !captcha.consumeToken()) return;
     // Reviews post to the backend in a later step.
     setSubmitted(true);
     window.setTimeout(() => {
       setSubmitted(false);
       setDialogOpen(false);
-      setCaptchaToken("");
+      captcha.reset();
     }, 1400);
   };
 
@@ -241,8 +242,10 @@ export function ReviewSection({ product, reviews }: ReviewSectionProps) {
             {isCaptchaEnabled && (
               <div className="mt-1">
                 <TurnstileCaptcha
-                  onVerify={setCaptchaToken}
-                  onError={() => setCaptchaToken("")}
+                  key={captcha.generation}
+                  action="review"
+                  onVerify={captcha.onVerify}
+                  onError={captcha.onError}
                   theme="dark"
                 />
               </div>
@@ -254,7 +257,7 @@ export function ReviewSection({ product, reviews }: ReviewSectionProps) {
                 variant="outline"
                 onClick={() => {
                   setDialogOpen(false);
-                  setCaptchaToken("");
+                  captcha.reset();
                 }}
                 className="h-11 rounded-full border-glass-border bg-glass text-xs tracking-[0.16em] uppercase"
               >
@@ -262,7 +265,7 @@ export function ReviewSection({ product, reviews }: ReviewSectionProps) {
               </Button>
               <Button
                 type="submit"
-                disabled={isCaptchaEnabled && !captchaToken}
+                disabled={isCaptchaEnabled && !captcha.token}
                 className="h-11 rounded-full bg-primary px-6 text-xs font-semibold tracking-[0.16em] text-primary-foreground uppercase disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitted ? "Thank you!" : "Submit review"}

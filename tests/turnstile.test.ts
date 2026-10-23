@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { isTurnstileServerConfigured, verifyTurnstileToken } from "../lib/turnstile";
+import {
+  extractTurnstileToken,
+  isTurnstileServerConfigured,
+  parseTurnstileRequestRecord,
+  verifyTurnstileToken,
+} from "../lib/turnstile";
+import { TURNSTILE_RESPONSE_FIELD, TURNSTILE_SITE_KEY } from "../lib/turnstile-shared";
 
 const originalEnv = { ...process.env };
 const originalFetch = globalThis.fetch;
@@ -13,6 +19,7 @@ function reply(data: unknown, status = 200) {
   globalThis.fetch = async () => Response.json(data, { status });
 }
 test("Turnstile verifies via Cloudflare, sends secret only in POST body and disables caching", async () => {
+  const headers = new Headers({ "cf-connecting-ip": "203.0.113.42" });
   globalThis.fetch = async (url, init) => {
     assert.equal(url, "https://challenges.cloudflare.com/turnstile/v0/siteverify");
     assert.equal(init?.method, "POST");
@@ -21,9 +28,104 @@ test("Turnstile verifies via Cloudflare, sends secret only in POST body and disa
     const body = new URLSearchParams(String(init?.body));
     assert.equal(body.get("secret"), "unit-test-only-secret");
     assert.equal(body.get("response"), "token");
+    assert.equal(body.get("remoteip"), "203.0.113.42");
     return Response.json({ success: true, action: "login", hostname: "SHOP.EXAMPLE.COM" });
   };
+  assert.equal(await verifyTurnstileToken("token", { action: "login", requestHeaders: headers }), true);
+});
+
+test("configured Turnstile site key constant matches the existing Cloudflare widget", () => {
+  assert.equal(TURNSTILE_SITE_KEY, "0x4AAAAAAFR9W3cd66AOTr2B");
+  assert.equal(TURNSTILE_RESPONSE_FIELD, "cf-turnstile-response");
+});
+
+test("extractTurnstileToken and parseTurnstileRequestRecord parse cf-turnstile-response across JSON and form requests", async () => {
+  assert.equal(extractTurnstileToken({ "cf-turnstile-response": "cf-token" }), "cf-token");
+  assert.equal(extractTurnstileToken({ "cf-turnstile-response": "cf-token", turnstileToken: "legacy-token" }), "cf-token");
+  assert.equal(extractTurnstileToken({ "cf-turnstile-response": "", turnstileToken: "legacy-token" }), "legacy-token");
+
+  const params = new URLSearchParams({ email: "user@example.com", "cf-turnstile-response": "form-token" });
+  assert.equal(extractTurnstileToken(params), "form-token");
+
+  const jsonReq = new Request("http://localhost/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "user@example.com", password: "secret", "cf-turnstile-response": "json-cf-token" }),
+  });
+  const parsedJson = await parseTurnstileRequestRecord(jsonReq);
+  assert.equal(parsedJson?.formEncoded, false);
+  assert.equal(extractTurnstileToken(parsedJson?.record), "json-cf-token");
+
+  const urlReq = new Request("http://localhost/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ email: "user@example.com", password: "secret", "cf-turnstile-response": "url-cf-token" }),
+  });
+  const parsedUrl = await parseTurnstileRequestRecord(urlReq);
+  assert.equal(parsedUrl?.formEncoded, true);
+  assert.equal(extractTurnstileToken(parsedUrl?.record), "url-cf-token");
+
+  const form = new FormData();
+  form.set("email", "user@example.com");
+  form.set("password", "secret");
+  form.set("cf-turnstile-response", "multipart-cf-token");
+  const multiReq = new Request("http://localhost/api/auth/login", { method: "POST", body: form });
+  const parsedMulti = await parseTurnstileRequestRecord(multiReq);
+  assert.equal(parsedMulti?.formEncoded, true);
+  assert.equal(extractTurnstileToken(parsedMulti?.record), "multipart-cf-token");
+});
+
+test("production domain verification handles Vercel aliases, custom www/apex pairs, TURNSTILE_HOSTNAMES and loopback stripping", async () => {
+  // 1. Mixed local + prod allowlist strips loopback in production while accepting prod domain
+  process.env.TURNSTILE_ALLOWED_HOSTNAMES = "localhost, 127.0.0.1, 2r-m-store.vercel.app";
+  reply({ success: true, action: "login", hostname: "2r-m-store.vercel.app" });
   assert.equal(await verifyTurnstileToken("token", { action: "login" }), true);
+  reply({ success: true, action: "login", hostname: "localhost" });
+  assert.equal(await verifyTurnstileToken("token", { action: "login" }), false);
+
+  // 2. Spin-style TURNSTILE_HOSTNAMES alias works identically
+  delete process.env.TURNSTILE_ALLOWED_HOSTNAMES;
+  process.env.TURNSTILE_HOSTNAMES = "2r-m-store.vercel.app";
+  reply({ success: true, action: "login", hostname: "2r-m-store.vercel.app" });
+  assert.equal(await verifyTurnstileToken("token", { action: "login" }), true);
+  delete process.env.TURNSTILE_HOSTNAMES;
+
+  // 3. Automatic Vercel production, branch, deployment, and verified x-forwarded-host alias resolution
+  process.env.NEXTAUTH_URL = "https://2r-m-store.vercel.app/api/auth";
+  process.env.VERCEL = "1";
+  process.env.VERCEL_ENV = "production";
+  process.env.VERCEL_URL = "mukra-qp50jmebx-riajul1.vercel.app";
+  process.env.VERCEL_BRANCH_URL = "mukra-git-riajulkhandokar-riajul1.vercel.app";
+  assert.equal(isTurnstileServerConfigured(), true);
+
+  for (const host of [
+    "2r-m-store.vercel.app",
+    "mukra-qp50jmebx-riajul1.vercel.app",
+    "mukra-git-riajulkhandokar-riajul1.vercel.app",
+  ]) {
+    reply({ success: true, action: "login", hostname: host });
+    assert.equal(await verifyTurnstileToken("token", { action: "login" }), true, `Expected ${host} to pass`);
+  }
+
+  // Verified Vercel automatic alias via x-forwarded-host
+  const aliasHeaders = new Headers({ "x-forwarded-host": "mukra-riajul1.vercel.app" });
+  reply({ success: true, action: "login", hostname: "mukra-riajul1.vercel.app" });
+  assert.equal(await verifyTurnstileToken("token", { action: "login", requestHeaders: aliasHeaders }), true);
+
+  // Unrelated .vercel.app tenant still fails
+  reply({ success: true, action: "login", hostname: "attacker-project.vercel.app" });
+  assert.equal(await verifyTurnstileToken("token", { action: "login", requestHeaders: aliasHeaders }), false);
+
+  // 4. Custom apex <-> www equivalence without opening arbitrary subdomains
+  delete process.env.VERCEL;
+  delete process.env.VERCEL_ENV;
+  delete process.env.VERCEL_URL;
+  delete process.env.VERCEL_BRANCH_URL;
+  process.env.NEXTAUTH_URL = "https://mukra.com";
+  reply({ success: true, action: "login", hostname: "www.mukra.com" });
+  assert.equal(await verifyTurnstileToken("token", { action: "login" }), true);
+  reply({ success: true, action: "login", hostname: "evil.mukra.com" });
+  assert.equal(await verifyTurnstileToken("token", { action: "login" }), false);
 });
 test("Turnstile rejects missing, non-string, empty and oversized tokens before fetching", async () => {
   globalThis.fetch = async () => { throw new Error("Must not reach provider"); };

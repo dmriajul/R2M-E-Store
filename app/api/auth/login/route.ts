@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyCredentialsDetailed } from "@/lib/data/users";
 import { clientIp, createRateLimiter } from "@/lib/rate-limit";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import {
+  extractTurnstileToken,
+  parseTurnstileRequestRecord,
+  verifyTurnstileToken,
+} from "@/lib/turnstile";
 import { loginSchema } from "@/lib/validations/auth";
 import { LOGIN_CODES, type AuthApiFailure, type AuthErrorCode } from "@/lib/auth-messages";
 import { normalizeRole } from "@/lib/rbac";
@@ -25,10 +29,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
   const ip = clientIp(request.headers);
   const rate = loginIpLimiter.check(ip);
   if (!rate.ok) return failure("ACCOUNT_LOCKED", 429, rate.retryAfter);
-  let payload: unknown;
-  try { payload = await request.json(); } catch { return failure("INVALID_REQUEST", 400); }
-  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
-  if (!await verifyTurnstileToken(record.turnstileToken, { action: "login" })) return NextResponse.json({ data: null, success: false, error: "invalid_captcha", code: "SECURITY_CHECK_FAILED" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+  const parsedBody = await parseTurnstileRequestRecord(request);
+  if (!parsedBody) return failure("INVALID_REQUEST", 400);
+  const { record } = parsedBody;
+  const turnstileToken = extractTurnstileToken(record, request.headers);
+  if (!await verifyTurnstileToken(turnstileToken, { action: "login", remoteIp: ip, requestHeaders: request.headers })) {
+    return NextResponse.json(
+      { data: null, success: false, error: "invalid_captcha", code: "SECURITY_CHECK_FAILED" },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const parsed = loginSchema.safeParse({ email: record.email, password: record.password, remember: true });
   // Match Credentials: malformed/missing/wrong credentials all use generic copy.
   if (!parsed.success) return failure("INVALID_CREDENTIALS", 401);

@@ -6,7 +6,7 @@ import { TurnstileCaptcha } from "@/components/TurnstileCaptcha";
 import { CaptchaBypassNotice } from "@/components/auth/CaptchaBypassNotice";
 import { useTurnstile } from "@/hooks/useTurnstile";
 import { authErrorMessage, isAuthErrorCode, type AuthErrorCode } from "@/lib/auth-messages";
-import { isTurnstileBypassed } from "@/lib/turnstile-shared";
+import { isTurnstileBypassed, TURNSTILE_RESPONSE_FIELD } from "@/lib/turnstile-shared";
 import { AuthFeedback } from "@/components/auth/AuthFeedback";
 import { useAuthFeedback } from "@/hooks/useAuthFeedback";
 import { useForm } from "react-hook-form";
@@ -56,10 +56,10 @@ export default function RegisterPage() {
   const password = watch("password");
 
   const onSubmit = async (values: RegisterValues) => {
-    if (!captcha.token && !captchaBypassed) { setCaptchaAttempted(true); return; }
+    const consumed = captcha.consumeToken();
+    if (!consumed && !captchaBypassed) { setCaptchaAttempted(true); return; }
+    const turnstileToken = consumed || undefined;
     feedback.clear();
-    const turnstileToken = captcha.token || undefined;
-    captcha.clearToken();
     setPending(true);
 
     try {
@@ -74,6 +74,7 @@ export default function RegisterPage() {
           password: values.password,
           confirmPassword: values.confirmPassword,
           acceptedTerms: values.acceptedTerms,
+          [TURNSTILE_RESPONSE_FIELD]: turnstileToken,
           turnstileToken,
         }),
       });
