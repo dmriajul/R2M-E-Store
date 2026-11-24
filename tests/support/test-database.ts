@@ -4,7 +4,7 @@ import type { PrismaDelegate, PrismaLikeClient } from "../../lib/prisma";
 
 type Row = Record<string, unknown>;
 type Args = { where?: Row; data?: Row; create?: Row; update?: Row; select?: Row; include?: Row; take?: number; skip?: number; orderBy?: Row };
-const tables = ["user", "verificationToken", "roleChange", "product", "order", "orderItem", "returnRequest", "productVariant", "coupon", "category", "review", "wishlistItem", "address", "siteSettings"] as const;
+const tables = ["user", "googleIdentity", "verificationToken", "roleChange", "product", "order", "orderItem", "returnRequest", "productVariant", "coupon", "category", "review", "wishlistItem", "address", "siteSettings"] as const;
 type Table = typeof tables[number];
 
 function matches(row: Row, where: Row = {}): boolean {
@@ -42,7 +42,12 @@ function apply(row: Row, data: Row) {
     else row[key] = value;
   }
 }
-export function createTestDatabase(seed: Partial<Record<Table, Row[]>> = {}) {
+export interface TestFixture {
+  db: PrismaLikeClient;
+  rows: (table: Table) => Row[];
+}
+
+export function createTestDatabase(seed: Partial<Record<Table, Row[]>> = {}): TestFixture {
   let rows = Object.fromEntries(tables.map((name) => [name, structuredClone(seed[name] ?? [])])) as Record<Table, Row[]>;
   function project(table: Table, row: Row, args: Args): Row {
     let result = { ...row };
@@ -53,8 +58,8 @@ export function createTestDatabase(seed: Partial<Record<Table, Row[]>> = {}) {
     return structuredClone(result);
   }
   function create(table: Table, data: Row): Row {
-    const unique = table === "user" ? ["email"] : table === "verificationToken" ? ["identifier", "token"] : table === "order" ? ["orderNumber"] : [];
-    if (rows[table].some((row) => unique.some((key) => data[key] !== undefined && row[key] === data[key]))) throw { code: "P2002" };
+    const unique = table === "user" ? [["email"]] : table === "googleIdentity" ? [["provider", "providerAccountId"]] : table === "verificationToken" ? [["identifier", "token"]] : table === "order" ? [["orderNumber"]] : [];
+    if (rows[table].some((row) => unique.some((keys) => keys.every((key) => data[key] !== undefined && row[key] === data[key])))) throw { code: "P2002" };
     const row: Row = { id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), ...data };
     if (table === "user") Object.assign(row, { deletedAt: null, emailVerified: null, avatar: null, ...data });
     if (table === "order" && data.items && typeof data.items === "object" && "create" in data.items) {

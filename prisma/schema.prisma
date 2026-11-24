@@ -109,11 +109,45 @@ model User {
   /// Every recorded move between roles — the "Role history" section of the
   /// account detail sheet (`getAdminUserRoleHistory()` in lib/data/admin-users.ts).
   roleChanges RoleChange[]
+  /// OAuth identities linked to this account (Google). One row per
+  /// provider+providerAccountId; see `GoogleIdentity`.
+  googleIdentities GoogleIdentity[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([role])
   @@index([deletedAt])
+}
+
+/// One durable link between a third-party OAuth identity and a local account.
+///
+/// `providerAccountId` is the stable `sub` from the provider's id_token — the
+/// same Google account always resolves to the same row, so re-sign-ins never
+/// create duplicate identities. Linking rules (verified email, no auto-link
+/// by email match, no reactivation of soft-deleted accounts) are enforced in
+/// `resolveGoogleIdentity()` in lib/data/google-oauth.ts.
+model GoogleIdentity {
+  id               String   @id @default(cuid())
+  /// Provider id — `"google"` today; kept as a column so other OAuth
+  /// providers can share the table without a schema change.
+  provider         String   @default("google")
+  /// The provider's stable account id (Google `sub`).
+  providerAccountId String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String
+  /// Email as reported by the provider at link time (audit only — the local
+  /// `User.email` stays authoritative for the session).
+  email            String?
+  /// True when the provider verified the email at link time.
+  emailVerified    Boolean  @default(true)
+  name             String?
+  image            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@index([email])
 }
 
 /// One active verification link per normalized email. Token is SHA-256, never the bearer secret.

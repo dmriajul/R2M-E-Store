@@ -1,7 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { toast } from "sonner";
+import { signIn, type SignInResponse } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { clearIdentityCaches } from "@/lib/session-cache";
+import { queueAuthSuccess } from "@/lib/auth-flash";
+import { safeCallbackPath } from "@/lib/auth-redirect";
+import { loginErrorCode } from "@/lib/auth-messages";
 
 /**
  * Brand marks as inline SVG (lucide-react v1 dropped brand icons).
@@ -43,33 +49,88 @@ function AppleMark() {
   );
 }
 
-const PROVIDERS = [
-  { id: "google", label: "Google", mark: <GoogleMark /> },
-  { id: "apple", label: "Apple", mark: <AppleMark /> },
-] as const;
+/**
+ * Where to land after a successful social sign-in (middleware adds ?callbackUrl=).
+ * Same origin-guarded source the Credentials form uses.
+ */
+function currentCallbackUrl(): string {
+  return safeCallbackPath(
+    new URLSearchParams(
+      typeof window === "undefined" ? "" : window.location.search,
+    ).get("callbackUrl"),
+    typeof window === "undefined" ? "" : window.location.origin,
+  );
+}
 
-/** Mock OAuth: the real flow lands with the auth provider. */
+/**
+ * Social sign-in buttons.
+ *
+ * Google runs the real Auth.js OAuth flow (redirect-less, then a hard navigate
+ * to the callback URL on success). Apple remains an unwired placeholder.
+ */
 export function SocialButtons() {
+  const [googlePending, setGooglePending] = useState(false);
+
+  const onGoogleSignIn = async () => {
+    if (googlePending) return;
+    setGooglePending(true);
+    try {
+      const result: SignInResponse = await signIn("google", {
+        redirect: false,
+        callbackUrl: currentCallbackUrl(),
+      });
+
+      if (!result || result.error || !result.ok) {
+        toast.warning(loginErrorCode(result?.code), {
+          description: "Google sign-in did not complete. Please try again, or sign in with your email and password.",
+        });
+        return;
+      }
+
+      /* Drop whatever the previous identity left cached *before* the next page
+         loads — so an admin never opens the console on a shopper's data, and a
+         shopper never inherits an operator's session data. */
+      clearIdentityCaches();
+
+      queueAuthSuccess("SIGNED_IN");
+
+      window.location.assign(result.url || "/");
+    } catch {
+      toast.warning("SERVER_ERROR", {
+        description: "Google sign-in did not complete. Please try again, or sign in with your email and password.",
+      });
+    } finally {
+      setGooglePending(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-2 gap-3">
-      {PROVIDERS.map((provider) => (
-        <Button
-          key={provider.id}
-          type="button"
-          variant="outline"
-          onClick={() =>
-            toast.warning(`${provider.label} sign-in is currently unavailable`, {
-              description: "Please sign in with your email and password.",
-              duration: Infinity,
-              closeButton: true,
-            })
-          }
-          className="h-12 gap-2.5 rounded-full border-glass-border bg-glass text-sm font-medium transition-all duration-400 ease-[var(--ease-luxe)] hover:border-primary/40 hover:bg-white/8 hover:text-foreground"
-        >
-          {provider.mark}
-          {provider.label}
-        </Button>
-      ))}
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onGoogleSignIn}
+        disabled={googlePending}
+        className="h-12 gap-2.5 rounded-full border-glass-border bg-glass text-sm font-medium transition-all duration-400 ease-[var(--ease-luxe)] hover:border-primary/40 hover:bg-white/8 hover:text-foreground"
+      >
+        {GoogleMark()}
+        Google
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() =>
+          toast.warning("Apple sign-in is currently unavailable", {
+            description: "Please sign in with your email and password.",
+            duration: Infinity,
+            closeButton: true,
+          })
+        }
+        className="h-12 gap-2.5 rounded-full border-glass-border bg-glass text-sm font-medium transition-all duration-400 ease-[var(--ease-luxe)] hover:border-primary/40 hover:bg-white/8 hover:text-foreground"
+      >
+        {AppleMark()}
+        Apple
+      </Button>
     </div>
   );
 }

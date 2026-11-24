@@ -4,26 +4,59 @@ import { TURNSTILE_RESPONSE_FIELD } from "@/lib/turnstile-shared";
 import { LOGIN_MESSAGES, type LoginFailure } from "@/lib/auth-messages";
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { redirect } from "next/navigation";
 import { authConfig } from "@/lib/auth.config";
 import {
   verifyCredentialsDetailed,
   getUserEmailVerificationStatus,
 } from "@/lib/data/users";
+import { resolveGoogleIdentity, GOOGLE_PROVIDER_ID } from "@/lib/data/google-oauth";
 import { loginSchema } from "@/lib/validations";
 import { canAccessSection, normalizeRole, pathForSection, type AdminSection } from "@/lib/rbac";
-import type { AdminRole, AdminUser, SessionRole } from "@/types";
+import type { AdminRole, AdminUser, AuthRole, SessionRole } from "@/types";
 
 /**
  * Auth.js (NextAuth v5) instance.
  *
- * Credentials + bcrypt against the durable Prisma User table only.
- * Missing database/configuration never enables demo accounts or fake registration.
+ * Credentials + bcrypt against the durable Prisma User table, plus Google OAuth
+ * linked to the same users through the `GoogleIdentity` table. Missing
+ * database/configuration never enables demo accounts or fake registration.
  *
  * The JWT carries `role`, normalised through `normalizeRole()` so a legacy
  * `ADMIN` row reads as `SUPER_ADMIN` everywhere downstream.
+ *
+ * Google sign-in lives here (Node runtime) — never in the Edge-safe
+ * `lib/auth.config.ts`, which `middleware.ts` imports. The Google client
+ * secret is read from the server environment only; it never reaches the
+ * browser bundle.
  */
 const loginLimiter = createRateLimiter({ max: 20, windowMs: 15 * 60 * 1000 });
+
+/**
+ * Google provider — registered only when both server-side credentials are
+ * present, so a checkout without Google configured still runs Credentials
+ * exactly as before. `profile()` maps Google's OIDC id_token to the stable
+ * `providerAccountId` (the `sub` claim); the default would do the same, but
+ * being explicit keeps the identity contract visible.
+ */
+const googleClientId = process.env.AUTH_GOOGLE_ID;
+const googleClientSecret = process.env.AUTH_GOOGLE_SECRET;
+const googleProvider =
+  googleClientId && googleClientSecret
+    ? Google({
+        clientId: googleClientId,
+        clientSecret: googleClientSecret,
+        profile(profile) {
+          return {
+            id: profile.sub,
+            name: profile.name,
+            email: profile.email,
+            image: profile.picture,
+          };
+        },
+      })
+    : null;
 
 class LoginError extends CredentialsSignin {
   constructor(reason: LoginFailure) {
@@ -39,6 +72,44 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   callbacks: {
     ...authConfig.callbacks,
+    /**
+     * Google sign-in: resolve (or safely create) the local Prisma identity,
+     * then map the local user onto the profile user so the existing JWT/session
+     * callbacks carry the real id, role and verification state.
+     *
+     * Rejections return a redirect to the login page with a fixed public code —
+     * never raw provider/database details. Credentials and any future
+     * provider pass through untouched.
+     */
+    async signIn({ user, account, profile }) {
+      if (account?.provider !== GOOGLE_PROVIDER_ID) return true;
+
+      const resolution = await resolveGoogleIdentity({
+        providerAccountId: account.providerAccountId,
+        email: user?.email ?? "",
+        emailVerified: profile?.email_verified === true,
+        name: user?.name ?? null,
+        image: user?.image ?? null,
+      });
+
+      if (!resolution.ok) {
+        return `/login?error=${resolution.errorType}&code=${resolution.errorType}`;
+      }
+
+      const local = user as typeof user & {
+        role?: AuthRole;
+        phone?: string;
+        emailVerified?: Date | boolean | null;
+      };
+      local.id = resolution.user.id;
+      local.name = resolution.user.name;
+      local.email = resolution.user.email;
+      local.phone = resolution.user.phone;
+      local.role = resolution.user.role;
+      local.emailVerified = true;
+      local.image = resolution.user.avatar ?? local.image;
+      return true;
+    },
     async jwt(args) {
       const token = authConfig.callbacks.jwt(args);
       if (typeof token.id === "string" && token.emailVerified !== true) {
@@ -116,6 +187,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
+    // Registered only when Google credentials are configured (server env only).
+    ...(googleProvider ? [googleProvider] : []),
   ],
 });
 
