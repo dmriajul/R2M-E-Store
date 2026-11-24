@@ -50,6 +50,16 @@ export const LOGIN_CODES = {
   "too-many-attempts": "ACCOUNT_LOCKED",
   "security-verification-failed": "SECURITY_CHECK_FAILED",
   "email-not-verified": "EMAIL_NOT_VERIFIED",
+  // OAuth provider outcomes (Auth.js error types). Fixed public copy only —
+  // never raw provider/database details.
+  "OAuthAccountNotLinked": "EMAIL_ALREADY_EXISTS",
+  "OAuthSignInError": "SERVER_ERROR",
+  "Configuration": "SERVER_ERROR",
+  "AccessDenied": "SERVER_ERROR",
+  "CallbackRouteError": "SERVER_ERROR",
+  "OAuthCallbackError": "SERVER_ERROR",
+  "OAuthProfileParseError": "SERVER_ERROR",
+  "Verification": "SERVER_ERROR",
 } as const satisfies Record<string, AuthErrorCode>;
 export type LoginFailure = keyof typeof LOGIN_CODES;
 export const LOGIN_MESSAGES = Object.fromEntries(Object.entries(LOGIN_CODES).map(([code, key]) => [code, AUTH_MESSAGES[key]])) as Record<LoginFailure, string>;

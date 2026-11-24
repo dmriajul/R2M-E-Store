@@ -65,6 +65,7 @@ function delegate(overrides: Partial<PrismaDelegate> = {}): PrismaDelegate {
 function database(overrides: Partial<PrismaLikeClient>): PrismaLikeClient {
   const db: PrismaLikeClient = {
     user: delegate(),
+    googleIdentity: delegate(),
     verificationToken: delegate(),
     roleChange: delegate(),
     product: delegate(),

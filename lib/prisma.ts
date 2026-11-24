@@ -26,6 +26,8 @@ export interface PrismaDelegate {
 
 export interface PrismaLikeClient {
   user: PrismaDelegate;
+  /** OAuth identity links (`GoogleIdentity`) — see lib/data/google-oauth.ts. */
+  googleIdentity: PrismaDelegate;
   verificationToken: PrismaDelegate;
   /** Role-change audit trail (`RoleChange`) — see lib/data/admin-users.ts. */
   roleChange: PrismaDelegate;
