@@ -815,3 +815,38 @@ export const settingsHeroSchema = z
   });
 
 export type SettingsHeroValues = z.infer<typeof settingsHeroSchema>;
+
+/* -------------------------------------------------------------------------- */
+/*  Theme settings                                                           */
+/* -------------------------------------------------------------------------- */
+
+import { THEME_PRESET_IDS, isValidHex } from "@/lib/theme-settings";
+
+const hexColor = z
+  .string()
+  .trim()
+  .refine(isValidHex, "Use a valid HEX color (e.g. #1A2B3C)");
+
+const themeColorsSchema = z.object({
+  primary: hexColor,
+  secondary: hexColor,
+  accent: hexColor,
+  background: hexColor,
+  surface: hexColor,
+  foreground: hexColor,
+  mutedForeground: hexColor,
+  border: hexColor,
+  buttonBg: hexColor,
+  buttonFg: hexColor,
+});
+
+export const themeSettingsSchema = z.object({
+  activeTheme: z.enum(THEME_PRESET_IDS),
+  presets: z.object({
+    light: themeColorsSchema,
+    dark: themeColorsSchema,
+    premium: themeColorsSchema,
+  }),
+});
+
+export type ThemeSettingsValues = z.infer<typeof themeSettingsSchema>;

@@ -3,16 +3,20 @@ import { Footer } from "@/components/layout/Footer";
 import { NewsletterSection } from "@/components/sections/NewsletterSection";
 import { PageTransition } from "@/components/providers/PageTransition";
 import { BackToTop } from "@/components/ui/BackToTop";
+import { ThemeStyles } from "@/components/theme/ThemeStyles";
 
 /**
  * Storefront chrome. Everything shoppers browse — home, shop, product,
  * checkout — lives inside this group and gets the navbar + footer.
+ *
+ * ThemeStyles injects the admin-selected theme's CSS variables across every
+ * customer-facing page here (see components/theme/ThemeStyles.tsx).
  */
 export default function ShopGroupLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <>
+    <ThemeStyles>
       <Navbar />
       <main id="main-content" className="relative z-10 flex-1">
         <PageTransition>{children}</PageTransition>
@@ -21,6 +25,6 @@ export default function ShopGroupLayout({
       <NewsletterSection />
       <Footer />
       <BackToTop />
-    </>
+    </ThemeStyles>
   );
 }

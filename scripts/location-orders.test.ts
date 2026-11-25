@@ -150,7 +150,7 @@ function productRow() {
 function database(): PrismaLikeClient {
   process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
   const db: PrismaLikeClient = {
-    user: delegate(), googleIdentity: delegate(), verificationToken: delegate(), roleChange: delegate(), product: delegate(), order: delegate(), orderItem: delegate(), returnRequest: delegate(), productVariant: delegate(), coupon: delegate(), category: delegate(), review: delegate(), wishlistItem: delegate(), address: delegate(), siteSettings: delegate(),
+    user: delegate(), googleIdentity: delegate(), verificationToken: delegate(), roleChange: delegate(), product: delegate(), order: delegate(), orderItem: delegate(), returnRequest: delegate(), productVariant: delegate(), coupon: delegate(), category: delegate(), review: delegate(), wishlistItem: delegate(), address: delegate(), siteSettings: delegate(), themeSettings: delegate(),
     $transaction: async (operation) => operation(db),
   };
   // Checkout re-reads the catalogue before it opens the transaction.

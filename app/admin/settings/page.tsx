@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, CreditCard, Image as ImageIcon, Store, Truck } from "lucide-react";
+import { Bell, CreditCard, Image as ImageIcon, Palette, Store, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HeroSettingsForm } from "@/components/admin/HeroSettingsForm";
+import { ThemeSettingsForm } from "@/components/admin/ThemeSettingsForm";
 import {
   GeneralSettingsForm,
   NotificationSettingsForm,
@@ -12,11 +13,12 @@ import {
   ShippingSettingsForm,
 } from "@/components/admin/SettingsForms";
 
-type TabId = "general" | "hero" | "shipping" | "payments" | "notifications";
+type TabId = "general" | "hero" | "theme" | "shipping" | "payments" | "notifications";
 
 const TABS: readonly { id: TabId; label: string; icon: typeof Store }[] = [
   { id: "general", label: "General", icon: Store },
   { id: "hero", label: "Homepage Hero", icon: ImageIcon },
+  { id: "theme", label: "Theme", icon: Palette },
   { id: "shipping", label: "Shipping", icon: Truck },
   { id: "payments", label: "Payments", icon: CreditCard },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -69,6 +71,7 @@ export default function AdminSettingsPage() {
           >
             {tab === "general" && <GeneralSettingsForm />}
             {tab === "hero" && <HeroSettingsForm />}
+            {tab === "theme" && <ThemeSettingsForm />}
             {tab === "shipping" && <ShippingSettingsForm />}
             {tab === "payments" && <PaymentsSettingsForm />}
             {tab === "notifications" && <NotificationSettingsForm />}
