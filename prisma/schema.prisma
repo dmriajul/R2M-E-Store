@@ -415,3 +415,18 @@ model SiteSettings {
   secondaryCtaText  String?
   secondaryCtaLink  String?
 }
+
+/// Admin-controlled 3-preset theme. A singleton row (`id = "global"`) holding
+/// the active preset and the three independently-customizable palettes. The
+/// ten colors per preset are stored as JSON; `lib/data/theme-settings.ts`
+/// normalizes them against `DEFAULT_THEME_PRESETS` so missing/invalid values
+/// fall back safely. See `prisma/changes/20261125_theme_settings.sql`.
+model ThemeSettings {
+  id          String   @id @default("global")
+  /// Which preset is live on the storefront: `light` | `dark` | `premium`.
+  activeTheme String   @default("light")
+  /// `{ light: {...colors}, dark: {...colors}, premium: {...colors} }`.
+  presets     Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

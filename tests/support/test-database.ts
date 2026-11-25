@@ -4,7 +4,7 @@ import type { PrismaDelegate, PrismaLikeClient } from "../../lib/prisma";
 
 type Row = Record<string, unknown>;
 type Args = { where?: Row; data?: Row; create?: Row; update?: Row; select?: Row; include?: Row; take?: number; skip?: number; orderBy?: Row };
-const tables = ["user", "googleIdentity", "verificationToken", "roleChange", "product", "order", "orderItem", "returnRequest", "productVariant", "coupon", "category", "review", "wishlistItem", "address", "siteSettings"] as const;
+const tables = ["user", "googleIdentity", "verificationToken", "roleChange", "product", "order", "orderItem", "returnRequest", "productVariant", "coupon", "category", "review", "wishlistItem", "address", "siteSettings", "themeSettings"] as const;
 type Table = typeof tables[number];
 
 function matches(row: Row, where: Row = {}): boolean {

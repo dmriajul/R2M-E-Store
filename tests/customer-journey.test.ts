@@ -71,6 +71,7 @@ function database(overrides: Partial<PrismaLikeClient>): PrismaLikeClient {
     wishlistItem: delegate(),
     address: delegate(),
     siteSettings: delegate(),
+    themeSettings: delegate(),
     $transaction: async (operation) => operation(db),
     ...overrides,
   };

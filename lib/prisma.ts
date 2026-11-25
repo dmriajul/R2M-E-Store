@@ -42,6 +42,8 @@ export interface PrismaLikeClient {
   wishlistItem: PrismaDelegate;
   address: PrismaDelegate;
   siteSettings: PrismaDelegate;
+  /** Admin-controlled 3-preset theme (`ThemeSettings`) — see lib/data/theme-settings.ts. */
+  themeSettings: PrismaDelegate;
   $disconnect?(): Promise<void>;
   $transaction<T>(operation: (transaction: PrismaLikeClient) => Promise<T>): Promise<T>;
 }

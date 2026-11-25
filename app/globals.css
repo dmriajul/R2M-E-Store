@@ -45,6 +45,10 @@
   --input: #1A2744;
   --ring: #D4AF37;
 
+  /* ---- Buttons (independent of --primary so themes can tune button colors) ---- */
+  --button-bg: #D4AF37;
+  --button-fg: #050816;
+
   /* ---- Glassmorphism ---- */
   --glass: rgba(255, 255, 255, 0.04);
   --glass-border: rgba(212, 175, 55, 0.15);
@@ -109,6 +113,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-button-bg: var(--button-bg);
+  --color-button-fg: var(--button-fg);
 
   --color-glass: var(--glass);
   --color-glass-border: var(--glass-border);
