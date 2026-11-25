@@ -4,6 +4,12 @@ import { ThemeStyles } from "@/components/theme/ThemeStyles";
 import { warnOnTurnstileConfigurationGaps } from "@/lib/turnstile";
 
 /**
+ * The auth shell renders the active theme's CSS variables (via `ThemeStyles`),
+ * so it must render fresh per request so theme changes apply without a redeploy.
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * Focused auth shell: no navbar, no footer. The backdrop is pure CSS — two
  * slowly drifting gradient orbs plus a faint grid — so it costs nothing and
  * animates on the compositor. Motion is opt-out friendly: the drift is driven

@@ -2,7 +2,11 @@ import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireActionRole } from "@/lib/auth";
 import { rolesForPermission } from "@/lib/rbac";
-import { readThemeSettings, saveThemeSettings } from "@/lib/data/theme-settings";
+import { DatabaseUnavailableError } from "@/lib/prisma";
+import {
+  readThemeSettingsWithSource,
+  saveThemeSettings,
+} from "@/lib/data/theme-settings";
 import { themeSettingsSchema } from "@/lib/validations";
 import type { ApiResponse } from "@/types";
 import type { ThemeSettings } from "@/lib/theme-settings";
@@ -28,11 +32,14 @@ export async function GET(): Promise<NextResponse<ApiResponse<ThemeSettings>>> {
     );
   }
 
-  const settings = await readThemeSettings();
+  const { settings, source } = await readThemeSettingsWithSource();
   return NextResponse.json({
     data: settings,
     error: null,
     success: true,
+    // Map the data-layer's "defaults" to the API contract's "mock" so the UI
+    // can distinguish fail-safe defaults from real persisted values.
+    source: source === "database" ? "database" : "mock",
   });
 }
 
@@ -86,6 +93,35 @@ export async function PUT(
     });
   } catch (error) {
     console.error("[admin/settings/theme] Failed to save theme settings", error);
+    // Distinguish a database that cannot be reached from a generic failure so
+    // the Admin UI can give an actionable message rather than implying the
+    // save silently succeeded.
+    if (error instanceof DatabaseUnavailableError) {
+      return NextResponse.json(
+        {
+          data: null,
+          error:
+            "The database is unreachable, so the theme was not saved. Confirm the database is running and reachable, then retry.",
+          success: false,
+        },
+        { status: 503 },
+      );
+    }
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: unknown }).code)
+        : "";
+    if (code === "P1001") {
+      return NextResponse.json(
+        {
+          data: null,
+          error:
+            "The database host is unreachable, so the theme was not saved. Check the database status and connection, then retry.",
+          success: false,
+        },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       {
         data: null,

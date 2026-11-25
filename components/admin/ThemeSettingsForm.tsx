@@ -15,6 +15,7 @@ import {
   DEFAULT_THEME_PRESETS,
   THEME_PRESET_IDS,
   THEME_PRESET_LABELS,
+  getDefaultThemePreset,
   isValidHex,
   type ThemeColors,
   type ThemePresetId,
@@ -33,7 +34,7 @@ const COLOR_FIELDS: ReadonlyArray<{ key: keyof ThemeColors; label: string }> = [
   { key: "mutedForeground", label: "Secondary Text Color" },
   { key: "border", label: "Border Color" },
   { key: "buttonBg", label: "Button Background" },
-  { key: "buttonFg", label: "Button Text Color" },
+  { key: "buttonForeground", label: "Button Text Color" },
 ];
 
 /** One color picker: native swatch + manual HEX input, with validation. */
@@ -84,8 +85,11 @@ export function ThemeSettingsForm() {
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [settings, setSettings] = useState<ThemeSettings | null>(null);
-  const [selected, setSelected] = useState<ThemePresetId>("light");
-  const [draft, setDraft] = useState<ThemeColors>(DEFAULT_THEME_PRESETS.light);
+  const [loadedFromDatabase, setLoadedFromDatabase] = useState(true);
+  const [selected, setSelected] = useState<ThemePresetId>("metallic-chic");
+  const [draft, setDraft] = useState<ThemeColors>(
+    getDefaultThemePreset("metallic-chic"),
+  );
   const [showPreview, setShowPreview] = useState(true);
 
   // Load the persisted theme once mounted (client fetch, like the hero editor).
@@ -106,9 +110,12 @@ export function ThemeSettingsForm() {
           if (active) setLoadError("Could not load theme settings.");
           return;
         }
+        // `source: "mock"` means the values are fail-safe defaults because the
+        // database could not be read — never present them as saved values.
+        setLoadedFromDatabase(json.source === "database");
         setSettings(json.data);
         setSelected(json.data.activeTheme);
-        setDraft(json.data.presets[json.data.activeTheme]);
+        setDraft(json.data.presets[json.data.activeTheme] as ThemeColors);
       } catch {
         if (active) setLoadError("Could not load theme settings.");
       } finally {
@@ -122,7 +129,11 @@ export function ThemeSettingsForm() {
 
   const selectPreset = (id: ThemePresetId) => {
     setSelected(id);
-    setDraft(settings ? settings.presets[id] : DEFAULT_THEME_PRESETS[id]);
+    setDraft(
+      settings
+        ? (settings.presets[id] as ThemeColors)
+        : getDefaultThemePreset(id),
+    );
   };
 
   const updateColor = (key: keyof ThemeColors, next: string) => {
@@ -130,13 +141,22 @@ export function ThemeSettingsForm() {
   };
 
   /** Builds the full payload, applying the current draft to the selected preset. */
-  const buildPayload = (): ThemeSettings => ({
-    activeTheme: selected,
-    presets: {
-      ...(settings?.presets ?? DEFAULT_THEME_PRESETS),
-      [selected]: draft,
-    },
-  });
+  const buildPayload = (): ThemeSettings => {
+    // Start from each preset's defaults and layer any saved customizations on
+    // top, so independent customizations are preserved and no preset is lost.
+    const basePresets: Record<string, ThemeColors> = {};
+    for (const preset of DEFAULT_THEME_PRESETS) {
+      const saved = settings?.presets?.[preset.id] ?? {};
+      basePresets[preset.id] = { ...preset.colors, ...saved };
+    }
+    return {
+      activeTheme: selected,
+      presets: {
+        ...basePresets,
+        [selected]: draft,
+      },
+    };
+  };
 
   const persist = async (payload: ThemeSettings, successMessage: string) => {
     setSaving(true);
@@ -156,7 +176,8 @@ export function ThemeSettingsForm() {
       const saved = json.data;
       setSettings(saved);
       setSelected(saved.activeTheme);
-      setDraft(saved.presets[saved.activeTheme]);
+      setDraft(saved.presets[saved.activeTheme] as ThemeColors);
+      setLoadedFromDatabase(true);
       toast.success(successMessage);
     } catch {
       toast.error("Could not save theme settings. Please try again.");
@@ -170,8 +191,7 @@ export function ThemeSettingsForm() {
   };
 
   const handleReset = () => {
-    const defaults = DEFAULT_THEME_PRESETS[selected];
-    setDraft(defaults);
+    setDraft(getDefaultThemePreset(selected));
     void persist(buildPayload(), `${THEME_PRESET_LABELS[selected]} reset to defaults.`);
   };
 
@@ -195,6 +215,13 @@ export function ThemeSettingsForm() {
 
   return (
     <div className="flex flex-col gap-5">
+      {!loadedFromDatabase && (
+        <p role="status" className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
+          The database could not be read, so the values shown are the built-in
+          defaults — they are <strong>not</strong> the saved theme. Fix database
+          connectivity and refresh to load your saved theme.
+        </p>
+      )}
       <FormSection
         title="Theme Presets"
         description="Choose a preset to customize, preview, and apply. Each preset is customized independently."
