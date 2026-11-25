@@ -54,11 +54,11 @@
   --glass-border: rgba(212, 175, 55, 0.15);
   --glass-strong: rgba(5, 8, 22, 0.85);
 
-  /* ---- Brand helpers ---- */
+  /* ---- Brand helpers (derived from --gold so they follow the active preset) ---- */
   --gold: #D4AF37;
-  --gold-soft: rgba(212, 175, 55, 0.15);
-  --gold-strong: #F1D97A;
-  --gold-glow: rgba(212, 175, 55, 0.25);
+  --gold-soft: color-mix(in srgb, var(--gold) 15%, transparent);
+  --gold-strong: color-mix(in srgb, var(--gold) 70%, #ffffff);
+  --gold-glow: color-mix(in srgb, var(--gold) 25%, transparent);
 
   /* ---- Kids line: warm secondary accents ---- */
   --rose: #F472B6;
@@ -80,6 +80,86 @@
 
   /* ---- Motion ---- */
   --ease-luxe: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ==========================================================================
+     Design tokens (typography, radius, shadows, layout, …)
+     Defaults here are the neutral baseline. The active preset overrides every
+     one of these inside the storefront scope via ThemeStyles (CSS variables
+     cascade to `(shop)` + `(auth)` only), so the Admin Console — which lives
+     outside that scope — keeps this neutral chrome.
+     ========================================================================== */
+
+  /* ---- Typography ---- */
+  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --heading-weight: 700;
+  --body-weight: 400;
+  --base-font-size: 16px;
+  --heading-scale: 1.9;
+  --body-line-height: 1.6;
+  --heading-line-height: 1.15;
+  --letter-spacing: -0.01em;
+
+  /* ---- Radius ---- */
+  --radius-card: 1.25rem;
+  --radius-button: 0.625rem;
+  --radius-input: 0.625rem;
+
+  /* ---- Shadows (semantic, consumed by component classes) ---- */
+  --shadow-card: 0 10px 30px -20px rgba(0, 0, 0, 0.45);
+  --shadow-button: 0 8px 24px -10px rgba(0, 0, 0, 0.5);
+
+  /* ---- Borders ---- */
+  --border-width: 1px;
+  --border-style: solid;
+
+  /* ---- Header / nav ---- */
+  --header-style: glass;
+  --header-bg: color-mix(in srgb, var(--background) 78%, transparent);
+  --nav-font-size: 0.875rem;
+  --nav-spacing: 1.25rem;
+  --header-border: border;
+  --nav-link-style: underline;
+
+  /* ---- Buttons ---- */
+  --button-shape: rounded;
+  --button-radius: 0.625rem;
+  --button-height: 2.5rem;
+  --button-pad-x: 1rem;
+  --button-pad-y: 0.5rem;
+  --button-weight: 600;
+  --button-size: 0.875rem;
+  --button-hover: lift;
+  --button-transition: all 200ms ease;
+  --button-primary-style: solid;
+  --button-secondary-style: outline;
+
+  /* ---- Product cards ---- */
+  --card-radius: 1.25rem;
+  --card-border: hairline;
+  --card-shadow: md;
+  --card-image-style: rounded;
+  --card-title-size: 0.9375rem;
+  --card-price-size: 1.125rem;
+  --card-badge-style: pill;
+  --card-padding: 1rem;
+  --card-hover: lift;
+
+  /* ---- Layout / spacing ---- */
+  --container-width: 80rem;
+  --section-spacing: 4rem;
+  --page-padding-x: 1.5rem;
+  --grid-gap: 1.25rem;
+  --grid-cols: 3;
+  --card-gap: 1.25rem;
+  --heading-spacing: 1.25rem;
+
+  /* ---- Footer ---- */
+  --footer-bg: color-mix(in srgb, var(--surface) 80%, var(--background));
+  --footer-text: var(--muted-foreground);
+  --footer-spacing: 4rem;
+  --footer-border: hairline;
+  --footer-link-style: hover;
 }
 
 @theme inline {
@@ -480,6 +560,207 @@
 }
 
 @layer components {
+  /* ==========================================================================
+     Full design-preset component classes
+     These consume the design-token CSS variables. The variables are injected
+     into the storefront scope only (via ThemeStyles), so these classes render
+     the active preset on customer-facing pages and keep the neutral `:root`
+     baseline everywhere else (notably the Admin Console).
+     ========================================================================== */
+
+  /* ---- Layout primitives ---- */
+  .theme-container {
+    width: 100%;
+    max-width: var(--container-width);
+    margin-inline: auto;
+  }
+
+  .theme-section {
+    padding-block: var(--section-spacing);
+  }
+
+  .theme-page-pad {
+    padding-inline: var(--page-padding-x);
+  }
+
+  .theme-product-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr));
+    gap: var(--grid-gap);
+  }
+
+  /* ---- Typography ---- */
+  .theme-heading {
+    font-family: var(--font-heading);
+    font-weight: var(--heading-weight);
+    line-height: var(--heading-line-height);
+    letter-spacing: var(--letter-spacing);
+  }
+
+  .theme-body {
+    font-family: var(--font-body);
+    font-weight: var(--body-weight);
+    line-height: var(--body-line-height);
+  }
+
+  /* ---- Header / navigation ---- */
+  .theme-header {
+    background: var(--header-bg);
+  }
+
+  .theme-header-border {
+    border-bottom: var(--border-width) var(--border-style) var(--border);
+  }
+
+  .theme-header-shadow {
+    box-shadow: var(--shadow-md);
+  }
+
+  .theme-nav-link {
+    font-size: var(--nav-font-size);
+    transition: var(--button-transition);
+  }
+
+  /* Accent hairline used under the header / above the footer. */
+  .theme-hairline {
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      var(--primary),
+      transparent
+    );
+  }
+
+  /* ---- Buttons ---- */
+  .theme-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: var(--button-height);
+    padding-inline: var(--button-pad-x);
+    padding-block: var(--button-pad-y);
+    font-size: var(--button-size);
+    font-weight: var(--button-weight);
+    border-radius: var(--button-radius);
+    transition: var(--button-transition);
+    white-space: nowrap;
+  }
+
+  .theme-btn-primary {
+    background: var(--button-bg);
+    color: var(--button-fg);
+  }
+
+  .theme-btn-secondary {
+    background: transparent;
+    color: var(--foreground);
+    border: var(--border-width) var(--border-style) var(--border);
+  }
+
+  .theme-btn-ghost {
+    background: transparent;
+    color: var(--foreground);
+  }
+
+  /* Hover treatments driven by the preset's --button-hover token. */
+  .theme-btn[data-hover="lift"]:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-button);
+  }
+  .theme-btn[data-hover="glow"]:hover {
+    box-shadow: 0 0 0 1px var(--primary), var(--shadow-button);
+  }
+  .theme-btn[data-hover="fill"]:hover {
+    background: color-mix(in srgb, var(--button-bg) 82%, var(--background));
+  }
+
+  /* ---- Product cards ---- */
+  .theme-card {
+    background: var(--surface);
+    border-radius: var(--radius-card);
+    padding: var(--card-padding);
+    border: var(--border-width) var(--border-style) var(--card-border-color);
+    box-shadow: var(--shadow-card);
+    transition:
+      transform 300ms var(--ease-luxe),
+      box-shadow 300ms var(--ease-luxe),
+      border-color 300ms var(--ease-luxe);
+  }
+
+  /* Badge radius inside a themed card follows the preset's badge treatment. */
+  .theme-card [data-slot="badge"] {
+    border-radius: var(--card-badge-radius);
+  }
+
+  .theme-card-hairline {
+    border: var(--border-width) var(--border-style) var(--card-border-color);
+  }
+
+  .theme-card-strong {
+    border: var(--border-width) var(--border-style) var(--border);
+  }
+
+  .theme-card-shadow-sm {
+    box-shadow: var(--shadow-sm);
+  }
+  .theme-card-shadow-md {
+    box-shadow: var(--shadow-md);
+  }
+  .theme-card-shadow-lg {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .theme-card-title {
+    font-size: var(--card-title-size);
+    font-weight: 600;
+  }
+
+  .theme-card-price {
+    font-size: var(--card-price-size);
+    font-weight: 700;
+  }
+
+  .theme-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .theme-badge-pill {
+    border-radius: 9999px;
+  }
+  .theme-badge-sharp {
+    border-radius: 0;
+  }
+  .theme-badge-rounded {
+    border-radius: 0.375rem;
+  }
+
+  /* ---- Footer ---- */
+  .theme-footer {
+    background: var(--footer-bg);
+    color: var(--footer-text);
+    padding-block: var(--footer-spacing);
+  }
+
+  .theme-footer-border {
+    border-top: var(--border-width) var(--border-style) var(--border);
+  }
+
+  .theme-footer-hairline {
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      var(--border),
+      transparent
+    );
+  }
+
   /* Frosted glass surface used by the navbar, sheets and floating cards. */
   .glass {
     background-color: var(--glass);
@@ -489,80 +770,81 @@
   }
 
   .glass-strong {
-    background-color: var(--glass-strong);
+    background-color: color-mix(in srgb, var(--background) 88%, transparent);
     border: 1px solid var(--glass-border);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     backdrop-filter: blur(24px) saturate(180%);
   }
 
-  /* Gold gradient text for luxury headlines. */
+  /* Gradient accent text for headlines — follows the preset's accent. */
   .text-gradient-gold {
     background-image: linear-gradient(
       100deg,
-      #F6E7AB 0%,
+      color-mix(in srgb, var(--gold) 78%, #fff) 0%,
       var(--gold) 42%,
-      #8A6F1F 100%
+      color-mix(in srgb, var(--gold) 55%, #000) 100%
     );
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
   }
 
-  /* Hairline gold divider. */
+  /* Hairline accent divider — follows the preset's accent. */
   .hairline-gold {
     background-image: linear-gradient(
       90deg,
       transparent,
-      rgba(212, 175, 55, 0.55),
+      color-mix(in srgb, var(--gold) 55%, transparent),
       transparent
     );
   }
 
-  /* Soft luxury glow for CTAs and hovered product cards. */
+  /* Soft accent glow for CTAs and hovered cards — follows the preset. */
   .glow-gold {
     box-shadow:
-      0 0 0 1px rgba(212, 175, 55, 0.25),
-      0 8px 30px -12px rgba(212, 175, 55, 0.35);
+      0 0 0 1px color-mix(in srgb, var(--gold) 25%, transparent),
+      0 8px 30px -12px color-mix(in srgb, var(--gold) 35%, transparent);
   }
 
   .glow-gold-hover {
     box-shadow:
-      0 0 0 1px rgba(212, 175, 55, 0.35),
-      0 8px 30px -8px rgba(212, 175, 55, 0.5);
+      0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent),
+      0 8px 30px -8px color-mix(in srgb, var(--gold) 50%, transparent);
   }
 
   .glow-cyan {
     box-shadow:
-      0 0 0 1px rgba(0, 240, 255, 0.25),
-      0 8px 30px -12px rgba(0, 240, 255, 0.35);
+      0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent),
+      0 8px 30px -12px color-mix(in srgb, var(--accent) 35%, transparent);
   }
 
   /* ---- Kids line helpers -------------------------------------------------
-     Warmer, softer glass for cards aimed at parents. */
+     Warmer, softer glass for cards aimed at parents. Uses the preset's
+     glass tokens so every card follows the active theme. */
   .glass-soft {
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(212, 175, 55, 0.12);
+    background-color: var(--glass);
+    border: 1px solid var(--glass-border);
     -webkit-backdrop-filter: blur(14px) saturate(150%);
     backdrop-filter: blur(14px) saturate(150%);
   }
 
-  /* Friendly lift used on product tiles. */
+  /* Friendly lift used on product tiles — shadows follow the preset. */
   .shadow-playful {
     box-shadow:
-      0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
-      0 18px 40px -24px rgba(0, 0, 0, 0.9);
+      0 1px 0 0 color-mix(in srgb, var(--surface) 5%, transparent) inset,
+      var(--shadow-card);
   }
 
   .shadow-playful-hover {
     box-shadow:
-      0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
-      0 28px 60px -26px rgba(0, 0, 0, 0.95),
-      0 0 34px -14px rgba(244, 114, 182, 0.4);
+      0 1px 0 0 color-mix(in srgb, var(--surface) 8%, transparent) inset,
+      var(--shadow-lg),
+      0 0 34px -14px color-mix(in srgb, var(--primary) 40%, transparent);
   }
 
   /* Relaxed reading rhythm for descriptions and long-form copy. */
   .prose-kids {
-    line-height: 1.75;
+    line-height: var(--body-line-height, 1.75);
     letter-spacing: 0.005em;
   }
 
@@ -576,13 +858,13 @@
     transform: scale(1.18) rotate(-6deg);
   }
 
-  /* Shimmering gold rule used as a loading / emphasis accent. */
+  /* Shimmering accent rule used as a loading / emphasis accent. */
   .shimmer-gold {
     background-image: linear-gradient(
       90deg,
-      rgba(212, 175, 55, 0) 0%,
-      rgba(212, 175, 55, 0.6) 50%,
-      rgba(212, 175, 55, 0) 100%
+      color-mix(in srgb, var(--gold) 0%, transparent) 0%,
+      color-mix(in srgb, var(--gold) 60%, transparent) 50%,
+      color-mix(in srgb, var(--gold) 0%, transparent) 100%
     );
     background-size: 200% 100%;
     animation: var(--animate-shimmer);
@@ -590,7 +872,7 @@
 
   /* Glowing glass pill for hero badge */
   .glass-pill-glow {
-    box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+    box-shadow: 0 0 15px color-mix(in srgb, var(--gold) 20%, transparent);
   }
 
   /* Scroll-reveal (see components/sections/Reveal.tsx).

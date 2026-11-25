@@ -29,7 +29,7 @@ import { SearchDialog } from "@/components/layout/SearchDialog";
 const iconButtonClasses = cn(
   "group relative inline-flex size-9 items-center justify-center rounded-full",
   "text-muted-foreground transition-all duration-300 ease-[var(--ease-luxe)]",
-  "hover:bg-glass hover:text-primary hover:shadow-[0_0_24px_-8px_rgba(212,175,55,0.6)]",
+  "hover:bg-glass hover:text-primary hover:shadow-[0_0_24px_-8px_var(--primary)]",
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 focus-visible:outline-none",
 );
 
@@ -122,16 +122,13 @@ export function Navbar() {
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 w-full transition-all duration-500 ease-[var(--ease-luxe)]",
-        "border-b backdrop-blur-xl backdrop-saturate-150",
-        isScrolled
-          ? "border-glass-border bg-black/70 shadow-[0_10px_40px_-24px_rgba(0,0,0,0.9)]"
-          : "border-transparent bg-black/30",
+        "theme-header sticky top-0 z-50 w-full border-b backdrop-blur-xl backdrop-saturate-150 transition-all duration-500 ease-[var(--ease-luxe)]",
+        isScrolled ? "theme-header-shadow" : "",
       )}
     >
       <nav
         aria-label="Main navigation"
-        className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:h-20 lg:px-8"
+        className="theme-container theme-page-pad flex h-16 w-full items-center justify-between gap-4 lg:h-20"
       >
         {/* ---------- Logo ---------- */}
         <Link
@@ -150,7 +147,10 @@ export function Navbar() {
         </Link>
 
         {/* ---------- Desktop nav ---------- */}
-        <ul className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 lg:flex">
+        <ul
+          className="absolute left-1/2 hidden -translate-x-1/2 items-center lg:flex"
+          style={{ gap: "var(--nav-spacing)" }}
+        >
           {navLinks.map((link) => {
             const isActive =
               pathname === link.href ||
@@ -162,7 +162,7 @@ export function Navbar() {
                   href={link.href}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "relative inline-flex items-center rounded-full px-4 py-2 text-sm font-medium tracking-wide",
+                    "theme-nav-link relative inline-flex items-center rounded-full px-4 py-2 font-medium tracking-wide",
                     "transition-colors duration-300 ease-[var(--ease-luxe)]",
                     "hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                     isActive ? "text-primary" : "text-muted-foreground",
@@ -210,7 +210,7 @@ export function Navbar() {
             className={cn(
               "group relative inline-flex size-9 items-center justify-center rounded-full",
               "text-muted-foreground transition-all duration-300 ease-[var(--ease-luxe)]",
-              "hover:bg-glass hover:text-primary hover:shadow-[0_0_24px_-8px_rgba(212,175,55,0.6)]",
+              "hover:bg-glass hover:text-primary hover:shadow-[0_0_24px_-8px_var(--primary)]",
               "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
             )}
           >
@@ -233,7 +233,7 @@ export function Navbar() {
               >
                 <Badge
                   variant="default"
-                  className="h-[18px] min-w-[18px] rounded-full border-0 bg-primary px-1 text-[10px] leading-none font-bold text-primary-foreground shadow-[0_0_12px_rgba(212,175,55,0.7)]"
+                  className="h-[18px] min-w-[18px] rounded-full border-0 bg-primary px-1 text-[10px] leading-none font-bold text-primary-foreground shadow-[0_0_12px_var(--primary)]"
                 >
                   {itemCount > 99 ? "99+" : itemCount}
                 </Badge>
@@ -265,7 +265,7 @@ export function Navbar() {
             <SheetContent
               side="right"
               showCloseButton={false}
-              className="w-[86vw] max-w-sm gap-0 border-l border-glass-border bg-black/80 p-0 backdrop-blur-2xl sm:w-96"
+              className="w-[86vw] max-w-sm gap-0 border-l border-glass-border bg-background/85 p-0 backdrop-blur-2xl sm:w-96"
             >
               <SheetHeader className="border-b border-glass-border px-6 py-5">
                 <div className="flex items-center justify-between">

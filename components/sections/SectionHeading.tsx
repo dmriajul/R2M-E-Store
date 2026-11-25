@@ -44,7 +44,7 @@ export function SectionHeading({
         </p>
         <Heading
           id={id}
-          className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl"
+          className="theme-heading mt-3 text-4xl tracking-tight sm:text-5xl"
         >
           {t(titleKey, language)}
         </Heading>

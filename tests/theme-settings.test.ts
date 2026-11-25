@@ -9,6 +9,7 @@ import {
   THEME_COLOR_KEYS,
   THEME_PRESET_IDS,
   contrastColor,
+  getDefaultDesignConfig,
   getDefaultThemePreset,
   getThemePreset,
   isValidHex,
@@ -21,6 +22,7 @@ import {
   THEME_PRESET_LABELS,
   type ThemeColors,
   type ThemePresetId,
+  type ThemePresetState,
   type ThemeSettings,
 } from "../lib/theme-settings";
 import {
@@ -45,18 +47,26 @@ afterEach(() => {
 /** Build a `presets` record from the built-in presets (all four, by id). */
 function presetsRecord(
   overrides: Partial<Record<ThemePresetId, Partial<ThemeColors>>> = {},
-): Record<string, ThemeColors> {
-  const record: Record<string, ThemeColors> = {};
+): Record<string, ThemePresetState> {
+  const record: Record<string, ThemePresetState> = {};
   for (const preset of DEFAULT_THEME_PRESETS) {
-    record[preset.id] = { ...preset.colors };
+    record[preset.id] = { colors: { ...preset.colors }, design: preset.design };
   }
   for (const id of Object.keys(overrides) as ThemePresetId[]) {
     // Merge the override over a fresh copy of the default so every color key
     // remains present and typed as a complete ThemeColors.
     const base = getDefaultThemePreset(id);
-    record[id] = { ...base, ...(overrides[id] ?? {}) };
+    record[id] = {
+      colors: { ...base, ...(overrides[id] ?? {}) },
+      design: getDefaultDesignConfig(id),
+    };
   }
   return record;
+}
+
+/** Convenience: the default preset state (colors + design) for an id. */
+function defaultPresetState(id: ThemePresetId): ThemePresetState {
+  return { colors: getDefaultThemePreset(id), design: getDefaultDesignConfig(id) };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -155,20 +165,23 @@ test("normalizeThemeSettings falls back to defaults for missing/invalid input", 
   const partial = normalizeThemeSettings({
     activeTheme: "rose-red-and-blueberry",
     presets: {
-      "rose-red-and-blueberry": { primary: "not-a-color", background: "#123456" },
+      "rose-red-and-blueberry": { colors: { primary: "not-a-color", background: "#123456" } },
     },
   });
   assert.equal(partial.activeTheme, "rose-red-and-blueberry");
-  assert.equal(partial.presets["rose-red-and-blueberry"]?.background, "#123456");
+  assert.equal(
+    partial.presets["rose-red-and-blueberry"]?.colors.background,
+    "#123456",
+  );
   // Invalid HEX reverted to the default primary.
   assert.equal(
-    partial.presets["rose-red-and-blueberry"]?.primary,
+    partial.presets["rose-red-and-blueberry"]?.colors.primary,
     getDefaultThemePreset("rose-red-and-blueberry").primary,
   );
   // Untouched presets keep their defaults.
   assert.deepEqual(
     partial.presets["metallic-chic"],
-    getDefaultThemePreset("metallic-chic"),
+    defaultPresetState("metallic-chic"),
   );
 });
 
@@ -202,15 +215,18 @@ test("readThemeSettings returns defaults when no database is configured", async 
 /* -------------------------------------------------------------------------- */
 
 test("customizing one preset never mutates another preset", () => {
-  const customized = { ...getDefaultThemePreset("metallic-chic"), primary: "#112233" };
+  const customized: ThemePresetState = {
+    colors: { ...getDefaultThemePreset("metallic-chic"), primary: "#112233" },
+    design: getDefaultDesignConfig("metallic-chic"),
+  };
   const settings = normalizeThemeSettings({
     activeTheme: "metallic-chic",
     presets: { "metallic-chic": customized },
   });
-  assert.equal(settings.presets["metallic-chic"]?.primary, "#112233");
+  assert.equal(settings.presets["metallic-chic"]?.colors.primary, "#112233");
   // All other presets are intact defaults, untouched by the customization.
   for (const id of THEME_PRESET_IDS.filter((id) => id !== "metallic-chic")) {
-    assert.deepEqual(settings.presets[id], getDefaultThemePreset(id));
+    assert.deepEqual(settings.presets[id], defaultPresetState(id));
   }
   // The built-in defaults were not mutated either.
   assert.equal(getDefaultThemePreset("metallic-chic").primary, "#B08D57");
@@ -260,7 +276,10 @@ test("resolveActiveThemeVars uses the active preset and its customs", () => {
   const settings: ThemeSettings = {
     activeTheme: "snowy-yet-warm",
     presets: {
-      "snowy-yet-warm": { ...getDefaultThemePreset("snowy-yet-warm"), background: "#012345" },
+      "snowy-yet-warm": {
+        colors: { ...getDefaultThemePreset("snowy-yet-warm"), background: "#012345" },
+        design: getDefaultDesignConfig("snowy-yet-warm"),
+      },
     },
   };
   const vars = resolveActiveThemeVars(settings);
@@ -313,41 +332,40 @@ test("themeSettingsSchema rejects an unknown activeTheme", () => {
 
 test("writeThemeSettings persists customized colors and reloads them", async () => {
   const fixture = installTestDatabase();
-  const customized = { ...getDefaultThemePreset("metallic-chic"), primary: "#123456", accent: "#654321" };
+  const customized: Partial<ThemeColors> = { primary: "#123456", accent: "#654321" };
   const payload = {
     activeTheme: "metallic-chic",
     presets: presetsRecord({ "metallic-chic": customized }),
   };
 
   const saved = await writeThemeSettings(payload);
-  assert.equal(saved.presets["metallic-chic"]?.primary, "#123456");
-  assert.equal(saved.presets["metallic-chic"]?.accent, "#654321");
+  assert.equal(saved.presets["metallic-chic"]?.colors.primary, "#123456");
+  assert.equal(saved.presets["metallic-chic"]?.colors.accent, "#654321");
 
   const reloaded = await readThemeSettings();
-  assert.equal(reloaded.presets["metallic-chic"]?.primary, "#123456");
-  assert.equal(reloaded.presets["metallic-chic"]?.accent, "#654321");
+  assert.equal(reloaded.presets["metallic-chic"]?.colors.primary, "#123456");
+  assert.equal(reloaded.presets["metallic-chic"]?.colors.accent, "#654321");
   // The other presets are untouched.
-  assert.deepEqual(reloaded.presets["snowy-yet-warm"], getDefaultThemePreset("snowy-yet-warm"));
+  assert.deepEqual(reloaded.presets["snowy-yet-warm"], defaultPresetState("snowy-yet-warm"));
   assert.equal(fixture.rows("themeSettings").length, 1);
 });
 
 test("writeThemeSettings resets a preset to its defaults", async () => {
   installTestDatabase();
   // First customize, then reset to defaults.
-  const customized = { ...getDefaultThemePreset("striking-citrus"), primary: "#ABCDEF" };
   await writeThemeSettings({
     activeTheme: "striking-citrus",
-    presets: presetsRecord({ "striking-citrus": customized }),
+    presets: presetsRecord({ "striking-citrus": { primary: "#ABCDEF" } }),
   });
 
   const reset = await writeThemeSettings({
     activeTheme: "striking-citrus",
     presets: presetsRecord(),
   });
-  assert.deepEqual(reset.presets["striking-citrus"], getDefaultThemePreset("striking-citrus"));
+  assert.deepEqual(reset.presets["striking-citrus"], defaultPresetState("striking-citrus"));
 
   const reloaded = await readThemeSettings();
-  assert.deepEqual(reloaded.presets["striking-citrus"], getDefaultThemePreset("striking-citrus"));
+  assert.deepEqual(reloaded.presets["striking-citrus"], defaultPresetState("striking-citrus"));
 });
 
 test("writeThemeSettings drops invalid colors rather than storing them", async () => {
@@ -356,7 +374,10 @@ test("writeThemeSettings drops invalid colors rather than storing them", async (
     activeTheme: "metallic-chic",
     presets: presetsRecord({ "metallic-chic": { primary: "bad-hex" } }),
   });
-  assert.equal(saved.presets["metallic-chic"]?.primary, getDefaultThemePreset("metallic-chic").primary);
+  assert.equal(
+    saved.presets["metallic-chic"]?.colors.primary,
+    getDefaultThemePreset("metallic-chic").primary,
+  );
 });
 
 test("writeThemeSettings throws when no database is configured", async () => {

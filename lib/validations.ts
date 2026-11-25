@@ -820,7 +820,11 @@ export type SettingsHeroValues = z.infer<typeof settingsHeroSchema>;
 /*  Theme settings                                                           */
 /* -------------------------------------------------------------------------- */
 
-import { THEME_PRESET_IDS, isValidHex, type ThemePresetId } from "@/lib/theme-settings";
+import {
+  THEME_PRESET_IDS,
+  isValidHex,
+  type ThemePresetId,
+} from "@/lib/theme-settings";
 
 const hexColor = z
   .string()
@@ -840,6 +844,122 @@ export const themeColorsSchema = z.object({
   buttonForeground: hexColor,
 });
 
+/* -------------------------------------------------------------------------- */
+/*  Design token schemas                                                      */
+/* -------------------------------------------------------------------------- */
+
+const fontFamily = z.string().min(1, "Choose a font family");
+const weight = z.number().int().min(100).max(900);
+const sizeToken = z.string().min(1, "Provide a size");
+const scale = z.number().min(1).max(4);
+const lineHeight = z.number().min(1).max(3);
+const spacingToken = z.string().min(1, "Provide a spacing value");
+
+export const typographySchema = z.object({
+  headingFont: fontFamily,
+  bodyFont: fontFamily,
+  headingWeight: weight,
+  bodyWeight: weight,
+  baseFontSize: sizeToken,
+  headingScale: scale,
+  bodyLineHeight: lineHeight,
+  headingLineHeight: lineHeight,
+  letterSpacing: spacingToken,
+});
+
+export const radiusSchema = z.object({
+  sm: sizeToken,
+  md: sizeToken,
+  lg: sizeToken,
+  card: sizeToken,
+  button: sizeToken,
+  input: sizeToken,
+});
+
+export const shadowsSchema = z.object({
+  sm: sizeToken,
+  md: sizeToken,
+  lg: sizeToken,
+  card: sizeToken,
+  button: sizeToken,
+});
+
+export const bordersSchema = z.object({
+  width: sizeToken,
+  style: z.enum(["solid", "dashed", "dotted"]),
+});
+
+export const headerSchema = z.object({
+  style: z.enum(["solid", "glass", "transparent"]),
+  bg: sizeToken,
+  navFontSize: sizeToken,
+  navSpacing: spacingToken,
+  borderStyle: z.enum(["border", "shadow", "none"]),
+  navLinkStyle: z.enum(["underline", "pill", "plain"]),
+});
+
+export const buttonsSchema = z.object({
+  shape: z.enum(["pill", "rounded", "sharp"]),
+  radius: sizeToken,
+  height: sizeToken,
+  paddingX: sizeToken,
+  paddingY: sizeToken,
+  fontWeight: weight,
+  fontSize: sizeToken,
+  hoverStyle: z.enum(["lift", "glow", "fill", "none"]),
+  transition: sizeToken,
+  primaryStyle: z.enum(["solid", "outline", "gradient"]),
+  secondaryStyle: z.enum(["solid", "outline", "ghost"]),
+});
+
+export const cardsSchema = z.object({
+  radius: sizeToken,
+  border: z.enum(["none", "hairline", "strong"]),
+  shadow: z.enum(["none", "sm", "md", "lg"]),
+  imageStyle: z.enum(["contain", "cover", "rounded"]),
+  titleSize: sizeToken,
+  priceSize: sizeToken,
+  badgeStyle: z.enum(["pill", "sharp", "rounded"]),
+  padding: sizeToken,
+  hover: z.enum(["lift", "glow", "none"]),
+});
+
+export const layoutSchema = z.object({
+  containerWidth: sizeToken,
+  sectionSpacing: spacingToken,
+  pagePaddingX: spacingToken,
+  gridGap: spacingToken,
+  gridCols: z.number().int().min(2).max(6),
+  cardGap: spacingToken,
+  headingSpacing: spacingToken,
+});
+
+export const footerSchema = z.object({
+  bg: sizeToken,
+  textColor: sizeToken,
+  spacing: spacingToken,
+  border: z.enum(["none", "hairline", "strong"]),
+  linkStyle: z.enum(["underline", "plain", "hover"]),
+});
+
+export const designConfigSchema = z.object({
+  typography: typographySchema,
+  radius: radiusSchema,
+  shadows: shadowsSchema,
+  borders: bordersSchema,
+  header: headerSchema,
+  buttons: buttonsSchema,
+  cards: cardsSchema,
+  layout: layoutSchema,
+  footer: footerSchema,
+});
+
+/** A preset's persisted state: colors + design, validated together. */
+export const themePresetStateSchema = z.object({
+  colors: themeColorsSchema,
+  design: designConfigSchema,
+});
+
 /** `presets` is keyed by each built-in preset id, all validated independently. */
 const THEME_PRESET_TUPLE = THEME_PRESET_IDS as [ThemePresetId, ...ThemePresetId[]];
 
@@ -849,7 +969,7 @@ export const themeSettingsSchema = z.object({
   activeTheme: z.enum(THEME_PRESET_TUPLE),
   presets: z.record(
     themePresetIdSchema,
-    themeColorsSchema,
+    themePresetStateSchema,
   ),
 });
 
