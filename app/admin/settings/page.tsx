@@ -80,7 +80,7 @@ export default function AdminSettingsPage() {
       </section>
 
       <p className="text-[11px] text-muted-foreground">
-        Homepage hero changes are saved to the database. Other settings are not yet connected and are not saved.
+        Homepage hero and theme changes are saved to the database. Other settings are not yet connected and are not saved.
       </p>
     </div>
   );

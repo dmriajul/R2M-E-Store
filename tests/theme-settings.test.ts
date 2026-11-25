@@ -6,19 +6,28 @@ import { installTestDatabase } from "./support/test-database";
 import {
   DEFAULT_THEME_PRESETS,
   DEFAULT_THEME_SETTINGS,
+  THEME_COLOR_KEYS,
   THEME_PRESET_IDS,
-  activeThemeToCssVars,
   contrastColor,
+  getDefaultThemePreset,
+  getThemePreset,
   isValidHex,
   normalizeActiveTheme,
   normalizeThemeColors,
   normalizeThemePresets,
   normalizeThemeSettings,
+  resolveActiveThemeVars,
   themeToCssVars,
+  THEME_PRESET_LABELS,
   type ThemeColors,
+  type ThemePresetId,
   type ThemeSettings,
 } from "../lib/theme-settings";
-import { readThemeSettings, writeThemeSettings } from "../lib/data/theme-settings";
+import {
+  readThemeSettings,
+  readThemeSettingsWithSource,
+  writeThemeSettings,
+} from "../lib/data/theme-settings";
 import { themeSettingsSchema } from "../lib/validations";
 import type { PrismaLikeClient } from "../lib/prisma";
 
@@ -31,6 +40,91 @@ afterEach(() => {
   delete scope.prisma;
   delete scope.prismaUnavailable;
   process.env = { ...env };
+});
+
+/** Build a `presets` record from the built-in presets (all four, by id). */
+function presetsRecord(
+  overrides: Partial<Record<ThemePresetId, Partial<ThemeColors>>> = {},
+): Record<string, ThemeColors> {
+  const record: Record<string, ThemeColors> = {};
+  for (const preset of DEFAULT_THEME_PRESETS) {
+    record[preset.id] = { ...preset.colors };
+  }
+  for (const id of Object.keys(overrides) as ThemePresetId[]) {
+    // Merge the override over a fresh copy of the default so every color key
+    // remains present and typed as a complete ThemeColors.
+    const base = getDefaultThemePreset(id);
+    record[id] = { ...base, ...(overrides[id] ?? {}) };
+  }
+  return record;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Four presets: definition + colour shape                                   */
+/* -------------------------------------------------------------------------- */
+
+test("exactly four presets are defined with distinct ids and labels", () => {
+  assert.equal(DEFAULT_THEME_PRESETS.length, 4);
+  assert.deepEqual(
+    DEFAULT_THEME_PRESETS.map((p) => p.id).sort(),
+    [...THEME_PRESET_IDS].sort(),
+  );
+  for (const preset of DEFAULT_THEME_PRESETS) {
+    assert.ok(preset.label.length > 0, `${preset.id} has a label`);
+    assert.ok(preset.description.length > 0, `${preset.id} has a description`);
+  }
+  // The three retired presets must be gone.
+  for (const retired of ["light", "dark", "premium"]) {
+    assert.ok(
+      !(THEME_PRESET_IDS as readonly string[]).includes(retired),
+      `retired preset ${retired} removed`,
+    );
+  }
+});
+
+test("each preset defines exactly the ten required colors as valid HEX", () => {
+  const expected = [
+    "primary",
+    "secondary",
+    "accent",
+    "background",
+    "surface",
+    "foreground",
+    "mutedForeground",
+    "border",
+    "buttonBg",
+    "buttonForeground",
+  ];
+  assert.deepEqual([...THEME_COLOR_KEYS], expected);
+
+  for (const preset of DEFAULT_THEME_PRESETS) {
+    assert.deepEqual(Object.keys(preset.colors).sort(), [...expected].sort());
+    for (const [key, value] of Object.entries(preset.colors)) {
+      assert.ok(isValidHex(value), `${preset.id} ${key} is valid HEX (${value})`);
+    }
+  }
+});
+
+test("the four requested palettes are present with their identity colors", () => {
+  const byId = new Map(DEFAULT_THEME_PRESETS.map((p) => [p.id, p.colors]));
+  assert.equal(byId.get("metallic-chic")?.primary, "#B08D57");
+  assert.equal(byId.get("metallic-chic")?.background, "#171717");
+  assert.equal(byId.get("snowy-yet-warm")?.background, "#FAF8F4");
+  assert.equal(byId.get("snowy-yet-warm")?.surface, "#FFFFFF");
+  assert.equal(byId.get("rose-red-and-blueberry")?.primary, "#C43D62");
+  assert.equal(byId.get("rose-red-and-blueberry")?.secondary, "#554A8B");
+  assert.equal(byId.get("striking-citrus")?.primary, "#4D7C36");
+  assert.equal(byId.get("striking-citrus")?.accent, "#E5C52B");
+});
+
+test("THEME_PRESET_LABELS and getThemePreset/getDefaultThemePreset resolve by id", () => {
+  for (const preset of DEFAULT_THEME_PRESETS) {
+    assert.equal(THEME_PRESET_LABELS[preset.id], preset.label);
+    assert.deepEqual(getThemePreset(preset.id).colors, preset.colors);
+    assert.deepEqual(getDefaultThemePreset(preset.id), preset.colors);
+  }
+  // Unknown id falls back to the first preset safely.
+  assert.equal(getThemePreset("nope").id, DEFAULT_THEME_PRESETS[0]!.id);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -59,33 +153,40 @@ test("normalizeThemeSettings falls back to defaults for missing/invalid input", 
 
   // Partial presets keep defaults for missing colors and drop invalid HEX.
   const partial = normalizeThemeSettings({
-    activeTheme: "dark",
+    activeTheme: "rose-red-and-blueberry",
     presets: {
-      dark: { primary: "not-a-color", background: "#123456" },
+      "rose-red-and-blueberry": { primary: "not-a-color", background: "#123456" },
     },
   });
-  assert.equal(partial.activeTheme, "dark");
-  assert.equal(partial.presets.dark.background, "#123456");
+  assert.equal(partial.activeTheme, "rose-red-and-blueberry");
+  assert.equal(partial.presets["rose-red-and-blueberry"]?.background, "#123456");
   // Invalid HEX reverted to the default primary.
-  assert.equal(partial.presets.dark.primary, DEFAULT_THEME_PRESETS.dark.primary);
+  assert.equal(
+    partial.presets["rose-red-and-blueberry"]?.primary,
+    getDefaultThemePreset("rose-red-and-blueberry").primary,
+  );
   // Untouched presets keep their defaults.
-  assert.deepEqual(partial.presets.light, DEFAULT_THEME_PRESETS.light);
+  assert.deepEqual(
+    partial.presets["metallic-chic"],
+    getDefaultThemePreset("metallic-chic"),
+  );
 });
 
-test("normalizeActiveTheme falls back to light for unknown ids", () => {
-  assert.equal(normalizeActiveTheme("dark"), "dark");
-  assert.equal(normalizeActiveTheme("premium"), "premium");
-  assert.equal(normalizeActiveTheme("nope"), "light");
-  assert.equal(normalizeActiveTheme(undefined), "light");
+test("normalizeActiveTheme falls back to metallic-chic for unknown ids", () => {
+  assert.equal(normalizeActiveTheme("snowy-yet-warm"), "snowy-yet-warm");
+  assert.equal(normalizeActiveTheme("nope"), "metallic-chic");
+  assert.equal(normalizeActiveTheme(undefined), "metallic-chic");
+  assert.equal(normalizeActiveTheme("light"), "metallic-chic");
 });
 
 test("normalizeThemeColors merges over a fallback and drops invalid HEX", () => {
-  const result = normalizeThemeColors({ primary: "#AABBCC", accent: "bad" }, DEFAULT_THEME_PRESETS.light);
+  const fallback = getDefaultThemePreset("striking-citrus");
+  const result = normalizeThemeColors({ primary: "#AABBCC", accent: "bad" }, fallback);
   assert.equal(result.primary, "#AABBCC");
-  assert.equal(result.accent, DEFAULT_THEME_PRESETS.light.accent);
+  assert.equal(result.accent, fallback.accent);
 });
 
-test("normalizeThemePresets preserves all three preset ids", () => {
+test("normalizeThemePresets preserves all four preset ids", () => {
   const result = normalizeThemePresets({});
   assert.deepEqual(Object.keys(result).sort(), [...THEME_PRESET_IDS].sort());
 });
@@ -97,12 +198,31 @@ test("readThemeSettings returns defaults when no database is configured", async 
 });
 
 /* -------------------------------------------------------------------------- */
-/*  Switching between all three presets                                       */
+/*  Independent customization                                                  */
+/* -------------------------------------------------------------------------- */
+
+test("customizing one preset never mutates another preset", () => {
+  const customized = { ...getDefaultThemePreset("metallic-chic"), primary: "#112233" };
+  const settings = normalizeThemeSettings({
+    activeTheme: "metallic-chic",
+    presets: { "metallic-chic": customized },
+  });
+  assert.equal(settings.presets["metallic-chic"]?.primary, "#112233");
+  // All other presets are intact defaults, untouched by the customization.
+  for (const id of THEME_PRESET_IDS.filter((id) => id !== "metallic-chic")) {
+    assert.deepEqual(settings.presets[id], getDefaultThemePreset(id));
+  }
+  // The built-in defaults were not mutated either.
+  assert.equal(getDefaultThemePreset("metallic-chic").primary, "#B08D57");
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Switching between all four presets                                       */
 /* -------------------------------------------------------------------------- */
 
 test("each preset maps to distinct, valid CSS variables", () => {
   for (const id of THEME_PRESET_IDS) {
-    const vars = themeToCssVars(DEFAULT_THEME_PRESETS[id]);
+    const vars = themeToCssVars(getDefaultThemePreset(id));
     // The ten editable colors all surface as variables.
     for (const key of [
       "--primary",
@@ -125,26 +245,35 @@ test("each preset maps to distinct, valid CSS variables", () => {
     assert.ok(vars["--glass"]);
   }
 
-  // The three presets are visually distinct on the key surfaces.
-  const lightBg = themeToCssVars(DEFAULT_THEME_PRESETS.light)["--background"];
-  const darkBg = themeToCssVars(DEFAULT_THEME_PRESETS.dark)["--background"];
-  const premiumBg = themeToCssVars(DEFAULT_THEME_PRESETS.premium)["--background"];
-  assert.notEqual(lightBg, darkBg);
-  assert.notEqual(lightBg, premiumBg);
-  assert.notEqual(darkBg, premiumBg);
+  // The four presets are visually distinct on the key surfaces.
+  const backgrounds = THEME_PRESET_IDS.map(
+    (id) => themeToCssVars(getDefaultThemePreset(id))["--background"],
+  );
+  for (let i = 0; i < backgrounds.length; i += 1) {
+    for (let j = i + 1; j < backgrounds.length; j += 1) {
+      assert.notEqual(backgrounds[i], backgrounds[j]);
+    }
+  }
 });
 
-test("activeThemeToCssVars uses the active preset", () => {
-  const light = activeThemeToCssVars({ activeTheme: "light", presets: DEFAULT_THEME_PRESETS });
-  const dark = activeThemeToCssVars({ activeTheme: "dark", presets: DEFAULT_THEME_PRESETS });
-  assert.equal(light["--background"], DEFAULT_THEME_PRESETS.light.background);
-  assert.equal(dark["--background"], DEFAULT_THEME_PRESETS.dark.background);
+test("resolveActiveThemeVars uses the active preset and its customs", () => {
+  const settings: ThemeSettings = {
+    activeTheme: "snowy-yet-warm",
+    presets: {
+      "snowy-yet-warm": { ...getDefaultThemePreset("snowy-yet-warm"), background: "#012345" },
+    },
+  };
+  const vars = resolveActiveThemeVars(settings);
+  assert.equal(vars["--background"], "#012345");
+  assert.equal(vars["--background"].toUpperCase(), "#012345");
+  // Another preset's customization is ignored for the active theme.
+  assert.equal(vars["--primary"], getDefaultThemePreset("snowy-yet-warm").primary);
 });
 
 test("contrastColor picks a readable foreground for a background", () => {
-  assert.equal(contrastColor("#FFFFFF"), "#0B0B0F"); // light bg -> dark text
+  assert.equal(contrastColor("#FFFFFF"), "#0A0A0A"); // light bg -> dark text
   assert.equal(contrastColor("#000000"), "#FFFFFF"); // dark bg -> light text
-  assert.equal(contrastColor("bad"), "#0B0B0F"); // invalid -> safe default
+  assert.equal(contrastColor("bad"), "#0A0A0A"); // invalid -> safe default
 });
 
 /* -------------------------------------------------------------------------- */
@@ -153,23 +282,27 @@ test("contrastColor picks a readable foreground for a background", () => {
 
 test("themeSettingsSchema accepts a valid payload", () => {
   const result = themeSettingsSchema.safeParse({
-    activeTheme: "premium",
-    presets: DEFAULT_THEME_PRESETS,
+    activeTheme: "striking-citrus",
+    presets: presetsRecord(),
   });
   assert.equal(result.success, true);
 });
 
 test("themeSettingsSchema rejects invalid HEX colors", () => {
-  const bad = structuredClone(DEFAULT_THEME_PRESETS) as unknown as ThemeColors & Record<string, unknown>;
-  bad.light = { ...DEFAULT_THEME_PRESETS.light, primary: "not-a-color" };
-  const result = themeSettingsSchema.safeParse({ activeTheme: "light", presets: bad });
+  const bad = presetsRecord({
+    "rose-red-and-blueberry": { primary: "not-a-color" },
+  });
+  const result = themeSettingsSchema.safeParse({
+    activeTheme: "rose-red-and-blueberry",
+    presets: bad,
+  });
   assert.equal(result.success, false);
 });
 
 test("themeSettingsSchema rejects an unknown activeTheme", () => {
   const result = themeSettingsSchema.safeParse({
     activeTheme: "neon",
-    presets: DEFAULT_THEME_PRESETS,
+    presets: presetsRecord(),
   });
   assert.equal(result.success, false);
 });
@@ -180,61 +313,75 @@ test("themeSettingsSchema rejects an unknown activeTheme", () => {
 
 test("writeThemeSettings persists customized colors and reloads them", async () => {
   const fixture = installTestDatabase();
-  const customized: ThemeColors = { ...DEFAULT_THEME_PRESETS.light, primary: "#123456", accent: "#654321" };
+  const customized = { ...getDefaultThemePreset("metallic-chic"), primary: "#123456", accent: "#654321" };
   const payload = {
-    activeTheme: "light",
-    presets: { ...DEFAULT_THEME_PRESETS, light: customized },
+    activeTheme: "metallic-chic",
+    presets: presetsRecord({ "metallic-chic": customized }),
   };
 
   const saved = await writeThemeSettings(payload);
-  assert.equal(saved.presets.light.primary, "#123456");
-  assert.equal(saved.presets.light.accent, "#654321");
+  assert.equal(saved.presets["metallic-chic"]?.primary, "#123456");
+  assert.equal(saved.presets["metallic-chic"]?.accent, "#654321");
 
   const reloaded = await readThemeSettings();
-  assert.equal(reloaded.presets.light.primary, "#123456");
-  assert.equal(reloaded.presets.light.accent, "#654321");
+  assert.equal(reloaded.presets["metallic-chic"]?.primary, "#123456");
+  assert.equal(reloaded.presets["metallic-chic"]?.accent, "#654321");
   // The other presets are untouched.
-  assert.deepEqual(reloaded.presets.dark, DEFAULT_THEME_PRESETS.dark);
+  assert.deepEqual(reloaded.presets["snowy-yet-warm"], getDefaultThemePreset("snowy-yet-warm"));
   assert.equal(fixture.rows("themeSettings").length, 1);
 });
 
 test("writeThemeSettings resets a preset to its defaults", async () => {
   installTestDatabase();
   // First customize, then reset to defaults.
-  const customized = { ...DEFAULT_THEME_PRESETS.dark, primary: "#ABCDEF" };
+  const customized = { ...getDefaultThemePreset("striking-citrus"), primary: "#ABCDEF" };
   await writeThemeSettings({
-    activeTheme: "dark",
-    presets: { ...DEFAULT_THEME_PRESETS, dark: customized },
+    activeTheme: "striking-citrus",
+    presets: presetsRecord({ "striking-citrus": customized }),
   });
 
   const reset = await writeThemeSettings({
-    activeTheme: "dark",
-    presets: { ...DEFAULT_THEME_PRESETS, dark: DEFAULT_THEME_PRESETS.dark },
+    activeTheme: "striking-citrus",
+    presets: presetsRecord(),
   });
-  assert.deepEqual(reset.presets.dark, DEFAULT_THEME_PRESETS.dark);
+  assert.deepEqual(reset.presets["striking-citrus"], getDefaultThemePreset("striking-citrus"));
 
   const reloaded = await readThemeSettings();
-  assert.deepEqual(reloaded.presets.dark, DEFAULT_THEME_PRESETS.dark);
+  assert.deepEqual(reloaded.presets["striking-citrus"], getDefaultThemePreset("striking-citrus"));
 });
 
 test("writeThemeSettings drops invalid colors rather than storing them", async () => {
   installTestDatabase();
   const saved = await writeThemeSettings({
-    activeTheme: "light",
-    presets: {
-      ...DEFAULT_THEME_PRESETS,
-      light: { ...DEFAULT_THEME_PRESETS.light, primary: "bad-hex" },
-    },
+    activeTheme: "metallic-chic",
+    presets: presetsRecord({ "metallic-chic": { primary: "bad-hex" } }),
   });
-  assert.equal(saved.presets.light.primary, DEFAULT_THEME_PRESETS.light.primary);
+  assert.equal(saved.presets["metallic-chic"]?.primary, getDefaultThemePreset("metallic-chic").primary);
 });
 
 test("writeThemeSettings throws when no database is configured", async () => {
   delete scope.prisma;
   await assert.rejects(
-    () => writeThemeSettings({ activeTheme: "light", presets: DEFAULT_THEME_PRESETS }),
+    () => writeThemeSettings({ activeTheme: "metallic-chic", presets: presetsRecord() }),
     /configured database/,
   );
+});
+
+test("readThemeSettingsWithSource reports whether values came from the database", async () => {
+  // No DB -> defaults with source "defaults".
+  delete scope.prisma;
+  const fallback = await readThemeSettingsWithSource();
+  assert.equal(fallback.source, "defaults");
+
+  // DB present and row written -> database source.
+  installTestDatabase();
+  await writeThemeSettings({
+    activeTheme: "snowy-yet-warm",
+    presets: presetsRecord(),
+  });
+  const fromDb = await readThemeSettingsWithSource();
+  assert.equal(fromDb.source, "database");
+  assert.equal(fromDb.settings.activeTheme, "snowy-yet-warm");
 });
 
 /* -------------------------------------------------------------------------- */
@@ -252,7 +399,7 @@ test("themeToCssVars renders the ten colors onto the storefront variables", () =
     mutedForeground: "#777777",
     border: "#888888",
     buttonBg: "#999999",
-    buttonFg: "#AAAAAA",
+    buttonForeground: "#AAAAAA",
   };
   const vars = themeToCssVars(colors);
   assert.equal(vars["--primary"], "#111111");
@@ -311,21 +458,37 @@ test("theme API: unauthenticated PUT is rejected with 403", async (context) => {
   const response = await PUT(new NextRequest("http://localhost:3000/api/admin/settings/theme", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ activeTheme: "light", presets: DEFAULT_THEME_PRESETS }),
+    body: JSON.stringify({ activeTheme: "metallic-chic", presets: presetsRecord() }),
   }));
   assert.equal(response.status, 403);
 });
 
-test("theme API: authorized GET returns the persisted theme", async (context) => {
+test("theme API: authorized GET returns the persisted theme with database source", async (context) => {
   installTestDatabase();
   context.mock.module("../lib/auth", { namedExports: ADMIN_GATE });
   const { GET } = await loadThemeRoute();
   const response = await GET();
   assert.equal(response.status, 200);
-  const body = (await response.json()) as { data: ThemeSettings; success: boolean };
+  const body = (await response.json()) as {
+    data: ThemeSettings;
+    success: boolean;
+    source?: string;
+  };
   assert.equal(body.success, true);
-  assert.equal(body.data.activeTheme, "light");
+  assert.equal(body.source, "database");
   assert.deepEqual(Object.keys(body.data.presets).sort(), [...THEME_PRESET_IDS].sort());
+});
+
+test("theme API: authorized GET reports mock source when the database is unreachable", async (context) => {
+  // No DB installed -> the read falls back to defaults; the source must say so.
+  delete scope.prisma;
+  context.mock.module("../lib/auth", { namedExports: ADMIN_GATE });
+  const { GET } = await loadThemeRoute();
+  const response = await GET();
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as { success: boolean; source?: string };
+  assert.equal(body.success, true);
+  assert.equal(body.source, "mock");
 });
 
 test("theme API: authorized PUT saves the active theme and presets", async (context) => {
@@ -335,32 +498,54 @@ test("theme API: authorized PUT saves the active theme and presets", async (cont
   const response = await PUT(new NextRequest("http://localhost:3000/api/admin/settings/theme", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ activeTheme: "premium", presets: DEFAULT_THEME_PRESETS }),
+    body: JSON.stringify({ activeTheme: "rose-red-and-blueberry", presets: presetsRecord() }),
   }));
   assert.equal(response.status, 200);
-  const body = (await response.json()) as { data: ThemeSettings; success: boolean; source?: string };
+  const body = (await response.json()) as {
+    data: ThemeSettings;
+    success: boolean;
+    source?: string;
+  };
   assert.equal(body.success, true);
-  assert.equal(body.data.activeTheme, "premium");
+  assert.equal(body.data.activeTheme, "rose-red-and-blueberry");
   assert.equal(body.source, "database");
 
   // Persisted and retrievable on a fresh read.
   const reloaded = await readThemeSettings();
-  assert.equal(reloaded.activeTheme, "premium");
+  assert.equal(reloaded.activeTheme, "rose-red-and-blueberry");
 });
 
 test("theme API: authorized PUT rejects an invalid HEX payload with 400", async (context) => {
   installTestDatabase();
   context.mock.module("../lib/auth", { namedExports: ADMIN_GATE });
   const { PUT } = await loadThemeRoute();
-  const badPresets = structuredClone(DEFAULT_THEME_PRESETS) as unknown as ThemeColors & Record<string, unknown>;
-  badPresets.light = { ...DEFAULT_THEME_PRESETS.light, primary: "not-a-color" };
+  const badPresets = presetsRecord({
+    "metallic-chic": { primary: "not-a-color" },
+  });
   const response = await PUT(new NextRequest("http://localhost:3000/api/admin/settings/theme", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ activeTheme: "light", presets: badPresets }),
+    body: JSON.stringify({ activeTheme: "metallic-chic", presets: badPresets }),
   }));
   assert.equal(response.status, 400);
   const body = (await response.json()) as { success: boolean; error: string };
   assert.equal(body.success, false);
   assert.ok(body.error.length > 0);
+});
+
+test("theme API: authorized PUT returns 503 with an actionable message when the database is unreachable", async (context) => {
+  // No DB -> writeThemeSettings throws; the route must report the failure
+  // clearly rather than implying the save succeeded.
+  delete scope.prisma;
+  context.mock.module("../lib/auth", { namedExports: ADMIN_GATE });
+  const { PUT } = await loadThemeRoute();
+  const response = await PUT(new NextRequest("http://localhost:3000/api/admin/settings/theme", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ activeTheme: "metallic-chic", presets: presetsRecord() }),
+  }));
+  assert.equal(response.status, 503);
+  const body = (await response.json()) as { success: boolean; error: string };
+  assert.equal(body.success, false);
+  assert.match(body.error, /database|unreachable/i);
 });

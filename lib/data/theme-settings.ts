@@ -17,7 +17,7 @@ import { getPrisma } from "@/lib/prisma";
 import {
   DEFAULT_THEME_SETTINGS,
   normalizeThemeSettings,
-  activeThemeToCssVars,
+  resolveActiveThemeVars,
   type ThemeSettings,
 } from "@/lib/theme-settings";
 
@@ -30,19 +30,42 @@ export const THEME_CACHE_TAG = "theme-settings";
  * the read path — a broken theme never breaks the storefront.
  */
 export async function readThemeSettings(): Promise<ThemeSettings> {
+  const result = await readThemeSettingsWithSource();
+  return result.settings;
+}
+
+export type ThemeSettingsSource = "database" | "defaults";
+
+/**
+ * Read with an explicit `source` so callers (the Admin Theme API) can tell the
+ * UI whether the values came from the database or from the fail-safe defaults.
+ * The Admin console must never present defaults as if they were saved values.
+ */
+export async function readThemeSettingsWithSource(): Promise<{
+  settings: ThemeSettings;
+  source: ThemeSettingsSource;
+}> {
   const db = await getPrisma();
-  if (!db) return DEFAULT_THEME_SETTINGS;
+  if (!db) return { settings: DEFAULT_THEME_SETTINGS, source: "defaults" };
 
   try {
     const row = await db.themeSettings.findUnique({ where: { id: SETTINGS_ID } });
-    if (!row || typeof row !== "object") return DEFAULT_THEME_SETTINGS;
-    return normalizeThemeSettings({
-      activeTheme: (row as Record<string, unknown>).activeTheme,
-      presets: (row as Record<string, unknown>).presets,
-    });
+    // The database was reachable and the query succeeded — `source` is
+    // "database" whether or not a row exists yet (a missing row simply means
+    // "no saved settings yet", which the defaults correctly represent).
+    if (!row || typeof row !== "object") {
+      return { settings: DEFAULT_THEME_SETTINGS, source: "database" };
+    }
+    return {
+      settings: normalizeThemeSettings({
+        activeTheme: (row as Record<string, unknown>).activeTheme,
+        presets: (row as Record<string, unknown>).presets,
+      }),
+      source: "database",
+    };
   } catch (error) {
     console.error("[theme-settings] Failed to load theme settings", error);
-    return DEFAULT_THEME_SETTINGS;
+    return { settings: DEFAULT_THEME_SETTINGS, source: "defaults" };
   }
 }
 
@@ -99,7 +122,7 @@ export async function saveThemeSettings(input: unknown): Promise<ThemeSettings> 
 export const getActiveThemeCssVars = unstable_cache(
   async (): Promise<Record<string, string>> => {
     const settings = await readThemeSettings();
-    return activeThemeToCssVars(settings);
+    return resolveActiveThemeVars(settings);
   },
   ["theme-css-vars"],
   { tags: [THEME_CACHE_TAG], revalidate: 300 },

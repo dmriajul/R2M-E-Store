@@ -6,6 +6,15 @@ import { BackToTop } from "@/components/ui/BackToTop";
 import { ThemeStyles } from "@/components/theme/ThemeStyles";
 
 /**
+ * The storefront shell renders the admin-selected theme's CSS variables (via
+ * `ThemeStyles`), so it must be rendered fresh on each request. A statically
+ * generated layout would serve cached HTML and ignore theme changes made via
+ * the Admin Theme console until the next redeploy — `force-dynamic` keeps the
+ * applied theme live without a redeploy.
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * Storefront chrome. Everything shoppers browse — home, shop, product,
  * checkout — lives inside this group and gets the navbar + footer.
  *
