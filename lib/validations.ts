@@ -820,14 +820,14 @@ export type SettingsHeroValues = z.infer<typeof settingsHeroSchema>;
 /*  Theme settings                                                           */
 /* -------------------------------------------------------------------------- */
 
-import { THEME_PRESET_IDS, isValidHex } from "@/lib/theme-settings";
+import { THEME_PRESET_IDS, isValidHex, type ThemePresetId } from "@/lib/theme-settings";
 
 const hexColor = z
   .string()
   .trim()
   .refine(isValidHex, "Use a valid HEX color (e.g. #1A2B3C)");
 
-const themeColorsSchema = z.object({
+export const themeColorsSchema = z.object({
   primary: hexColor,
   secondary: hexColor,
   accent: hexColor,
@@ -837,16 +837,20 @@ const themeColorsSchema = z.object({
   mutedForeground: hexColor,
   border: hexColor,
   buttonBg: hexColor,
-  buttonFg: hexColor,
+  buttonForeground: hexColor,
 });
 
+/** `presets` is keyed by each built-in preset id, all validated independently. */
+const THEME_PRESET_TUPLE = THEME_PRESET_IDS as [ThemePresetId, ...ThemePresetId[]];
+
+export const themePresetIdSchema = z.enum(THEME_PRESET_TUPLE);
+
 export const themeSettingsSchema = z.object({
-  activeTheme: z.enum(THEME_PRESET_IDS),
-  presets: z.object({
-    light: themeColorsSchema,
-    dark: themeColorsSchema,
-    premium: themeColorsSchema,
-  }),
+  activeTheme: z.enum(THEME_PRESET_TUPLE),
+  presets: z.record(
+    themePresetIdSchema,
+    themeColorsSchema,
+  ),
 });
 
 export type ThemeSettingsValues = z.infer<typeof themeSettingsSchema>;
