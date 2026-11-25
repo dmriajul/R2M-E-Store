@@ -54,7 +54,7 @@ export function WishlistButton({
            are suppressed under `prefers-reduced-motion`. Press feedback is the
            only "pop" here — it is driven by the user's own click, never by
            mount or store rehydration. */
-        "inline-flex size-9 items-center justify-center rounded-full border border-glass-border bg-black/35 backdrop-blur-md transition-[transform,box-shadow] duration-300 ease-[var(--ease-luxe)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "inline-flex size-9 items-center justify-center rounded-full border border-glass-border bg-background/35 backdrop-blur-md transition-[transform,box-shadow] duration-300 ease-[var(--ease-luxe)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         "motion-safe:hover:scale-110 motion-safe:active:scale-95 motion-reduce:transition-none",
         isWishlisted ? "text-rose" : "text-white/70 hover:text-rose",
         className,
@@ -172,8 +172,10 @@ export function ProductCard({
       <article
         className={cn(
           /* Micro-interaction is pure CSS: transform + box-shadow over 300ms,
-             with the lift suppressed under `prefers-reduced-motion`. */
-          "group glass-soft shadow-playful relative flex overflow-hidden rounded-3xl transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-luxe)] hover:border-rose/35 hover:shadow-playful-hover focus-within:border-rose/35",
+             with the lift suppressed under `prefers-reduced-motion`. The card
+             surface (radius, border, shadow, padding) follows the active
+             preset's card tokens via `.theme-card`. */
+          "group theme-card relative flex overflow-hidden transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-luxe)] hover:border-primary/40 hover:shadow-playful-hover focus-within:border-primary/40",
           "motion-safe:hover:-translate-y-1 motion-safe:hover:scale-[1.03] motion-reduce:transition-none",
           isList ? "flex-row gap-0" : "flex-col",
           className,
@@ -213,18 +215,18 @@ export function ProductCard({
           />
 
           {discount !== null && (
-            <span className="absolute bottom-3 left-3 rounded-full bg-rose/90 px-2.5 py-1 text-[10px] font-bold text-white">
+            <span className="absolute bottom-3 left-3 rounded-full bg-accent px-2.5 py-1 text-[10px] font-bold text-accent-foreground">
               −{discount}%
             </span>
           )}
 
           {/* Quick-view overlay (grid only — the list row has room for a button) */}
           {!isList && (
-            <div className="pointer-events-none absolute inset-0 hidden items-center justify-center bg-black/35 opacity-0 backdrop-blur-[2px] transition-opacity duration-400 ease-[var(--ease-luxe)] group-hover:opacity-100 group-focus-within:opacity-100 lg:flex">
+            <div className="pointer-events-none absolute inset-0 hidden items-center justify-center bg-background/35 opacity-0 backdrop-blur-[2px] transition-opacity duration-400 ease-[var(--ease-luxe)] group-hover:opacity-100 group-focus-within:opacity-100 lg:flex">
               <button
                 type="button"
                 onClick={() => setQuickViewOpen(true)}
-                className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-glass-border bg-black/60 px-4 py-2 text-[11px] font-semibold tracking-[0.16em] text-white uppercase backdrop-blur-md transition-transform duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-glass-border bg-background/60 px-4 py-2 text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase backdrop-blur-md transition-transform duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
                 <Eye className="size-3.5" />
                 Quick view
@@ -244,7 +246,7 @@ export function ProductCard({
             <div className="min-w-0">
               <Link
                 href={`/product/${product.id}`}
-                className="block truncate text-[15px] font-medium text-foreground transition-colors duration-300 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="theme-card-title block truncate text-foreground transition-colors duration-300 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
                 {product.name}
               </Link>
@@ -278,7 +280,7 @@ export function ProductCard({
               column. */}
           <div className="mt-auto flex flex-col gap-3">
             <div className="flex items-baseline gap-2">
-              <span className="text-lg font-bold text-primary">
+              <span className="theme-card-price text-primary">
                 {formatPrice(product.price, product.currency)}
               </span>
               {product.originalPrice && (

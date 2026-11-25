@@ -27,10 +27,10 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="relative z-10 border-t border-glass-border bg-[#070707]">
-      <span aria-hidden className="hairline-gold block h-px w-full" />
+    <footer className="theme-footer relative z-10 border-t">
+      <span aria-hidden className="theme-footer-hairline block h-px w-full" />
 
-      <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+      <div className="theme-container theme-page-pad">
         <div className="grid grid-cols-2 gap-10 lg:grid-cols-4 lg:gap-8">
           {/* ---------- Brand column ---------- */}
           <div className="col-span-2 lg:col-span-1">
