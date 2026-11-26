@@ -21,20 +21,20 @@ interface ThemePreviewProps {
  * It reuses the same `.theme-*` component classes and design tokens the real
  * storefront uses, so the preview matches the actual rendered design system.
  *
- * The wrapper uses a fixed width with horizontal scroll on small screens so the
- * preview never reflows the settings form.
+ * The wrapper uses the full available width without a rigid minimum width so
+ * the preview adapts cleanly inside the settings pane without clipping.
  */
 export function ThemePreview({ colors, design }: ThemePreviewProps) {
   const vars = themeToCssVars(colors, design);
 
   return (
     <div
-      className="theme-preview-scroll w-full overflow-x-auto rounded-xl border border-[#242424]"
+      className="theme-preview-scroll col-span-full w-full min-w-0 overflow-x-auto rounded-xl border border-[#242424] sm:col-span-2"
       style={{ background: "var(--background)" }}
     >
       <div
         style={vars}
-        className="theme-body min-w-[680px] bg-background text-foreground"
+        className="theme-body w-full min-w-0 bg-background text-foreground"
       >
         {/* ---- Header / nav ---- */}
         <header
@@ -42,20 +42,24 @@ export function ThemePreview({ colors, design }: ThemePreviewProps) {
             design.header.borderStyle === "shadow" ? "theme-header-shadow" : ""
           }`}
         >
-          <div className="theme-container theme-page-pad flex h-16 items-center justify-between">
-            <span className="theme-heading text-sm font-semibold tracking-wide text-primary">
+          <div className="theme-container theme-page-pad flex h-16 min-w-0 items-center justify-between gap-4">
+            <span className="theme-heading shrink-0 text-sm font-semibold tracking-wide text-primary">
               MUKRA
             </span>
             <nav
-              className="flex items-center gap-8"
+              className="flex min-w-0 items-center gap-8 overflow-x-auto whitespace-nowrap"
               style={{ gap: design.header.navSpacing }}
             >
-              <span className="theme-nav-link text-foreground">Shop</span>
-              <span className="theme-nav-link text-muted-foreground">
+              <span className="theme-nav-link shrink-0 text-foreground">
+                Shop
+              </span>
+              <span className="theme-nav-link shrink-0 text-muted-foreground">
                 Collections
               </span>
-              <span className="theme-nav-link text-muted-foreground">New</span>
-              <span className="theme-btn theme-btn-primary !h-8 !px-4 !py-0 text-[11px]">
+              <span className="theme-nav-link shrink-0 text-muted-foreground">
+                New
+              </span>
+              <span className="theme-btn theme-btn-primary shrink-0 !h-8 !px-4 !py-0 text-[11px]">
                 Cart
               </span>
             </nav>
@@ -73,7 +77,7 @@ export function ThemePreview({ colors, design }: ThemePreviewProps) {
           <p className="theme-body mt-3 max-w-sm text-sm text-muted-foreground">
             Premium kids fashion, crafted for little explorers.
           </p>
-          <div className="mt-5 flex items-center gap-3">
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <button type="button" className="theme-btn theme-btn-primary" data-hover={design.buttons.hoverStyle}>
               Shop Now
             </button>
@@ -101,7 +105,7 @@ export function ThemePreview({ colors, design }: ThemePreviewProps) {
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className={`theme-card theme-card-shadow-md ${
+                className={`theme-card theme-card-shadow-md min-w-0 ${
                   design.cards.border === "hairline"
                     ? "theme-card-hairline"
                     : design.cards.border === "strong"
@@ -133,7 +137,7 @@ export function ThemePreview({ colors, design }: ThemePreviewProps) {
                 <span className="theme-body mt-1 block text-[11px] text-muted-foreground">
                   Adorable &amp; soft
                 </span>
-                <div className="mt-3 flex items-center justify-between">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <span className="theme-card-price text-primary">$24</span>
                   <span className="theme-btn theme-btn-primary !h-8 !px-3 !py-0 text-[11px]" data-hover={design.buttons.hoverStyle}>
                     Add
@@ -155,7 +159,7 @@ export function ThemePreview({ colors, design }: ThemePreviewProps) {
           }`}
         >
           <div className="theme-container theme-page-pad">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <span className="theme-heading font-semibold text-foreground">
                 MUKRA
               </span>

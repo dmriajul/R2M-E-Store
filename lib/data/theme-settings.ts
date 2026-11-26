@@ -13,7 +13,13 @@
  */
 
 import { unstable_cache, revalidateTag } from "next/cache";
-import { getPrisma } from "@/lib/prisma";
+import {
+  DatabaseUnavailableError,
+  databaseFailureReason,
+  getPrisma,
+  getPrismaErrorCode,
+  requireDatabase,
+} from "@/lib/prisma";
 import {
   DEFAULT_THEME_SETTINGS,
   normalizeThemeSettings,
@@ -23,6 +29,14 @@ import {
 
 const SETTINGS_ID = "global";
 export const THEME_CACHE_TAG = "theme-settings";
+
+function safeThemeErrorSummary(error: unknown): string {
+  return (
+    databaseFailureReason(error) ??
+    getPrismaErrorCode(error) ??
+    (error instanceof Error && error.name ? error.name : "unknown error")
+  );
+}
 
 /**
  * Raw read of the persisted theme settings, falling back to the defaults when
@@ -45,10 +59,12 @@ export async function readThemeSettingsWithSource(): Promise<{
   settings: ThemeSettings;
   source: ThemeSettingsSource;
 }> {
-  const db = await getPrisma();
-  if (!db) return { settings: DEFAULT_THEME_SETTINGS, source: "defaults" };
-
   try {
+    const db = await getPrisma();
+    if (!db || !db.themeSettings) {
+      return { settings: DEFAULT_THEME_SETTINGS, source: "defaults" };
+    }
+
     const row = await db.themeSettings.findUnique({ where: { id: SETTINGS_ID } });
     // The database was reachable and the query succeeded — `source` is
     // "database" whether or not a row exists yet (a missing row simply means
@@ -64,7 +80,9 @@ export async function readThemeSettingsWithSource(): Promise<{
       source: "database",
     };
   } catch (error) {
-    console.error("[theme-settings] Failed to load theme settings", error);
+    console.error(
+      `[theme-settings] Failed to load theme settings (${safeThemeErrorSummary(error)})`,
+    );
     return { settings: DEFAULT_THEME_SETTINGS, source: "defaults" };
   }
 }
@@ -72,23 +90,26 @@ export async function readThemeSettingsWithSource(): Promise<{
 /**
  * Raw write of the full theme state. The input is normalized first, so invalid
  * colors are dropped back to defaults rather than corrupting the palette.
+ * Throws `DatabaseUnavailableError` when no database is configured or reachable.
  */
 export async function writeThemeSettings(input: unknown): Promise<ThemeSettings> {
-  const db = await getPrisma();
-  if (!db) throw new Error("Theme settings require a configured database");
-
   const settings = normalizeThemeSettings(input);
-  await db.themeSettings.upsert({
-    where: { id: SETTINGS_ID },
-    create: {
-      id: SETTINGS_ID,
-      activeTheme: settings.activeTheme,
-      presets: settings.presets as object,
-    },
-    update: {
-      activeTheme: settings.activeTheme,
-      presets: settings.presets as object,
-    },
+  await requireDatabase(async (db) => {
+    if (!db.themeSettings) {
+      throw new DatabaseUnavailableError();
+    }
+    await db.themeSettings.upsert({
+      where: { id: SETTINGS_ID },
+      create: {
+        id: SETTINGS_ID,
+        activeTheme: settings.activeTheme,
+        presets: settings.presets as object,
+      },
+      update: {
+        activeTheme: settings.activeTheme,
+        presets: settings.presets as object,
+      },
+    });
   });
   return settings;
 }

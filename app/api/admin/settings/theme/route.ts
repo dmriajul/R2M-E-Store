@@ -2,7 +2,11 @@ import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireActionRole } from "@/lib/auth";
 import { rolesForPermission } from "@/lib/rbac";
-import { DatabaseUnavailableError } from "@/lib/prisma";
+import {
+  DatabaseUnavailableError,
+  databaseFailureReason,
+  getPrismaErrorCode,
+} from "@/lib/prisma";
 import {
   readThemeSettingsWithSource,
   saveThemeSettings,
@@ -13,6 +17,102 @@ import type { ThemeSettings } from "@/lib/theme-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+interface ThemeSaveErrorResponse {
+  status: number;
+  message: string;
+}
+
+const KNOWN_PRISMA_SAVE_ERRORS: Readonly<Record<string, ThemeSaveErrorResponse>> = {
+  P1000: {
+    status: 503,
+    message:
+      "Database authentication failed, so the theme was not saved. Verify the database credentials in your server configuration and retry.",
+  },
+  P1001: {
+    status: 503,
+    message:
+      "The database host is unreachable, so the theme was not saved. Check the database status and connection, then retry.",
+  },
+  P1002: {
+    status: 503,
+    message:
+      "Connecting to the database timed out, so the theme was not saved. Check network access and database responsiveness, then retry.",
+  },
+  P1003: {
+    status: 503,
+    message:
+      "The configured database does not exist, so the theme was not saved. Verify the database name in your server configuration and retry.",
+  },
+  P1008: {
+    status: 503,
+    message:
+      "The database operation timed out before the theme could be saved. Check database load and retry.",
+  },
+  P1017: {
+    status: 503,
+    message:
+      "The database connection was closed before the theme could be saved. Check database availability and connection limits, then retry.",
+  },
+  P2002: {
+    status: 409,
+    message:
+      "A conflicting theme settings update occurred at the same time. Please retry applying your theme.",
+  },
+  P2021: {
+    status: 503,
+    message:
+      "The ThemeSettings table is missing in the database, so the theme was not saved. Apply the database schema migration for theme settings and retry.",
+  },
+  P2022: {
+    status: 503,
+    message:
+      "The ThemeSettings database schema is out of date (missing column), so the theme was not saved. Apply the latest database schema migration and retry.",
+  },
+  P2024: {
+    status: 503,
+    message:
+      "The database connection pool timed out before the theme could be saved. Wait a moment or check active database connections, then retry.",
+  },
+};
+
+function isDatabaseUnavailable(error: unknown): boolean {
+  return (
+    error instanceof DatabaseUnavailableError ||
+    (error instanceof Error && error.name === "DatabaseUnavailableError")
+  );
+}
+
+function classifyThemeSaveError(error: unknown): ThemeSaveErrorResponse {
+  const code = getPrismaErrorCode(error);
+  if (code && Object.hasOwn(KNOWN_PRISMA_SAVE_ERRORS, code)) {
+    return KNOWN_PRISMA_SAVE_ERRORS[code]!;
+  }
+  if (isDatabaseUnavailable(error)) {
+    return {
+      status: 503,
+      message:
+        "The database is unavailable or not configured, so the theme was not saved. Confirm the database is configured, running, and reachable, then retry.",
+    };
+  }
+  return {
+    status: 500,
+    message:
+      "Could not save theme settings due to an unexpected error. Please try again later.",
+  };
+}
+
+function safeErrorLogSummary(error: unknown): string {
+  return (
+    databaseFailureReason(error) ??
+    getPrismaErrorCode(error) ??
+    (isDatabaseUnavailable(error)
+      ? "DatabaseUnavailableError"
+      : error instanceof Error && error.name
+        ? error.name
+        : "unknown error")
+  );
+}
 
 /**
  * Theme settings are the SEO manager's surface (plus super admins), so both
@@ -92,43 +192,17 @@ export async function PUT(
       source: "database",
     });
   } catch (error) {
-    console.error("[admin/settings/theme] Failed to save theme settings", error);
-    // Distinguish a database that cannot be reached from a generic failure so
-    // the Admin UI can give an actionable message rather than implying the
-    // save silently succeeded.
-    if (error instanceof DatabaseUnavailableError) {
-      return NextResponse.json(
-        {
-          data: null,
-          error:
-            "The database is unreachable, so the theme was not saved. Confirm the database is running and reachable, then retry.",
-          success: false,
-        },
-        { status: 503 },
-      );
-    }
-    const code =
-      typeof error === "object" && error !== null && "code" in error
-        ? String((error as { code?: unknown }).code)
-        : "";
-    if (code === "P1001") {
-      return NextResponse.json(
-        {
-          data: null,
-          error:
-            "The database host is unreachable, so the theme was not saved. Check the database status and connection, then retry.",
-          success: false,
-        },
-        { status: 503 },
-      );
-    }
+    console.error(
+      `[admin/settings/theme] Failed to save theme settings (${safeErrorLogSummary(error)})`,
+    );
+    const { status, message } = classifyThemeSaveError(error);
     return NextResponse.json(
       {
         data: null,
-        error: "Could not save theme settings. Confirm the database is configured and schema is up to date.",
+        error: message,
         success: false,
       },
-      { status: 503 },
+      { status },
     );
   }
 }

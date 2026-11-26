@@ -28,10 +28,15 @@ import {
 import {
   readThemeSettings,
   readThemeSettingsWithSource,
+  saveThemeSettings,
   writeThemeSettings,
 } from "../lib/data/theme-settings";
 import { themeSettingsSchema } from "../lib/validations";
-import type { PrismaLikeClient } from "../lib/prisma";
+import {
+  DatabaseUnavailableError,
+  getPrismaErrorCode,
+  type PrismaLikeClient,
+} from "../lib/prisma";
 
 const env = { ...process.env };
 const scope = globalThis as typeof globalThis & {
@@ -205,6 +210,7 @@ test("normalizeThemePresets preserves all four preset ids", () => {
 });
 
 test("readThemeSettings returns defaults when no database is configured", async () => {
+  delete process.env.DATABASE_URL;
   delete scope.prisma;
   const settings = await readThemeSettings();
   assert.deepEqual(settings, DEFAULT_THEME_SETTINGS);
@@ -381,15 +387,21 @@ test("writeThemeSettings drops invalid colors rather than storing them", async (
 });
 
 test("writeThemeSettings throws when no database is configured", async () => {
+  delete process.env.DATABASE_URL;
   delete scope.prisma;
   await assert.rejects(
     () => writeThemeSettings({ activeTheme: "metallic-chic", presets: presetsRecord() }),
-    /configured database/,
+    DatabaseUnavailableError,
+  );
+  await assert.rejects(
+    () => saveThemeSettings({ activeTheme: "metallic-chic", presets: presetsRecord() }),
+    DatabaseUnavailableError,
   );
 });
 
 test("readThemeSettingsWithSource reports whether values came from the database", async () => {
   // No DB -> defaults with source "defaults".
+  delete process.env.DATABASE_URL;
   delete scope.prisma;
   const fallback = await readThemeSettingsWithSource();
   assert.equal(fallback.source, "defaults");
@@ -502,6 +514,7 @@ test("theme API: authorized GET returns the persisted theme with database source
 
 test("theme API: authorized GET reports mock source when the database is unreachable", async (context) => {
   // No DB installed -> the read falls back to defaults; the source must say so.
+  delete process.env.DATABASE_URL;
   delete scope.prisma;
   context.mock.module("../lib/auth", { namedExports: ADMIN_GATE });
   const { GET } = await loadThemeRoute();
@@ -555,8 +568,9 @@ test("theme API: authorized PUT rejects an invalid HEX payload with 400", async 
 });
 
 test("theme API: authorized PUT returns 503 with an actionable message when the database is unreachable", async (context) => {
-  // No DB -> writeThemeSettings throws; the route must report the failure
-  // clearly rather than implying the save succeeded.
+  // No DB -> writeThemeSettings throws DatabaseUnavailableError; the route must
+  // report the failure clearly rather than implying the save succeeded.
+  delete process.env.DATABASE_URL;
   delete scope.prisma;
   context.mock.module("../lib/auth", { namedExports: ADMIN_GATE });
   const { PUT } = await loadThemeRoute();
@@ -569,4 +583,174 @@ test("theme API: authorized PUT returns 503 with an actionable message when the 
   const body = (await response.json()) as { success: boolean; error: string };
   assert.equal(body.success, false);
   assert.match(body.error, /database|unreachable/i);
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Prisma error classification & credential/sensitive-detail protection       */
+/* -------------------------------------------------------------------------- */
+
+const SENSITIVE_LEAK_TOKENS = [
+  "SuperSecretPass123",
+  "mukra_db_admin",
+  "postgresql://",
+  "postgres://",
+  "db.internal.mukra.example",
+  "RAW_SENSITIVE_SQL_FRAGMENT",
+] as const;
+
+function assertNoSensitiveLeak(serialized: string, label: string) {
+  for (const token of SENSITIVE_LEAK_TOKENS) {
+    assert.ok(
+      !serialized.includes(token),
+      `${label} must never expose "${token}" (got: ${serialized})`,
+    );
+  }
+}
+
+test("getPrismaErrorCode extracts codes from code, errorCode, and wrapped causes safely", () => {
+  assert.equal(getPrismaErrorCode({ code: "P1001" }), "P1001");
+  assert.equal(
+    getPrismaErrorCode(
+      Object.assign(new Error("init failed"), {
+        name: "PrismaClientInitializationError",
+        errorCode: "P1000",
+      }),
+    ),
+    "P1000",
+  );
+  const wrapped = new DatabaseUnavailableError(
+    Object.assign(new Error("table missing"), { code: "P2021" }),
+  );
+  assert.equal(getPrismaErrorCode(wrapped), "P2021");
+  assert.equal(getPrismaErrorCode(new DatabaseUnavailableError()), null);
+  assert.equal(getPrismaErrorCode({ code: "ECONNRESET" }), null);
+
+  // Cyclic causes must terminate safely without throwing.
+  const cyclic: { cause?: unknown } = {};
+  cyclic.cause = cyclic;
+  assert.equal(getPrismaErrorCode(cyclic), null);
+});
+
+test("theme API: PUT maps all known Prisma error codes to safe, actionable messages without leaking secrets", async (context) => {
+  const cases: ReadonlyArray<{
+    code: string;
+    status: number;
+    expectedHint: RegExp;
+    useErrorCodeField?: boolean;
+  }> = [
+    { code: "P1000", status: 503, expectedHint: /authentication|credentials/i, useErrorCodeField: true },
+    { code: "P1001", status: 503, expectedHint: /unreachable|host/i },
+    { code: "P1002", status: 503, expectedHint: /timed out|network/i },
+    { code: "P1003", status: 503, expectedHint: /does not exist|database name/i, useErrorCodeField: true },
+    { code: "P1008", status: 503, expectedHint: /operation timed out|timed out/i },
+    { code: "P1017", status: 503, expectedHint: /connection was closed|closed/i },
+    { code: "P2002", status: 409, expectedHint: /conflicting|retry/i },
+    { code: "P2021", status: 503, expectedHint: /table|schema/i },
+    { code: "P2022", status: 503, expectedHint: /column|schema/i },
+    { code: "P2024", status: 503, expectedHint: /pool|timed out/i },
+  ];
+
+  const errorSpy = context.mock.method(console, "error", () => {});
+  context.mock.module("../lib/auth", { namedExports: ADMIN_GATE });
+  const { PUT } = await loadThemeRoute();
+
+  for (const { code, status, expectedHint, useErrorCodeField } of cases) {
+    const fixture = installTestDatabase();
+    const rawMessage =
+      `Invalid prisma.themeSettings.upsert(): postgresql://mukra_db_admin:SuperSecretPass123@db.internal.mukra.example:5432/prod ` +
+      `RAW_SENSITIVE_SQL_FRAGMENT (${code})`;
+    fixture.db.themeSettings.upsert = async () => {
+      throw Object.assign(
+        new Error(rawMessage),
+        useErrorCodeField
+          ? { name: "PrismaClientInitializationError", errorCode: code }
+          : { code },
+      );
+    };
+
+    const response = await PUT(
+      new NextRequest("http://localhost:3000/api/admin/settings/theme", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activeTheme: "metallic-chic", presets: presetsRecord() }),
+      }),
+    );
+
+    assert.equal(response.status, status, `${code} should return HTTP ${status}`);
+    const body = (await response.json()) as {
+      data: ThemeSettings | null;
+      success: boolean;
+      error: string;
+    };
+    assert.equal(body.success, false);
+    assert.equal(body.data, null);
+    assert.match(body.error, expectedHint, `${code} message should be actionable`);
+    assertNoSensitiveLeak(JSON.stringify(body), `HTTP response for ${code}`);
+  }
+
+  for (const call of errorSpy.mock.calls) {
+    assertNoSensitiveLeak(JSON.stringify(call.arguments), "console.error log");
+  }
+});
+
+test("theme API: PUT returns a safe generic message for unknown errors and never leaks raw messages", async (context) => {
+  const errorSpy = context.mock.method(console, "error", () => {});
+  const fixture = installTestDatabase();
+  fixture.db.themeSettings.upsert = async () => {
+    throw new Error(
+      "Unexpected driver crash at postgresql://mukra_db_admin:SuperSecretPass123@db.internal.mukra.example:5432/prod RAW_SENSITIVE_SQL_FRAGMENT",
+    );
+  };
+
+  context.mock.module("../lib/auth", { namedExports: ADMIN_GATE });
+  const { PUT } = await loadThemeRoute();
+  const response = await PUT(
+    new NextRequest("http://localhost:3000/api/admin/settings/theme", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activeTheme: "metallic-chic", presets: presetsRecord() }),
+    }),
+  );
+
+  assert.equal(response.status, 500);
+  const body = (await response.json()) as {
+    data: ThemeSettings | null;
+    success: boolean;
+    error: string;
+  };
+  assert.equal(body.success, false);
+  assert.equal(body.data, null);
+  assert.match(body.error, /could not save theme settings/i);
+  assertNoSensitiveLeak(JSON.stringify(body), "HTTP response for unknown error");
+
+  for (const call of errorSpy.mock.calls) {
+    assertNoSensitiveLeak(JSON.stringify(call.arguments), "console.error log for unknown error");
+  }
+});
+
+test("readThemeSettingsWithSource degrades to defaults safely when the database url or query fails without leaking credentials", async (context) => {
+  const errorSpy = context.mock.method(console, "error", () => {});
+
+  // Malformed URL causes getPrisma() to throw DatabaseUnavailableError — read path must not throw.
+  process.env.DATABASE_URL = "postgresql://mukra_db_admin:SuperSecretPass123@db.internal.mukra.example/";
+  delete scope.prisma;
+  const malformedResult = await readThemeSettingsWithSource();
+  assert.equal(malformedResult.source, "defaults");
+  assert.deepEqual(malformedResult.settings, DEFAULT_THEME_SETTINGS);
+
+  // Query failure with credentials in error.message must also degrade safely without logging secrets.
+  const fixture = installTestDatabase();
+  fixture.db.themeSettings.findUnique = async () => {
+    throw Object.assign(
+      new Error("postgresql://mukra_db_admin:SuperSecretPass123@db.internal.mukra.example:5432/prod RAW_SENSITIVE_SQL_FRAGMENT"),
+      { code: "P1001" },
+    );
+  };
+  const queryFailedResult = await readThemeSettingsWithSource();
+  assert.equal(queryFailedResult.source, "defaults");
+  assert.deepEqual(queryFailedResult.settings, DEFAULT_THEME_SETTINGS);
+
+  for (const call of errorSpy.mock.calls) {
+    assertNoSensitiveLeak(JSON.stringify(call.arguments), "readThemeSettingsWithSource console.error");
+  }
 });

@@ -84,15 +84,41 @@ const connectionFailures: Record<string, string> = {
   P2024: "connection pool exhausted or timed out — check pool size and active clients",
 };
 
+/**
+ * Extracts a Prisma error code (e.g. `P1001`, `P2021`) from an error or its
+ * causal chain without reading or exposing raw error messages.
+ */
+export function getPrismaErrorCode(error: unknown): string | null {
+  let current: unknown = error;
+  const seen = new Set<unknown>();
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const { code, errorCode } = current as {
+      code?: unknown;
+      errorCode?: unknown;
+    };
+    if (typeof code === "string" && /^P\d{4}$/.test(code)) return code;
+    if (typeof errorCode === "string" && /^P\d{4}$/.test(errorCode)) return errorCode;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return null;
+}
+
 /** Safe operational diagnosis without leaking connection strings or query data. */
 export function databaseFailureReason(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
-  const { code, name } = error as { code?: unknown; name?: unknown };
-  if (typeof code === "string" && Object.hasOwn(connectionFailures, code)) {
+  const code = getPrismaErrorCode(error);
+  if (code && Object.hasOwn(connectionFailures, code)) {
     return `${code}: ${connectionFailures[code]}`;
   }
-  if (name === "PrismaClientInitializationError") {
-    return "client initialization/connection failed — check DATABASE_URL, database access and generated Prisma Client";
+  let current: unknown = error;
+  const seen = new Set<unknown>();
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    if ((current as { name?: unknown }).name === "PrismaClientInitializationError") {
+      return "client initialization/connection failed — check DATABASE_URL, database access and generated Prisma Client";
+    }
+    current = (current as { cause?: unknown }).cause;
   }
   return null;
 }
@@ -134,8 +160,8 @@ export async function getPrisma(): Promise<PrismaLikeClient | null> {
     process.env.DATABASE_URL = databaseUrl;
   }
   if (globalForPrisma.prismaUnavailable) return null;
-  if (client) return client;
   if (globalForPrisma.prisma) return globalForPrisma.prisma;
+  if (process.env.NODE_ENV === "production" && client) return client;
 
   try {
     const mod = (await import("@prisma/client")) as unknown as {
@@ -143,9 +169,13 @@ export async function getPrisma(): Promise<PrismaLikeClient | null> {
     };
     if (!mod.PrismaClient) throw new Error("@prisma/client exported no PrismaClient");
 
-    client = new mod.PrismaClient({ log: [] });
-    if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;
-    return client;
+    const instance = new mod.PrismaClient({ log: [] });
+    if (process.env.NODE_ENV === "production") {
+      client = instance;
+    } else {
+      globalForPrisma.prisma = instance;
+    }
+    return instance;
   } catch (error) {
     // Do not latch initialization failures forever; a subsequent request may recover.
     diagnose(databaseFailureReason(error) ??
