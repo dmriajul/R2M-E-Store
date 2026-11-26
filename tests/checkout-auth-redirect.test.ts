@@ -227,14 +227,41 @@ test("callback URL validation: allows /checkout and blocks external origins, pro
     );
   }
 
-  // Auth-page self-redirects must not loop
+  // Auth-page self-redirects (lowercase, uppercase, mixed-case, additional auth routes, and percent-encoded variants) must not loop
   for (const loopPath of [
     "/login",
+    "/LOGIN",
+    "/Login",
     "/login?callbackUrl=%2Fcheckout",
+    "/LOGIN?callbackUrl=%2Fcheckout",
+    `${origin}/Login?callbackUrl=%2Fcheckout`,
     "/register",
+    "/REGISTER",
+    "/Register",
     "/signup",
+    "/SIGNUP",
+    "/SignUp",
+    "/forgot-password",
+    "/FORGOT-PASSWORD",
+    "/Forgot-Password?email=shopper%40example.com",
+    "/reset-password",
+    "/RESET-PASSWORD",
+    "/Reset-Password/token-123",
+    "/auth",
+    "/AUTH",
+    "/auth/verify-email-pending",
+    "/AUTH/verification-error",
+    "/Auth/Verification-Success",
+    "/api/auth",
+    "/API/AUTH",
     "/api/auth/signin",
+    "/API/Auth/signin",
     "/api/auth/callback/credentials",
+    "/%6cogin",
+    "/%4cogin",
+    "/api/%61uth/signin",
+    "/%2f%2fevil.example",
+    "/%5cevil.example",
   ]) {
     assert.equal(
       safeCallbackPath(loopPath, origin),
@@ -242,6 +269,10 @@ test("callback URL validation: allows /checkout and blocks external origins, pro
       `Expected ${loopPath} to avoid auth redirect loop`,
     );
   }
+
+  // Legitimate non-auth paths that merely share prefixes (e.g. /author-story) remain allowed
+  assert.equal(safeCallbackPath("/author-story", origin), "/author-story");
+  assert.equal(safeCallbackPath("/shop?category=dresses#grid", origin), "/shop?category=dresses#grid");
 });
 
 test("cart persistence + login return + empty-cart preservation: guest cart survives /checkout -> /login?callbackUrl=%2Fcheckout -> login -> /checkout, and empty cart still renders empty state", async (context) => {

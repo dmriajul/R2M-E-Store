@@ -43,24 +43,24 @@ const limiter = createRateLimiter({ max: 20, windowMs: 60_000 });
 
 type UploadPurpose = "hero" | "payment" | "return";
 
-const PURPOSE_ALIASES: Readonly<Record<string, UploadPurpose>> = {
-  hero: "hero",
-  payment: "payment",
-  payments: "payment",
-  return: "return",
-  returns: "return",
-};
+const PURPOSE_ALIASES: ReadonlyMap<string, UploadPurpose> = new Map<string, UploadPurpose>([
+  ["hero", "hero"],
+  ["payment", "payment"],
+  ["payments", "payment"],
+  ["return", "return"],
+  ["returns", "return"],
+]);
 
-const FOLDER_PURPOSES: Readonly<Record<string, UploadPurpose>> = {
-  hero: "hero",
-  "mukra/hero": "hero",
-  payment: "payment",
-  payments: "payment",
-  "mukra/payments": "payment",
-  return: "return",
-  returns: "return",
-  "mukra/returns": "return",
-};
+const FOLDER_PURPOSES: ReadonlyMap<string, UploadPurpose> = new Map<string, UploadPurpose>([
+  ["hero", "hero"],
+  ["mukra/hero", "hero"],
+  ["payment", "payment"],
+  ["payments", "payment"],
+  ["mukra/payments", "payment"],
+  ["return", "return"],
+  ["returns", "return"],
+  ["mukra/returns", "return"],
+]);
 
 function normalizeToken(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -68,40 +68,87 @@ function normalizeToken(value: unknown): string | undefined {
   return cleaned.length > 0 ? cleaned : undefined;
 }
 
+function resolveBucketForPurpose(purpose: UploadPurpose): UploadBucket | null {
+  switch (purpose) {
+    case "hero":
+      return UPLOAD_BUCKETS.hero;
+    case "payment":
+      return UPLOAD_BUCKETS.payments;
+    case "return":
+      return UPLOAD_BUCKETS.returns;
+    default: {
+      const _exhaustive: never = purpose;
+      void _exhaustive;
+      return null;
+    }
+  }
+}
+
 type ResolvedUploadTarget =
   | { ok: true; purpose: UploadPurpose; bucket: UploadBucket }
   | { ok: false; status: 400 | 403; error: string };
 
 function resolveUploadTarget(
-  queryPurposeRaw: string | null,
-  formPurposeRaw: FormDataEntryValue | null,
-  formFolderRaw: FormDataEntryValue | null,
+  queryPurposeValues: readonly string[],
+  formPurposeValues: readonly FormDataEntryValue[],
+  formFolderValues: readonly FormDataEntryValue[],
 ): ResolvedUploadTarget {
-  const queryToken = queryPurposeRaw === null ? undefined : queryPurposeRaw.trim().toLowerCase();
-  const formToken = normalizeToken(formPurposeRaw);
-  const folderToken = normalizeToken(formFolderRaw);
-
-  if (queryPurposeRaw !== null && !queryToken) {
-    return { ok: false, status: 403, error: "Upload purpose is not permitted" };
+  let fromQuery: UploadPurpose | undefined;
+  for (const rawQueryPurpose of queryPurposeValues) {
+    const queryToken = rawQueryPurpose.trim().toLowerCase();
+    if (!queryToken || !PURPOSE_ALIASES.has(queryToken)) {
+      return { ok: false, status: 403, error: "Upload purpose is not permitted" };
+    }
+    const mapped = PURPOSE_ALIASES.get(queryToken);
+    if (!mapped) {
+      return { ok: false, status: 403, error: "Upload purpose is not permitted" };
+    }
+    if (fromQuery !== undefined && fromQuery !== mapped) {
+      return { ok: false, status: 400, error: "Conflicting upload purpose values" };
+    }
+    fromQuery = mapped;
   }
 
-  if (queryToken !== undefined && !(queryToken in PURPOSE_ALIASES)) {
-    return { ok: false, status: 403, error: "Upload purpose is not permitted" };
+  let fromForm: UploadPurpose | undefined;
+  for (const rawFormPurpose of formPurposeValues) {
+    if (typeof rawFormPurpose !== "string") {
+      return { ok: false, status: 403, error: "Upload purpose is not permitted" };
+    }
+    const formToken = normalizeToken(rawFormPurpose);
+    if (!formToken || !PURPOSE_ALIASES.has(formToken)) {
+      return { ok: false, status: 403, error: "Upload purpose is not permitted" };
+    }
+    const mapped = PURPOSE_ALIASES.get(formToken);
+    if (!mapped) {
+      return { ok: false, status: 403, error: "Upload purpose is not permitted" };
+    }
+    if (fromForm !== undefined && fromForm !== mapped) {
+      return { ok: false, status: 400, error: "Conflicting upload purpose values" };
+    }
+    fromForm = mapped;
   }
 
-  if (formToken !== undefined && !(formToken in PURPOSE_ALIASES)) {
-    return { ok: false, status: 403, error: "Upload purpose is not permitted" };
-  }
-
-  const fromQuery = queryToken ? PURPOSE_ALIASES[queryToken] : undefined;
-  const fromForm = formToken ? PURPOSE_ALIASES[formToken] : undefined;
   if (fromQuery && fromForm && fromQuery !== fromForm) {
     return { ok: false, status: 400, error: "Conflicting upload purpose values" };
   }
 
-  const fromFolder = folderToken ? FOLDER_PURPOSES[folderToken] : undefined;
-  if (folderToken !== undefined && !fromFolder) {
-    return { ok: false, status: 403, error: "Upload destination is not permitted" };
+  let fromFolder: UploadPurpose | undefined;
+  for (const rawFolder of formFolderValues) {
+    if (typeof rawFolder !== "string") {
+      return { ok: false, status: 403, error: "Upload destination is not permitted" };
+    }
+    const folderToken = normalizeToken(rawFolder);
+    if (!folderToken || !FOLDER_PURPOSES.has(folderToken)) {
+      return { ok: false, status: 403, error: "Upload destination is not permitted" };
+    }
+    const mapped = FOLDER_PURPOSES.get(folderToken);
+    if (!mapped) {
+      return { ok: false, status: 403, error: "Upload destination is not permitted" };
+    }
+    if (fromFolder !== undefined && fromFolder !== mapped) {
+      return { ok: false, status: 400, error: "Upload purpose and folder do not match" };
+    }
+    fromFolder = mapped;
   }
 
   const explicitPurpose = fromQuery ?? fromForm;
@@ -114,12 +161,10 @@ function resolveUploadTarget(
     return { ok: false, status: 400, error: "Upload purpose is required" };
   }
 
-  const bucket =
-    purpose === "hero"
-      ? UPLOAD_BUCKETS.hero
-      : purpose === "payment"
-        ? UPLOAD_BUCKETS.payments
-        : UPLOAD_BUCKETS.returns;
+  const bucket = resolveBucketForPurpose(purpose);
+  if (!bucket) {
+    return { ok: false, status: 403, error: "Upload purpose is not permitted" };
+  }
 
   return { ok: true, purpose, bucket };
 }
@@ -163,8 +208,7 @@ async function saveLocally(
 /* -------------------------------------------------------------------------- */
 
 export async function POST(request: NextRequest): Promise<NextResponse<ApiResponse<unknown>>> {
-  const rawQueryPurpose = request.nextUrl.searchParams.get("purpose");
-  const normalizedQueryPurpose = rawQueryPurpose?.trim().toLowerCase();
+  const queryPurposeValues = request.nextUrl.searchParams.getAll("purpose");
 
   // Require an active, database-verified session before buffering multipart data.
   const verifiedUser = await getVerifiedSessionUser();
@@ -173,11 +217,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
   }
 
   // Reject unapproved query-string purposes early before reading request body.
-  if (rawQueryPurpose !== null) {
-    if (!normalizedQueryPurpose || !(normalizedQueryPurpose in PURPOSE_ALIASES)) {
+  let earlyQueryPurpose: UploadPurpose | undefined;
+  for (const rawQueryPurpose of queryPurposeValues) {
+    const normalizedQueryPurpose = rawQueryPurpose.trim().toLowerCase();
+    if (!normalizedQueryPurpose || !PURPOSE_ALIASES.has(normalizedQueryPurpose)) {
       return failure("Upload purpose is not permitted", 403);
     }
-    if (PURPOSE_ALIASES[normalizedQueryPurpose] === "hero") {
+    const mappedPurpose = PURPOSE_ALIASES.get(normalizedQueryPurpose);
+    if (!mappedPurpose) {
+      return failure("Upload purpose is not permitted", 403);
+    }
+    if (earlyQueryPurpose !== undefined && earlyQueryPurpose !== mappedPurpose) {
+      return failure("Conflicting upload purpose values", 400);
+    }
+    earlyQueryPurpose = mappedPurpose;
+    if (mappedPurpose === "hero") {
       const heroGate = requireRole(
         { user: verifiedUser },
         rolesForPermission("settings:write"),
@@ -200,9 +254,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
   }
 
   const target = resolveUploadTarget(
-    rawQueryPurpose,
-    form.get("purpose"),
-    form.get("folder"),
+    queryPurposeValues,
+    form.getAll("purpose"),
+    form.getAll("folder"),
   );
   if (!target.ok) {
     return failure(target.error, target.status);
@@ -216,10 +270,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
       rolesForPermission("settings:write"),
     );
     if (!gate.ok) return failure(gate.message, gate.reason === "unauthenticated" ? 401 : 403);
-  }
-
-  if (target.purpose === "return") {
+  } else if (target.purpose === "return") {
     const formOrderId = form.get("orderId");
+    if (formOrderId !== null && typeof formOrderId !== "string") {
+      return failure("Invalid order ID", 400);
+    }
     const orderId = (
       typeof formOrderId === "string"
         ? formOrderId
@@ -227,6 +282,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     ).trim();
     if (!orderId) {
       return failure("Order ID is required for return evidence uploads", 400);
+    }
+    if (orderId.length > 128 || /[\u0000-\u001F\u007F]/.test(orderId)) {
+      return failure("Invalid order ID", 400);
     }
 
     let order: { id: string; userId: string | null; status: string } | null;
@@ -247,6 +305,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     if (order.status !== "DELIVERED") {
       return failure("Return evidence can only be uploaded for delivered orders", 403);
     }
+  } else if (target.purpose !== "payment") {
+    return failure("Upload purpose is not permitted", 403);
   }
 
   const file = form.get("file");

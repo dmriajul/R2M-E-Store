@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { rm } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, test } from "node:test";
 import { NextRequest } from "next/server";
@@ -469,6 +469,264 @@ test("SEC-2: POST /api/upload rejects unauthenticated callers, unauthorized purp
   assert.equal(heroBody.success, true);
   trackUploadedUrl(heroBody.data.url);
   assert.match(heroBody.data.url, /^\/uploads\/hero\//);
+});
+
+test("F-1 (SEC-2): prototype-key purposes/folders, invalid mixed combinations, and invalid return orders are rejected without reaching Cloudinary or local storage", async (context) => {
+  async function snapshotLocalUploads(): Promise<string[]> {
+    const entries: string[] = [];
+    async function walk(dir: string): Promise<void> {
+      let dirents;
+      try {
+        dirents = await readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of dirents) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(full);
+        } else {
+          entries.push(path.relative(UPLOAD_ROOT, full));
+        }
+      }
+    }
+    await walk(UPLOAD_ROOT);
+    return entries.sort();
+  }
+
+  const fixture = installTestDatabase({
+    user: [
+      {
+        id: "f1-no-orders",
+        name: "No Orders Shopper",
+        email: "no-orders@example.com",
+        password: await hash("SecretPass123!", 10),
+        role: "CUSTOMER",
+        deletedAt: null,
+        emailVerified: new Date(),
+      },
+      {
+        id: "f1-owner",
+        name: "Order Owner",
+        email: "f1-owner@example.com",
+        password: await hash("SecretPass123!", 10),
+        role: "CUSTOMER",
+        deletedAt: null,
+        emailVerified: new Date(),
+      },
+      {
+        id: "f1-other",
+        name: "Other Shopper",
+        email: "f1-other@example.com",
+        password: await hash("SecretPass123!", 10),
+        role: "CUSTOMER",
+        deletedAt: null,
+        emailVerified: new Date(),
+      },
+    ],
+    order: [
+      {
+        id: "f1-order-delivered",
+        orderNumber: "LL-2026-2001",
+        userId: "f1-owner",
+        status: "DELIVERED",
+      },
+      {
+        id: "f1-order-processing",
+        orderNumber: "LL-2026-2002",
+        userId: "f1-owner",
+        status: "PROCESSING",
+      },
+      {
+        id: "f1-order-other-delivered",
+        orderNumber: "LL-2026-2003",
+        userId: "f1-other",
+        status: "DELIVERED",
+      },
+    ],
+  });
+  Object.assign(globalThis, { prisma: fixture.db });
+
+  const realAuth = await import("../lib/auth");
+  let activeUserId: string | null = "f1-no-orders";
+  let cloudinaryCalls = 0;
+
+  context.mock.module("../lib/auth", {
+    namedExports: {
+      ...realAuth,
+      getVerifiedSessionUser: async () =>
+        realAuth.getVerifiedSessionUser(activeUserId ? { user: { id: activeUserId } } : null),
+      requireActionRole: async (
+        allowedRoles: readonly ("SUPER_ADMIN" | "INVENTORY_MANAGER" | "SEO_MANAGER" | "SUPPORT_MANAGER")[],
+      ) => realAuth.requireVerifiedRole(activeUserId ? { user: { id: activeUserId } } : null, allowedRoles),
+    },
+  });
+  context.mock.module("../lib/cloudinary", {
+    namedExports: {
+      uploadToCloudinary: async () => {
+        cloudinaryCalls += 1;
+        return {
+          url: "https://res.cloudinary.com/demo/image/upload/v1/mukra/test.png",
+          publicId: "mukra/test",
+          bytes: 128,
+        };
+      },
+    },
+  });
+
+  const { POST } = await loadUploadRoute();
+  let ipCounter = 1;
+
+  async function postForm(query: string, entries: Array<[string, string | File]>) {
+    const form = new FormData();
+    for (const [k, v] of entries) {
+      form.append(k, v);
+    }
+    const oct = ipCounter++;
+    return POST(
+      new NextRequest(`http://localhost:3000/api/upload${query}`, {
+        method: "POST",
+        headers: { "x-forwarded-for": `203.0.113.${oct}` },
+        body: form,
+      }),
+    );
+  }
+
+  // Test prototype-key & invalid mixed combinations under BOTH Cloudinary-enabled
+  // and local-disk modes to prove neither storage backend is ever invoked.
+  for (const mode of ["cloudinary", "local"] as const) {
+    if (mode === "cloudinary") {
+      process.env.CLOUDINARY_CLOUD_NAME = "demo-cloud";
+      process.env.CLOUDINARY_API_KEY = "demo-key";
+      process.env.CLOUDINARY_API_SECRET = "demo-secret";
+    } else {
+      delete process.env.CLOUDINARY_CLOUD_NAME;
+      delete process.env.CLOUDINARY_API_KEY;
+      delete process.env.CLOUDINARY_API_SECRET;
+    }
+
+    const beforeFiles = await snapshotLocalUploads();
+    const beforeCloudinary = cloudinaryCalls;
+
+    // 1. Prototype-key query and form purpose / folder bypass vectors -> 403
+    for (const [query, fields] of [
+      ["?purpose=constructor", [["file", makePngFile()]]],
+      ["?purpose=CONSTRUCTOR", [["file", makePngFile()]]],
+      ["?purpose=__proto__", [["file", makePngFile()]]],
+      ["?purpose=toString", [["file", makePngFile()]]],
+      ["?purpose=valueOf", [["file", makePngFile()]]],
+      ["", [["file", makePngFile()], ["purpose", "constructor"]]],
+      ["", [["file", makePngFile()], ["purpose", "__proto__"]]],
+      ["", [["file", makePngFile()], ["folder", "constructor"]]],
+      ["", [["file", makePngFile()], ["folder", "__proto__"]]],
+      ["", [["file", makePngFile()], ["folder", "toString"]]],
+      ["?purpose=payment", [["file", makePngFile()], ["folder", "constructor"]]],
+      ["?purpose=constructor", [["file", makePngFile()], ["folder", "mukra/payments"]]],
+      ["?purpose=payment&purpose=constructor", [["file", makePngFile()]]],
+      ["", [["file", makePngFile()], ["purpose", "payment"], ["purpose", "constructor"]]],
+    ] as Array<[string, Array<[string, string | File]>]>) {
+      const res = await postForm(query, fields);
+      assert.equal(res.status, 403, `Expected 403 in ${mode} mode for query=${query}`);
+    }
+
+    // 2. Invalid mixed purpose/folder combinations -> 4xx
+    for (const [expectedStatus, query, fields] of [
+      [400, "?purpose=payment", [["file", makePngFile()], ["folder", "mukra/returns"]]],
+      [400, "?purpose=return", [["file", makePngFile()], ["folder", "mukra/payments"]]],
+      [400, "?purpose=payment", [["file", makePngFile()], ["purpose", "return"]]],
+      [400, "?purpose=payment&purpose=return", [["file", makePngFile()]]],
+      [403, "?purpose=payment", [["file", makePngFile()], ["folder", "mukra/products"]]],
+      [403, "", [["file", makePngFile()], ["purpose", "   "], ["folder", "mukra/payments"]]],
+    ] as Array<[number, string, Array<[string, string | File]>]>) {
+      const res = await postForm(query, fields);
+      assert.equal(res.status, expectedStatus, `Expected ${expectedStatus} in ${mode} mode for query=${query}`);
+    }
+
+    assert.equal(cloudinaryCalls, beforeCloudinary, `Cloudinary must not be called in ${mode} mode`);
+    assert.deepEqual(await snapshotLocalUploads(), beforeFiles, `Local storage must not be written in ${mode} mode`);
+  }
+
+  // Switch to local storage for end-to-end return & payment validation assertions
+  delete process.env.CLOUDINARY_CLOUD_NAME;
+  delete process.env.CLOUDINARY_API_KEY;
+  delete process.env.CLOUDINARY_API_SECRET;
+  activeUserId = "f1-owner";
+
+  const beforeReturnRejections = await snapshotLocalUploads();
+
+  // 3. Return upload with missing, malformed, or non-existent orderId -> rejected without storage writes
+  assert.equal(
+    (await postForm("?purpose=return", [["file", makePngFile()], ["folder", "mukra/returns"]])).status,
+    400,
+  );
+  assert.equal(
+    (await postForm("?purpose=return", [["file", makePngFile()], ["folder", "mukra/returns"], ["orderId", "   "]])).status,
+    400,
+  );
+  assert.equal(
+    (await postForm("?purpose=return", [["file", makePngFile()], ["folder", "mukra/returns"], ["orderId", "bad\u0000id"]])).status,
+    400,
+  );
+  assert.equal(
+    (
+      await postForm("?purpose=return", [
+        ["file", makePngFile()],
+        ["folder", "mukra/returns"],
+        ["orderId", "non-existent-order-id"],
+      ])
+    ).status,
+    403,
+  );
+
+  // 4. Return upload for another user's delivered order -> 403
+  assert.equal(
+    (
+      await postForm("?purpose=return", [
+        ["file", makePngFile()],
+        ["folder", "mukra/returns"],
+        ["orderId", "f1-order-other-delivered"],
+      ])
+    ).status,
+    403,
+  );
+
+  // 5. Return upload for own non-delivered order -> 403
+  assert.equal(
+    (
+      await postForm("?purpose=return", [
+        ["file", makePngFile()],
+        ["folder", "mukra/returns"],
+        ["orderId", "f1-order-processing"],
+      ])
+    ).status,
+    403,
+  );
+
+  assert.equal(cloudinaryCalls, 0);
+  assert.deepEqual(await snapshotLocalUploads(), beforeReturnRejections);
+
+  // 6. Valid payment upload -> 201 in payments bucket
+  const validPayment = await postForm("?purpose=payment", [
+    ["file", makePngFile("f1-payment.png")],
+    ["folder", "mukra/payments"],
+  ]);
+  assert.equal(validPayment.status, 201);
+  const validPaymentBody = (await validPayment.json()) as { success: boolean; data: { url: string } };
+  assert.equal(validPaymentBody.success, true);
+  trackUploadedUrl(validPaymentBody.data.url);
+  assert.match(validPaymentBody.data.url, /^\/uploads\/payments\//);
+
+  // 7. Valid return upload with correct ownership and DELIVERED status -> 201 in returns bucket
+  const validReturn = await postForm("?purpose=return", [
+    ["file", makePngFile("f1-return.png")],
+    ["folder", "mukra/returns"],
+    ["orderId", "f1-order-delivered"],
+  ]);
+  assert.equal(validReturn.status, 201);
+  const validReturnBody = (await validReturn.json()) as { success: boolean; data: { url: string } };
+  assert.equal(validReturnBody.success, true);
+  trackUploadedUrl(validReturnBody.data.url);
+  assert.match(validReturnBody.data.url, /^\/uploads\/returns\//);
 });
 
 /* -------------------------------------------------------------------------- */
