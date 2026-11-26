@@ -112,7 +112,7 @@ export function StepPayment() {
       body.append("file", file);
       body.append("folder", "mukra/payments");
 
-      const response = await fetch("/api/upload", { method: "POST", body });
+      const response = await fetch("/api/upload?purpose=payment", { method: "POST", body });
       const payload = (await response.json()) as {
         data?: UploadResult;
         error?: string;

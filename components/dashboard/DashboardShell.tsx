@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Bell,
@@ -17,6 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { clearIdentityCaches } from "@/lib/session-cache";
 import { cn, initials } from "@/lib/utils";
 import { MukraLogo } from "@/components/brand/MukraLogo";
 import { useDashboardSession } from "@/components/dashboard/DashboardSessionProvider";
@@ -180,7 +182,7 @@ function NavRow({
   );
 }
 
-function LogoutButton({
+export function LogoutButton({
   className,
   onDone,
 }: {
@@ -188,24 +190,47 @@ function LogoutButton({
   onDone?: () => void;
 }) {
   const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
+  const inFlightRef = useRef(false);
+
+  const handleLogout = async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    setSigningOut(true);
+
+    try {
+      const result = await signOut({ redirect: false, callbackUrl: "/" });
+      if (!result || typeof result.url !== "string" || !result.url) {
+        throw new Error("Sign-out did not complete");
+      }
+
+      clearIdentityCaches();
+      onDone?.();
+      toast.success("Signed out — see you soon! 👋", {
+        description: "You can browse the collection any time.",
+      });
+      router.replace("/");
+      router.refresh();
+    } catch {
+      toast.error("Could not sign out. Please try again.");
+      inFlightRef.current = false;
+      setSigningOut(false);
+    }
+  };
 
   return (
     <button
       type="button"
-      onClick={() => {
-        toast.info("Signed out — see you soon! 👋", {
-          description: "You can browse the collection any time.",
-        });
-        onDone?.();
-        router.push("/");
-      }}
+      disabled={signingOut}
+      aria-busy={signingOut}
+      onClick={() => void handleLogout()}
       className={cn(
-        "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-muted-foreground transition-all duration-300 ease-[var(--ease-luxe)] hover:bg-rose-soft hover:text-rose focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-muted-foreground transition-all duration-300 ease-[var(--ease-luxe)] hover:bg-rose-soft hover:text-rose focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-60",
         className,
       )}
     >
       <LogOut aria-hidden className="size-[18px] shrink-0" />
-      Logout
+      <span>{signingOut ? "Signing out…" : "Logout"}</span>
     </button>
   );
 }
