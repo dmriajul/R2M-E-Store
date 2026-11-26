@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import { FREE_SHIPPING_THRESHOLD } from "@/lib/cart";
 import { formatPrice } from "@/lib/utils";
-import type { Metadata } from "next";
 import { CheckoutFlow } from "@/components/checkout/CheckoutFlow";
 
 export const metadata: Metadata = {
@@ -12,10 +14,17 @@ export const metadata: Metadata = {
 };
 
 /**
- * Checkout route. The page is a thin server component so it can own metadata
- * and robots directives; all of the interactivity lives in <CheckoutFlow />.
+ * Checkout route. Requires an authenticated session on the server before
+ * rendering `<CheckoutFlow />` (matching `POST /api/orders`), redirecting
+ * guests to `/login?callbackUrl=%2Fcheckout` while keeping localStorage cart
+ * state intact.
  */
-export default function CheckoutPage() {
+export default async function CheckoutPage() {
+  const session = await auth();
+  if (!session?.user) {
+    redirect("/login?callbackUrl=%2Fcheckout");
+  }
+
   return (
     <div className="relative">
       <div

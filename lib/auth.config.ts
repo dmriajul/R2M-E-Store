@@ -35,7 +35,14 @@ export const authConfig = {
       const { pathname } = request.nextUrl;
       const user = auth?.user;
 
-      if (!user) return false; // → redirect to pages.signIn with callbackUrl
+      if (!user) {
+        if (pathname === "/checkout" || pathname.startsWith("/checkout/")) {
+          const loginUrl = new URL("/login", request.nextUrl);
+          loginUrl.searchParams.set("callbackUrl", "/checkout");
+          return Response.redirect(loginUrl, 307);
+        }
+        return false; // → redirect to pages.signIn with callbackUrl
+      }
 
       const role = normalizeRole(user.role);
 

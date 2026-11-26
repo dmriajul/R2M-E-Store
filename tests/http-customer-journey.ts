@@ -78,7 +78,6 @@ async function main() {
     "/cart",
     "/login",
     "/register",
-    "/checkout",
     "/about",
     "/contact",
     "/size-guide",
@@ -98,6 +97,11 @@ async function main() {
   assert.ok((await collections.text()).includes("Collections"));
   checks++;
   await guest.status("/missing-audit-page", 404);
+  const guestCheckout = await guest.status("/checkout", 307);
+  const guestCheckoutTarget = new URL(guestCheckout.headers.get("location")!, base);
+  assert.equal(guestCheckoutTarget.pathname, "/login");
+  assert.equal(guestCheckoutTarget.search, "?callbackUrl=%2Fcheckout");
+  await guest.status("/login?callbackUrl=%2Fcheckout", 200);
   for (const path of ["/dashboard", "/dashboard/orders", "/admin"]) {
     const response = await guest.status(path, 307);
     assert.equal(new URL(response.headers.get("location")!, base).pathname, "/login");
@@ -183,6 +187,7 @@ async function main() {
   assert.ok(sessionResponse.headers.get("set-cookie")?.includes("HttpOnly"));
   assert.ok(sessionResponse.headers.get("set-cookie")?.includes("SameSite=Lax"));
   await customer.status("/dashboard", 200);
+  await customer.status("/checkout", 200);
   const denied = await customer.status("/admin", 302);
   assert.equal(new URL(denied.headers.get("location")!, base).pathname, "/dashboard");
   await customer.status("/api/admin/products", 403);
