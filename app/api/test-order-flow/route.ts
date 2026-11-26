@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest, after } from "next/server";
-import { auth, isAdmin } from "@/lib/auth";
+import { requireActionRole } from "@/lib/auth";
 import { createOrder } from "@/lib/data/orders";
 import { listProducts } from "@/lib/data/products";
 import { sendOrderConfirmationEmail } from "@/lib/order-email";
@@ -10,21 +10,30 @@ export const runtime = "nodejs";
 const limiter = createRateLimiter({ max: 5, windowMs: 10 * 60 * 1000 });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const ip = clientIp(request.headers);
-  const rate = limiter.check(ip);
-  if (!rate.ok) {
+  if (process.env.NODE_ENV === "production") {
     return NextResponse.json(
-      { data: null, error: "Too many requests", success: false, retryAfter: rate.retryAfter },
-      { status: 429, headers: { "Retry-After": String(rate.retryAfter) } },
+      { data: null, error: "Not found", success: false },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
     );
   }
 
-  const staff = await isAdmin();
-  const session = await auth();
-  if (!staff || !session?.user) {
+  const gate = await requireActionRole(["SUPER_ADMIN"]);
+  if (!gate.ok) {
     return NextResponse.json(
-      { data: null, error: "Staff authentication required", success: false },
-      { status: 401 },
+      { data: null, error: gate.message, success: false },
+      {
+        status: gate.reason === "unauthenticated" ? 401 : 403,
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
+  }
+
+  const ip = clientIp(request.headers);
+  const rate = limiter.check(`${gate.user.id}:${ip}`);
+  if (!rate.ok) {
+    return NextResponse.json(
+      { data: null, error: "Too many requests", success: false, retryAfter: rate.retryAfter },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfter), "Cache-Control": "no-store" } },
     );
   }
 
@@ -56,8 +65,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     ],
     contact: {
-      name: session.user.name ?? "Test Staff",
-      email: session.user.email ?? "staff@mukra.com",
+      name: gate.user.name || "Test Staff",
+      email: gate.user.email || "staff@mukra.com",
       phone: "+8801700000000",
     },
     shipping: {
@@ -73,9 +82,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const { order, source } = await createOrder(input, {
-      id: session.user.id,
-      name: session.user.name ?? "Test Staff",
-      email: session.user.email ?? "staff@mukra.com",
+      id: gate.user.id,
+      name: gate.user.name || "Test Staff",
+      email: gate.user.email || "staff@mukra.com",
     });
     report.orderCreated = true;
     report.stockDeducted = source === "database";

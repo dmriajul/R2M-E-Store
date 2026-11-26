@@ -3,18 +3,174 @@ import { extractTurnstileToken, verifyTurnstileToken } from "@/lib/turnstile";
 import { TURNSTILE_RESPONSE_FIELD } from "@/lib/turnstile-shared";
 import { LOGIN_MESSAGES, type LoginFailure } from "@/lib/auth-messages";
 import NextAuth, { CredentialsSignin } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { redirect } from "next/navigation";
 import { authConfig } from "@/lib/auth.config";
-import {
-  verifyCredentialsDetailed,
-  getUserEmailVerificationStatus,
-} from "@/lib/data/users";
+import { requireDatabase } from "@/lib/prisma";
+import { verifyCredentialsDetailed } from "@/lib/data/users";
 import { resolveGoogleIdentity, GOOGLE_PROVIDER_ID } from "@/lib/data/google-oauth";
 import { loginSchema } from "@/lib/validations";
 import { canAccessSection, normalizeRole, pathForSection, type AdminSection } from "@/lib/rbac";
 import type { AdminRole, AdminUser, AuthRole, SessionRole } from "@/types";
+
+/**
+ * Interval between database status/role revalidations for non-sensitive JWT
+ * session reads. Sensitive admin APIs, server actions, and protected upload
+ * checks always query current database state directly via
+ * `getVerifiedSessionUser()` / `requireActionRole()`.
+ */
+export const JWT_REVALIDATION_INTERVAL_MS = 60_000;
+
+export interface VerifiedSessionUser {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: SessionRole;
+  emailVerified: boolean;
+}
+
+export type RevalidateSessionUserResult =
+  | { status: "active"; user: VerifiedSessionUser }
+  | { status: "invalid"; reason: "missing" | "deleted" | "email-unverified" }
+  | { status: "error" };
+
+interface RevalidationUserRow {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  deletedAt: Date | null;
+  emailVerified: Date | null;
+}
+
+/**
+ * Checks live user existence, soft-delete status, email-verification state,
+ * and current role against the database. Fails closed (`status: "error"`) on
+ * any storage outage so privileged or protected access is never granted by
+ * default.
+ */
+export async function revalidateSessionUser(
+  userId: string,
+): Promise<RevalidateSessionUserResult> {
+  const trimmedId = userId.trim();
+  if (!trimmedId) {
+    return { status: "invalid", reason: "missing" };
+  }
+
+  try {
+    return await requireDatabase(async (db) => {
+      const row = (await db.user.findUnique({
+        where: { id: trimmedId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+          deletedAt: true,
+          emailVerified: true,
+        },
+      })) as RevalidationUserRow | null;
+
+      if (!row) {
+        return { status: "invalid", reason: "missing" } as const;
+      }
+
+      if (row.deletedAt != null) {
+        return { status: "invalid", reason: "deleted" } as const;
+      }
+
+      const role = normalizeRole(row.role);
+      // Preserve customer email-verification requirement while allowing
+      // established staff/admin accounts (including nullable legacy rows).
+      if (role === "CUSTOMER" && !row.emailVerified) {
+        return { status: "invalid", reason: "email-unverified" } as const;
+      }
+
+      return {
+        status: "active",
+        user: {
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          phone: row.phone ?? undefined,
+          role,
+          emailVerified: Boolean(row.emailVerified),
+        },
+      } as const;
+    });
+  } catch {
+    console.error("[auth] Session revalidation failed due to database error");
+    return { status: "error" };
+  }
+}
+
+type JwtCallbackParams = Parameters<typeof authConfig.callbacks.jwt>[0];
+
+/**
+ * Revalidates a JWT session token on a short interval (`JWT_REVALIDATION_INTERVAL_MS`).
+ * Returns `null` when the account has been deleted, removed, left unverified as
+ * a customer, or when database verification fails closed.
+ */
+export async function revalidateJwtToken(
+  args: JwtCallbackParams,
+  options?: { now?: number },
+): Promise<JWT | null> {
+  const now = options?.now ?? Date.now();
+  const token = await authConfig.callbacks.jwt(args);
+
+  // Fresh sign-ins have just been verified against the database in the
+  // Credentials or Google callback; record the timestamp without re-querying.
+  if (args.user) {
+    token.revalidatedAt = now;
+    return token;
+  }
+
+  const userId =
+    typeof token.id === "string" && token.id.trim()
+      ? token.id
+      : typeof token.sub === "string" && token.sub.trim()
+        ? token.sub
+        : "";
+  if (!userId) {
+    return null;
+  }
+
+  const lastChecked = token.revalidatedAt;
+  const shouldRevalidate =
+    args.trigger === "update" ||
+    typeof lastChecked !== "number" ||
+    !Number.isFinite(lastChecked) ||
+    now < lastChecked ||
+    now - lastChecked >= JWT_REVALIDATION_INTERVAL_MS;
+
+  if (!shouldRevalidate) {
+    return token;
+  }
+
+  const check = await revalidateSessionUser(userId);
+  if (check.status !== "active") {
+    return null;
+  }
+
+  token.id = check.user.id;
+  token.sub = check.user.id;
+  token.name = check.user.name;
+  token.email = check.user.email;
+  token.role = check.user.role;
+  if (check.user.phone) {
+    token.phone = check.user.phone;
+  } else {
+    delete token.phone;
+  }
+  token.emailVerified = check.user.emailVerified;
+  token.revalidatedAt = now;
+  return token;
+}
 
 /**
  * Auth.js (NextAuth v5) instance.
@@ -111,17 +267,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true;
     },
     async jwt(args) {
-      const token = authConfig.callbacks.jwt(args);
-      if (typeof token.id === "string" && token.emailVerified !== true) {
-        try {
-          token.emailVerified = await getUserEmailVerificationStatus(token.id);
-        } catch {
-          // Refresh status for existing sessions without revoking staff/legacy sessions.
-          // New customer sign-ins are checked separately after password verification.
-          token.emailVerified = false;
-        }
-      }
-      return token;
+      return revalidateJwtToken(args);
     },
   },
   providers: [
@@ -199,13 +345,41 @@ export async function currentUser() {
 }
 
 /**
- * True when the signed-in user is an operator of any console role.
- * (Every console role is a form of administrator; the *section* a role may
- * reach is decided by `canAccessSection()` / `hasPermission()`.)
+ * Resolves the active session user and verifies live account status,
+ * email-verification state, and current role directly against the database.
+ * Fails closed (`null`) when unauthenticated, soft-deleted, missing, or when
+ * the database is unavailable.
+ */
+export async function getVerifiedSessionUser(
+  sessionInput?: SessionLike | null,
+): Promise<VerifiedSessionUser | null> {
+  let session: SessionLike | null | undefined = sessionInput;
+  if (session === undefined) {
+    try {
+      session = await auth();
+    } catch {
+      return null;
+    }
+  }
+  const userId = session?.user?.id;
+  if (typeof userId !== "string" || !userId.trim()) {
+    return null;
+  }
+
+  const check = await revalidateSessionUser(userId);
+  if (check.status !== "active") {
+    return null;
+  }
+  return check.user;
+}
+
+/**
+ * True when the signed-in user is an active operator of any console role,
+ * verified against the live database record.
  */
 export async function isAdmin(): Promise<boolean> {
-  const role = (await currentUser())?.role;
-  return normalizeRole(role) !== "CUSTOMER";
+  const verified = await getVerifiedSessionUser();
+  return Boolean(verified && verified.role !== "CUSTOMER");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -287,16 +461,39 @@ export function requireRole(
   };
 }
 
-/** Resolves the current session and applies `requireRole` to it. */
+/**
+ * Verifies a session's user status and current role against the database
+ * before applying `requireRole`, ensuring revoked or demoted staff lose
+ * privileged access immediately rather than waiting for JWT expiry/TTL.
+ */
+export async function requireVerifiedRole(
+  session: SessionLike | null | undefined,
+  allowedRoles: readonly AdminRole[],
+): Promise<RoleGateResult> {
+  const verified = await getVerifiedSessionUser(session ?? null);
+  return requireRole(verified ? { user: verified } : null, allowedRoles);
+}
+
+/**
+ * Resolves the current session, revalidates user status & role against the
+ * database, and applies `requireRole` to the live record.
+ */
 export async function requireActionRole(
   allowedRoles: readonly AdminRole[],
 ): Promise<RoleGateResult> {
-  return requireRole(await auth(), allowedRoles);
+  let session: SessionLike | null = null;
+  try {
+    session = await auth();
+  } catch {
+    session = null;
+  }
+  return requireVerifiedRole(session, allowedRoles);
 }
 
 /** The console roles, whatever shape the caller's role list has. */
 export async function requireAdminSession(): Promise<AdminUser | null> {
-  const gate = requireRole(await auth(), ADMIN_SESSION_ROLES);
+  const verified = await getVerifiedSessionUser();
+  const gate = requireRole(verified ? { user: verified } : null, ADMIN_SESSION_ROLES);
   return gate.ok ? gate.user : null;
 }
 
@@ -312,19 +509,20 @@ const ADMIN_SESSION_ROLES: readonly AdminRole[] = [
 ];
 
 /**
- * Page/layout guard: resolves the session, redirects anyone who is not signed
- * in to `/login`, and anyone whose role may not open `section` to
- * `/unauthorized`. Returns the operator for the console UI.
+ * Page/layout guard: resolves the session and verifies live database status &
+ * role, redirecting anyone who is not signed in (or whose account was deleted /
+ * unavailable) to `/login`, and anyone whose live role may not open `section`
+ * to `/unauthorized`. Returns the operator for the console UI.
  */
 export async function requireAdminSection(section: AdminSection): Promise<AdminUser> {
-  const session = await auth();
-  const user = session?.user;
-  const role = normalizeRole(user?.role);
+  const verified = await getVerifiedSessionUser();
+  if (!verified) {
+    redirect("/login?callbackUrl=%2Fadmin");
+  }
 
-  if (!user || role === "CUSTOMER") {
-    // Customers have their own area; everyone else signs in first.
-    const destination = user ? "/unauthorized" : "/login?callbackUrl=%2Fadmin";
-    redirect(destination);
+  const role = verified.role;
+  if (role === "CUSTOMER") {
+    redirect("/unauthorized");
   }
 
   if (!canAccessSection(role, section)) {
@@ -332,9 +530,9 @@ export async function requireAdminSection(section: AdminSection): Promise<AdminU
   }
 
   return {
-    id: user.id,
-    name: user.name?.trim() || user.email?.split("@")[0] || "Operator",
-    email: user.email ?? "",
+    id: verified.id,
+    name: verified.name.trim() || verified.email.split("@")[0] || "Operator",
+    email: verified.email,
     role,
   };
 }

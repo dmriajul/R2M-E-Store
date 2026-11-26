@@ -65,7 +65,7 @@ async function main() {
   stage = "unverified customer login blocked";
   assert.equal((await login(email, password, unverifiedToken)).searchParams.get("code"), "email-not-verified");
   assert.equal(await (await request("/api/auth/session")).json(), null);
-  assert.equal((await request("/checkout")).status, 200);
+  assert.equal((await request("/checkout")).status, 307);
 
   stage = "email verification route";
   // Authorized staging DB access rotates a token without logging it; this does not test inbox delivery.
@@ -81,6 +81,7 @@ async function main() {
   const session = await (await request("/api/auth/session")).json() as { user: { id: string; emailVerified: boolean } };
   assert.equal(session.user.id, row.id);
   assert.equal(session.user.emailVerified, true);
+  assert.equal((await request("/checkout")).status, 200);
 
   if (process.env.TEST_CREATE_STAGING_ORDER === "true") {
     stage = "cart and checkout";

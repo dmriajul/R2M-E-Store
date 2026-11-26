@@ -29,5 +29,7 @@ declare module "next-auth/jwt" {
     id?: string;
     role?: SessionRole;
     phone?: string;
+    /** Epoch ms of the last server-side database status/role check. */
+    revalidatedAt?: number;
   }
 }

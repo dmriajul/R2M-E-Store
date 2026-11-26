@@ -79,7 +79,13 @@ async function main() {
   const denied = await deniedLogin.json() as { url: string };
   assert.equal(new URL(denied.url).searchParams.get("code"), "email-not-verified");
   assert.equal(await (await request("/api/auth/session")).json(), null);
-  assert.equal((await request("/checkout")).status, 200, "Checkout page stays public; order placement retains its existing authentication requirement");
+  const unauthCheckout = await request("/checkout");
+  assert.equal(unauthCheckout.status, 307, "Unauthenticated checkout redirects to login");
+  assert.equal(
+    new URL(unauthCheckout.headers.get("location")!, base).pathname +
+      new URL(unauthCheckout.headers.get("location")!, base).search,
+    "/login?callbackUrl=%2Fcheckout",
+  );
 
   await request("/auth/verify-email-pending"); // Ensure the action is compiled in dev.
   const manifest = JSON.parse(
@@ -138,6 +144,7 @@ async function main() {
     true,
     "Verified customer can now sign in",
   );
+  assert.equal((await request("/checkout")).status, 200);
   await resend(email); // Verified user also receives the same generic response, no email.
   assert.equal((await loggedLinks()).length, before + 4);
   process.stdout.write(
